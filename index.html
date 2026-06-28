@@ -34,6 +34,15 @@
           <li><a class="transition-colors hover:text-ash" href="#contact">Liên hệ</a></li>
         </ul>
         <div class="flex items-center gap-4">
+          <button id="account-btn"
+            class="relative flex items-center gap-1.5 text-base font-medium text-ink transition-opacity hover:opacity-60"
+            aria-label="Tài khoản"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            <span id="account-label" class="hidden sm:inline">Đăng nhập</span>
+          </button>
           <button id="cart-btn"
             class="relative flex items-center gap-2 text-base font-medium text-ink transition-opacity hover:opacity-60"
             aria-label="Giỏ hàng"
@@ -97,8 +106,8 @@
         <img id="hero-side-image" class="hero-side absolute right-0 top-0 h-full object-cover" style="width:calc((100% - 72rem)/2)" alt="" />
         <button id="hero-side-edit" class="hidden absolute right-2 bottom-2 z-10 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors" aria-label="Đổi ảnh">Đổi ảnh</button>
         <div class="mx-auto max-w-6xl px-6 py-10 md:py-14">
-        <div class="grid items-center gap-16 md:grid-cols-2">
-          <div class="animate-fade-up">
+        <div class="grid items-end gap-16 md:grid-cols-2">
+          <div class="animate-fade-up md:pt-16">
             <p id="hero-subtitle" class="mb-5 text-xs font-medium uppercase tracking-[0.25em] text-ash">
               Tiệm bánh thủ công
             </p>
@@ -111,12 +120,18 @@
               Bánh làm mới mỗi ngày từ nguyên liệu chọn lọc. Đơn giản, tinh tế,
               và tử tế với vị giác của bạn.
             </p>
-            <div class="mt-9">
+            <div class="mt-9 flex flex-wrap items-center gap-4">
               <a id="hero-cta"
                 href="#products"
                 class="inline-block bg-ink px-8 py-4 text-sm font-medium text-white transition-transform duration-300 hover:scale-[1.02]"
               >
                 Khám phá menu
+              </a>
+              <a id="hero-about-cta"
+                href="#about"
+                class="inline-block border border-ink px-8 py-4 text-sm font-medium text-ink transition-colors duration-300 hover:bg-ink hover:text-white"
+              >
+                Tìm hiểu nomnom
               </a>
             </div>
           </div>
@@ -153,6 +168,32 @@
         </select>
         <div id="product-sections" class="mt-8 space-y-12">
           <p class="text-center text-sm text-ash py-12">Đang tải sản phẩm…</p>
+        </div>
+      </section>
+      <hr class="mx-auto max-w-6xl border-dashed border-earth" />
+      <!-- ===== About nomnom ===== -->
+      <section id="about" class="mx-auto max-w-6xl px-6 py-12 scroll-mt-24">
+        <div class="grid items-center gap-10 md:grid-cols-2">
+          <!-- Ảnh About -->
+          <div class="relative aspect-[4/3] overflow-hidden rounded-2xl bg-earth/30" id="about-image-wrap">
+            <img id="about-image" class="h-full w-full object-cover" alt="" style="display:none" />
+            <div id="about-image-placeholder" class="flex h-full w-full items-center justify-center">
+              <span class="font-serif text-xl italic text-ash">nomnom</span>
+            </div>
+            <button id="about-image-edit" class="hidden absolute bottom-3 right-3 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors">Đổi ảnh</button>
+          </div>
+          <!-- Nội dung About -->
+          <div>
+            <h2 id="about-title" class="inline-block border-b border-ink pb-2 font-serif text-3xl text-ink md:text-4xl">Về nomnom</h2>
+            <p id="about-text" class="mt-6 text-base leading-relaxed text-ash">
+              nomnom là tiệm bánh thủ công nhỏ, làm mỗi mẻ bánh bằng cả tấm lòng. Chúng mình tin rằng một chiếc bánh ngon bắt đầu từ nguyên liệu thật và sự tỉ mỉ trong từng công đoạn.
+            </p>
+            <div class="mt-8">
+              <a href="#products" class="inline-block rounded-full bg-[#7a0c1f] px-10 py-4 text-sm font-medium text-white shadow-md transition-transform duration-300 hover:scale-[1.03]">
+                Mua bánh thôi
+              </a>
+            </div>
+          </div>
         </div>
       </section>
       <hr class="mx-auto max-w-6xl border-dashed border-earth" />
@@ -294,6 +335,15 @@
           </div>
           <textarea id="cust-note" placeholder="Ghi chú (tuỳ chọn)" rows="2" class="w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink resize-none"></textarea>
         </div>
+        <label id="voucher-row" class="mt-3 hidden cursor-pointer items-center gap-2 rounded-xl border border-dashed border-[#7a0c1f] bg-[#7a0c1f]/5 px-4 py-3">
+          <input id="voucher-check" type="checkbox" class="h-4 w-4 accent-[#7a0c1f]" />
+          <span class="text-sm text-[#7a0c1f]" id="voucher-label">Dùng ưu đãi giảm giá</span>
+        </label>
+        <div id="checkout-summary" class="mt-3 space-y-1 text-sm hidden">
+          <div class="flex justify-between text-ash"><span>Tạm tính</span><span id="sum-subtotal"></span></div>
+          <div id="sum-discount-row" class="flex justify-between text-[#7a0c1f] hidden"><span>Ưu đãi</span><span id="sum-discount"></span></div>
+          <div class="flex justify-between font-medium text-ink"><span>Thanh toán</span><span id="sum-total"></span></div>
+        </div>
         <div id="delivery-info" class="mt-4 border border-earth/40 p-3 text-xs text-ash space-y-1 hidden">
           <p id="delivery-fee" class="font-medium text-ink"></p>
           <p id="delivery-zones"></p>
@@ -338,6 +388,69 @@
           Nhắn tin Zalo cho shop
         </a>
         <button id="success-close" class="mt-4 text-sm text-ash hover:text-ink transition-colors">Đóng</button>
+      </div>
+    </div>
+
+    <!-- ===== Customer Account Modal ===== -->
+    <div id="customer-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50">
+      <div class="w-full max-w-sm bg-cream p-6 mx-4 max-h-[88vh] overflow-y-auto md:mx-auto md:p-8">
+        <!-- Form đăng nhập / đăng ký -->
+        <form id="customer-login-form">
+          <h2 class="font-serif text-2xl text-ink">Đăng nhập nomnom</h2>
+          <p class="mt-2 text-sm text-ash">Dùng số điện thoại để tích điểm đổi ưu đãi. Lần đầu nhập thêm tên & địa chỉ để lần sau đặt nhanh hơn.</p>
+          <input
+            type="tel" name="phone" placeholder="Số điện thoại *" required
+            class="mt-5 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+          />
+          <input
+            type="text" name="name" placeholder="Họ tên"
+            class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+          />
+          <input
+            type="text" name="address" placeholder="Địa chỉ giao hàng"
+            class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+          />
+          <p id="customer-login-error" class="mt-2 text-xs text-red-600 hidden"></p>
+          <div class="mt-5 flex items-center gap-3">
+            <button type="submit" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90">Đăng nhập</button>
+            <button type="button" id="customer-login-cancel" class="text-sm text-ash hover:text-ink">Đóng</button>
+          </div>
+        </form>
+        <!-- Bảng tài khoản (sau khi đăng nhập) -->
+        <div id="customer-panel" class="hidden">
+          <div class="flex items-center justify-between">
+            <h2 class="font-serif text-2xl text-ink">Tài khoản</h2>
+            <button id="customer-logout" class="text-xs text-ash hover:text-ink transition-colors">Đăng xuất</button>
+          </div>
+          <div class="mt-4 flex items-center gap-3">
+            <div id="customer-avatar" class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-earth/30 font-serif text-lg text-ink"></div>
+            <div class="min-w-0">
+              <p id="customer-name-display" class="font-medium text-ink"></p>
+              <p id="customer-phone-display" class="text-sm text-ash"></p>
+            </div>
+          </div>
+          <div class="mt-6 rounded-2xl bg-ink px-5 py-5 text-cream">
+            <p class="text-xs uppercase tracking-wider text-cream/60">Điểm tích lũy</p>
+            <p class="mt-1 font-serif text-3xl"><span id="customer-points">0</span> <span class="text-base font-sans text-cream/70">đơn</span></p>
+            <div class="mt-4 h-2 w-full overflow-hidden rounded-full bg-cream/20">
+              <div id="customer-progress" class="h-full bg-cream transition-all" style="width:0%"></div>
+            </div>
+            <p id="customer-progress-text" class="mt-2 text-xs text-cream/70"></p>
+          </div>
+          <div id="customer-voucher" class="mt-4 hidden rounded-2xl border border-dashed border-[#7a0c1f] bg-[#7a0c1f]/5 px-5 py-4 text-center">
+            <p class="text-sm font-medium text-[#7a0c1f]">🎉 Bạn có ưu đãi!</p>
+            <p id="customer-voucher-text" class="mt-1 text-xs text-ash"></p>
+          </div>
+          <label class="mt-6 block">
+            <span class="text-xs font-medium uppercase tracking-wider text-ash">Cập nhật thông tin</span>
+            <input id="customer-edit-name" type="text" placeholder="Họ tên" class="mt-2 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink" />
+          </label>
+          <input id="customer-edit-address" type="text" placeholder="Địa chỉ giao hàng" class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink" />
+          <div class="mt-4 flex items-center gap-3">
+            <button id="customer-save" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90">Lưu</button>
+            <button id="customer-panel-close" class="text-sm text-ash hover:text-ink">Đóng</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -473,6 +586,11 @@
           <span class="text-sm text-ash">Ảnh bên phải</span>
           <input type="file" name="hero_side_image" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
         </label>
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Mục About</p>
+        <label class="mt-2 block">
+          <span class="text-sm text-ash">Ảnh mục About nomnom</span>
+          <input type="file" name="about_image" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+        </label>
         <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Liên hệ</p>
         <input
           type="text" name="phone" placeholder="Số điện thoại"
@@ -542,6 +660,17 @@
         <input
           type="text" name="bank_name" placeholder="Tên chủ tài khoản"
           class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Tích điểm khách hàng</p>
+        <label class="mt-2 block text-sm text-ash">Cứ mỗi bao nhiêu đơn thì tặng 1 ưu đãi?</label>
+        <input
+          type="number" name="reward_cycle_orders" placeholder="VD: 10" min="1"
+          class="mt-1 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <label class="mt-3 block text-sm text-ash">Mức giảm của ưu đãi (%)</label>
+        <input
+          type="number" name="reward_percent" placeholder="VD: 20" min="1" max="100"
+          class="mt-1 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
         />
         <p id="contact-error" class="mt-2 text-xs text-red-600 hidden"></p>
         <div class="mt-6 flex items-center gap-3">
