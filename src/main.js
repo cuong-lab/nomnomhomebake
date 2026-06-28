@@ -67,7 +67,7 @@ window.addEventListener("scroll", () => {
 }, { passive: true });
 
 function openCart() {
-  cartDrawer.classList.remove("translate-x-full");
+  cartDrawer.classList.add("cart-open");
   cartOverlay.classList.remove("hidden");
   document.getElementById("cart-qr").classList.add("hidden");
   document.getElementById("cart-success").classList.add("hidden");
@@ -77,7 +77,7 @@ function openCart() {
 }
 
 function closeCart() {
-  cartDrawer.classList.add("translate-x-full");
+  cartDrawer.classList.remove("cart-open");
   cartOverlay.classList.add("hidden");
   stopPaymentPolling();
 }
