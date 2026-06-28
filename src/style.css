@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* ============================================================
+   nomnom — Design Tokens (Minimalism & Modern Bakery)
+   Tailwind v4 dùng @theme để khai báo token -> tự sinh class
+   ví dụ: bg-cream, text-ink, font-serif, text-earth ...
+   ============================================================ */
+@theme {
+  /* Màu nền monochrome + 1 accent bakery ấm */
+  --color-white: #ffffff;
+  --color-cream: #fdfbf7; /* off-white / soft cream */
+  --color-earth: #d4c5b9; /* muted earth accent */
+  --color-ink: #0a0a0a; /* jet black */
+  --color-ash: #6b6b6b; /* xám phụ cho text mờ */
+
+  /* Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+
+  /* Bo góc & nhịp chuyển động tinh tế */
+  --radius-card: 0.25rem;
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ----- Base ----- */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Micro-interaction: fade-in nhẹ khi tải trang */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.8s var(--ease-soft) both;
+}
+
+/* Hide scrollbar but keep scroll */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Inline editing for admin */
+[contenteditable] {
+  outline: none;
+  transition: box-shadow 0.2s;
+}
+
+[contenteditable]:hover {
+  box-shadow: 0 0 0 2px var(--color-earth);
+  cursor: text;
+}
+
+[contenteditable]:focus {
+  box-shadow: 0 0 0 2px var(--color-ink);
+}
+
+.save-toast {
+  position: fixed;
+  bottom: 5rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--color-ink);
+  color: white;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: all 0.3s var(--ease-soft);
+  z-index: 60;
+  pointer-events: none;
+}
+
+.save-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* iPhone safe area */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  footer {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Touch feedback on mobile */
+@media (hover: none) {
+  .active\:scale-95:active {
+    transform: scale(0.95);
+  }
+}

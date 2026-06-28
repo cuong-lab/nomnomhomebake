@@ -1,0 +1,1539 @@
+import "./style.css";
+import { supabase } from "./supabase.js";
+
+const yearEl = document.querySelector("[data-year]");
+if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+let isAdmin = false;
+let cart = JSON.parse(localStorage.getItem("nomnom-cart") || "[]");
+
+function saveCart() {
+  localStorage.setItem("nomnom-cart", JSON.stringify(cart));
+  updateCartCount();
+}
+
+function updateCartCount() {
+  const total = cart.reduce((sum, item) => sum + item.qty, 0);
+  document.getElementById("cart-count").textContent = `Giỏ hàng (${total})`;
+  document.getElementById("cart-count-mobile").textContent = total;
+}
+
+function addToCart(product) {
+  const existing = cart.find((item) => item.id === product.id);
+  if (existing) {
+    existing.qty++;
+  } else {
+    cart.push({
+      id: product.id,
+      name: product.name,
+      price: product.sale_price || product.price,
+      image_url: product.image_url,
+      qty: 1,
+    });
+  }
+  saveCart();
+}
+
+// ── Cart Drawer ──
+
+const cartDrawer = document.getElementById("cart-drawer");
+const cartOverlay = document.getElementById("cart-overlay");
+const cartItems = document.getElementById("cart-items");
+const cartFooter = document.getElementById("cart-footer");
+const cartTotal = document.getElementById("cart-total");
+const cartCheckout = document.getElementById("cart-checkout");
+
+document.getElementById("cart-btn").addEventListener("click", openCart);
+document.getElementById("cart-close").addEventListener("click", closeCart);
+cartOverlay.addEventListener("click", closeCart);
+
+function openCart() {
+  cartDrawer.classList.remove("translate-x-full");
+  cartOverlay.classList.remove("hidden");
+  document.getElementById("cart-qr").classList.add("hidden");
+  document.getElementById("cart-success").classList.add("hidden");
+  document.getElementById("cart-customer").classList.add("hidden");
+  cartItems.classList.remove("hidden");
+  renderCart();
+}
+
+function closeCart() {
+  cartDrawer.classList.add("translate-x-full");
+  cartOverlay.classList.add("hidden");
+  stopPaymentPolling();
+}
+
+function renderCart() {
+  if (!cart.length) {
+    cartItems.innerHTML = `<p class="text-center text-sm text-ash py-12">Giỏ hàng trống.</p>`;
+    cartFooter.classList.add("hidden");
+    return;
+  }
+
+  cartItems.innerHTML = cart
+    .map(
+      (item) => `
+    <div class="flex gap-4 py-3 border-b border-earth/30">
+      <div class="h-16 w-16 shrink-0 bg-earth/30 overflow-hidden">
+        ${item.image_url ? `<img src="${item.image_url}" alt="${item.name}" class="h-full w-full object-cover" />` : ""}
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-ink truncate">${item.name}</p>
+        <p class="text-sm text-ash">${formatPrice(item.price)}</p>
+        <div class="mt-1 flex items-center gap-2">
+          <button data-cart-minus="${item.id}" class="h-6 w-6 border border-earth/60 text-sm text-ink hover:bg-earth/20">−</button>
+          <span class="text-sm text-ink">${item.qty}</span>
+          <button data-cart-plus="${item.id}" class="h-6 w-6 border border-earth/60 text-sm text-ink hover:bg-earth/20">+</button>
+          <button data-cart-remove="${item.id}" class="ml-auto text-xs text-red-500 hover:text-red-700">Xóa</button>
+        </div>
+      </div>
+    </div>
+  `
+    )
+    .join("");
+
+  const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  cartTotal.textContent = formatPrice(total);
+  cartFooter.classList.remove("hidden");
+  document.getElementById("cart-qr").classList.add("hidden");
+
+  cartItems.querySelectorAll("[data-cart-minus]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const item = cart.find((i) => i.id === btn.dataset.cartMinus);
+      if (item) { item.qty = Math.max(1, item.qty - 1); saveCart(); renderCart(); }
+    })
+  );
+
+  cartItems.querySelectorAll("[data-cart-plus]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const item = cart.find((i) => i.id === btn.dataset.cartPlus);
+      if (item) { item.qty++; saveCart(); renderCart(); }
+    })
+  );
+
+  cartItems.querySelectorAll("[data-cart-remove]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      cart = cart.filter((i) => i.id !== btn.dataset.cartRemove);
+      saveCart(); renderCart();
+    })
+  );
+}
+
+let bankSettings = {};
+
+const cartCustomer = document.getElementById("cart-customer");
+const custError = document.getElementById("cust-error");
+
+document.getElementById("cart-checkout-step").addEventListener("click", () => {
+  // không cho chọn ngày trong quá khứ
+  document.getElementById("cust-date").min = new Date().toISOString().split("T")[0];
+  cartItems.classList.add("hidden");
+  cartFooter.classList.add("hidden");
+  cartCustomer.classList.remove("hidden");
+});
+
+function buildDeliveryTime() {
+  const d = document.getElementById("cust-date").value; // YYYY-MM-DD
+  const t = document.getElementById("cust-time").value; // HH:MM
+  if (!d && !t) return "Giao sớm nhất";
+  const parts = [];
+  if (t) parts.push(t); // giờ đứng trước để app đọc đúng giờ giao
+  if (d) {
+    const [y, m, day] = d.split("-");
+    parts.push(`${day}/${m}/${y}`);
+  }
+  return parts.join(" ");
+}
+
+document.getElementById("cust-back").addEventListener("click", () => {
+  cartCustomer.classList.add("hidden");
+  cartItems.classList.remove("hidden");
+  cartFooter.classList.remove("hidden");
+});
+
+cartCheckout.addEventListener("click", () => {
+  const custName = document.getElementById("cust-name").value.trim();
+  const custPhone = document.getElementById("cust-phone").value.trim();
+  const custAddress = document.getElementById("cust-address").value.trim();
+  const custNote = document.getElementById("cust-note").value.trim();
+
+  if (!custName || !custPhone || !custAddress) {
+    custError.textContent = "Vui lòng nhập đầy đủ họ tên, SĐT và địa chỉ.";
+    custError.classList.remove("hidden");
+    return;
+  }
+  custError.classList.add("hidden");
+
+  if (!bankSettings.bank_id || !bankSettings.bank_account) {
+    alert("Chủ shop chưa thiết lập thanh toán. Vui lòng liên hệ qua Zalo.");
+    return;
+  }
+
+  const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const orderCode = "NN" + Date.now().toString().slice(-8);
+  lastOrderCode = orderCode;
+  const content = `${orderCode} nomnom`;
+
+  supabase.from("orders").insert({
+    order_code: orderCode,
+    items: cart.map((item) => ({ name: item.name, qty: item.qty, price: item.price })),
+    total,
+    status: "pending",
+    customer_name: custName,
+    customer_phone: custPhone,
+    customer_address: custAddress,
+    delivery_time: buildDeliveryTime(),
+    note: custNote || null,
+  });
+
+  const qrUrl = `https://img.vietqr.io/image/${bankSettings.bank_id}-${bankSettings.bank_account}-compact.jpg?amount=${total}&addInfo=${encodeURIComponent(content)}`;
+
+  document.getElementById("qr-image").src = qrUrl;
+  document.getElementById("qr-bank-name").textContent = bankSettings.bank_id;
+  document.getElementById("qr-account").textContent = bankSettings.bank_account;
+  document.getElementById("qr-holder").textContent = bankSettings.bank_name || "";
+  document.getElementById("qr-amount").textContent = formatPrice(total);
+  document.getElementById("qr-content").textContent = content;
+
+  const qrZaloHelp = document.getElementById("qr-zalo-help");
+  if (bankSettings.zalo_url) {
+    qrZaloHelp.href = bankSettings.zalo_url;
+    qrZaloHelp.classList.remove("hidden");
+  } else {
+    qrZaloHelp.classList.add("hidden");
+  }
+
+  cartCustomer.classList.add("hidden");
+  document.getElementById("cart-qr").classList.remove("hidden");
+
+  cart = [];
+  saveCart();
+  startPaymentPolling();
+});
+
+let lastOrderCode = "";
+let paymentPoller = null;
+
+function startPaymentPolling() {
+  stopPaymentPolling();
+  paymentPoller = setInterval(async () => {
+    const { data } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("order_code", lastOrderCode)
+      .single();
+
+    if (data && data.status === "paid") {
+      stopPaymentPolling();
+      showPaymentSuccess();
+    }
+  }, 3000);
+}
+
+function stopPaymentPolling() {
+  if (paymentPoller) {
+    clearInterval(paymentPoller);
+    paymentPoller = null;
+  }
+}
+
+function showPaymentSuccess() {
+  document.getElementById("cart-qr").classList.add("hidden");
+  document.getElementById("success-order-code").textContent = lastOrderCode;
+
+  const zaloUrl = bankSettings.zalo_url || "";
+  const successZalo = document.getElementById("success-zalo");
+  if (zaloUrl) {
+    successZalo.href = zaloUrl;
+    successZalo.classList.remove("hidden");
+  } else {
+    successZalo.classList.add("hidden");
+  }
+
+  document.getElementById("cart-success").classList.remove("hidden");
+}
+
+document.getElementById("success-close").addEventListener("click", () => {
+  stopPaymentPolling();
+  closeCart();
+});
+
+document.getElementById("qr-back").addEventListener("click", () => {
+  stopPaymentPolling();
+  document.getElementById("cart-qr").classList.add("hidden");
+  cartItems.classList.remove("hidden");
+  cartFooter.classList.remove("hidden");
+});
+
+function formatPrice(price) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  }).format(price);
+}
+
+// ── Mobile Menu ──
+
+const menuToggle = document.getElementById("menu-toggle");
+const mobileMenu = document.getElementById("mobile-menu");
+
+menuToggle.addEventListener("click", () => {
+  mobileMenu.classList.toggle("hidden");
+});
+
+mobileMenu.querySelectorAll("a").forEach((link) =>
+  link.addEventListener("click", () => mobileMenu.classList.add("hidden"))
+);
+
+// ── Auth (triple-tap logo) ──
+
+const loginModal = document.getElementById("login-modal");
+const loginForm = document.getElementById("login-form");
+const loginError = document.getElementById("login-error");
+const logo = document.getElementById("logo");
+
+let tapCount = 0;
+let tapTimer = null;
+
+logo.addEventListener("click", () => {
+  if (isAdmin) {
+    supabase.auth.signOut();
+    return;
+  }
+  tapCount++;
+  if (tapCount === 3) {
+    tapCount = 0;
+    clearTimeout(tapTimer);
+    loginModal.classList.remove("hidden");
+    loginModal.classList.add("flex");
+    return;
+  }
+  clearTimeout(tapTimer);
+  tapTimer = setTimeout(() => { tapCount = 0; }, 600);
+});
+
+document.getElementById("login-cancel").addEventListener("click", closeLogin);
+
+loginModal.addEventListener("click", (e) => {
+  if (e.target === loginModal) closeLogin();
+});
+
+function closeLogin() {
+  loginModal.classList.add("hidden");
+  loginModal.classList.remove("flex");
+  loginForm.reset();
+  loginError.classList.add("hidden");
+}
+
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = new FormData(loginForm);
+  const { error } = await supabase.auth.signInWithPassword({
+    email: form.get("email"),
+    password: form.get("password"),
+  });
+  if (error) {
+    loginError.textContent = "Email hoặc mật khẩu không đúng.";
+    loginError.classList.remove("hidden");
+    return;
+  }
+  closeLogin();
+});
+
+const adminLogoutBtn = document.getElementById("admin-logout-btn");
+
+adminLogoutBtn.addEventListener("click", () => {
+  supabase.auth.signOut();
+});
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  isAdmin = !!session;
+  adminLogoutBtn.classList.toggle("hidden", !isAdmin);
+  adminOrdersBtn.classList.toggle("hidden", !isAdmin);
+  if (isAdmin) {
+    startAdminOrdersPolling();
+  } else {
+    stopAdminOrdersPolling();
+    closeOrdersDrawer();
+    adminOrdersBadge.classList.add("hidden");
+  }
+  loadProducts();
+  loadHeroSlides();
+  loadBanners();
+  loadContactSettings();
+  loadReviews();
+});
+
+// ── Products ──
+
+let allProducts = [];
+let activeCategory = "all";
+let activePriceSort = "default";
+
+const categoryTabs = document.getElementById("category-tabs");
+const priceFilter = document.getElementById("price-filter");
+
+function buildCategoryTabs(products) {
+  const categories = [...new Set(products.map((p) => p.category).filter(Boolean))];
+  categoryTabs.innerHTML =
+    `<button data-cat="all" class="border border-ink bg-ink px-4 py-1.5 text-xs font-medium text-white transition-colors">Tất cả</button>` +
+    categories
+      .map((c) => `<button data-cat="${c}" class="border border-earth px-4 py-1.5 text-xs font-medium text-ink transition-colors hover:border-ink">${c}</button>`)
+      .join("");
+
+  categoryTabs.querySelectorAll("button").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      activeCategory = btn.dataset.cat;
+      categoryTabs.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("bg-ink", b.dataset.cat === activeCategory);
+        b.classList.toggle("text-white", b.dataset.cat === activeCategory);
+        b.classList.toggle("border-ink", b.dataset.cat === activeCategory);
+        b.classList.toggle("text-ink", b.dataset.cat !== activeCategory);
+        b.classList.toggle("border-earth", b.dataset.cat !== activeCategory);
+      });
+      applyFilters();
+    })
+  );
+}
+
+priceFilter.addEventListener("change", () => {
+  activePriceSort = priceFilter.value;
+  applyFilters();
+});
+
+function applyFilters() {
+  let filtered = activeCategory === "all"
+    ? [...allProducts]
+    : allProducts.filter((p) => p.category === activeCategory);
+
+  if (activePriceSort === "low") {
+    filtered.sort((a, b) => (a.sale_price || a.price) - (b.sale_price || b.price));
+  } else if (activePriceSort === "high") {
+    filtered.sort((a, b) => (b.sale_price || b.price) - (a.sale_price || a.price));
+  }
+
+  renderProducts(filtered);
+}
+
+function renderProducts(products) {
+  const grid = document.getElementById("product-grid");
+
+  const addBtn = isAdmin
+    ? `<button id="add-product-btn" class="flex aspect-[4/5] items-center justify-center border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink transition-colors cursor-pointer">
+        <span class="text-center"><span class="block text-3xl leading-none">+</span><span class="mt-2 block text-sm">Thêm sản phẩm</span></span>
+      </button>`
+    : "";
+
+  if (!products.length && !isAdmin) {
+    grid.innerHTML = `<p class="col-span-full text-center text-sm text-ash py-12">Chưa có sản phẩm nào.</p>`;
+    return;
+  }
+
+  grid.innerHTML =
+    addBtn +
+    products
+      .map(
+        (p) => `
+    <article class="group relative">
+      <div data-detail="${p.id}" class="aspect-[4/5] overflow-hidden bg-earth/30 cursor-pointer relative">
+        ${
+          p.image_url
+            ? `<img src="${p.image_url}" alt="${p.name}" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />`
+            : `<div class="flex h-full items-center justify-center"><span class="font-serif text-lg italic text-ash">nomnom</span></div>`
+        }
+        ${p.badge === "bestseller" ? `<span class="absolute top-2 left-2 bg-[#f39c12] px-2 py-0.5 text-[10px] font-medium text-white">Bán chạy</span>` : ""}
+        ${p.badge === "new" ? `<span class="absolute top-2 left-2 bg-[#34C759] px-2 py-0.5 text-[10px] font-medium text-white">Mới</span>` : ""}
+        ${p.badge === "soldout" ? `<span class="absolute top-2 left-2 bg-ink px-2 py-0.5 text-[10px] font-medium text-white">Hết hàng</span>` : ""}
+      </div>
+      <div class="mt-4">
+        <h3 data-detail="${p.id}" class="font-serif text-lg text-ink cursor-pointer hover:text-ash transition-colors">${p.name}</h3>
+        ${p.description ? `<p class="mt-1 text-sm text-ash line-clamp-2">${p.description}</p>` : ""}
+        <div class="mt-2 flex items-center justify-between">
+          <p class="text-sm font-medium text-ink">
+            ${p.sale_price
+              ? `<span class="text-ash line-through">${formatPrice(p.price)}</span> <span class="text-red-600">${formatPrice(p.sale_price)}</span>`
+              : formatPrice(p.price)
+            }
+          </p>
+          ${p.badge === "soldout"
+            ? `<span class="text-xs text-ash">Hết hàng</span>`
+            : `<button data-add-cart="${p.id}" class="bg-ink px-4 py-2 text-xs font-medium text-white hover:opacity-90 active:scale-95 transition-all">+ Giỏ hàng</button>`
+          }
+        </div>
+      </div>
+      ${
+        isAdmin
+          ? `<div class="mt-3 flex gap-2">
+              <button data-edit="${p.id}" class="text-xs text-ash hover:text-ink transition-colors">Sửa</button>
+              <button data-delete="${p.id}" class="text-xs text-red-500 hover:text-red-700 transition-colors">Xóa</button>
+            </div>`
+          : ""
+      }
+    </article>
+  `
+      )
+      .join("");
+
+  if (isAdmin) {
+    document.getElementById("add-product-btn")?.addEventListener("click", () => openProductForm());
+
+    grid.querySelectorAll("[data-edit]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const product = products.find((p) => p.id === btn.dataset.edit);
+        if (product) openProductForm(product);
+      })
+    );
+
+    grid.querySelectorAll("[data-delete]").forEach((btn) =>
+      btn.addEventListener("click", () => deleteProduct(btn.dataset.delete))
+    );
+  }
+
+  grid.querySelectorAll("[data-add-cart]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const product = products.find((p) => p.id === btn.dataset.addCart);
+      if (product) {
+        addToCart(product);
+        btn.textContent = "Đã thêm ✓";
+        setTimeout(() => { btn.textContent = "+ Giỏ hàng"; }, 1000);
+      }
+    })
+  );
+
+  grid.querySelectorAll("[data-detail]").forEach((el) =>
+    el.addEventListener("click", () => {
+      const product = allProducts.find((p) => p.id === el.dataset.detail);
+      if (product) openDetailModal(product);
+    })
+  );
+}
+
+// ── Product Detail Modal (carousel tối đa 3 ảnh) ──
+
+const detailModal = document.getElementById("detail-modal");
+const detailTrack = document.getElementById("detail-track");
+const detailDots = document.getElementById("detail-dots");
+const detailPrev = document.getElementById("detail-prev");
+const detailNext = document.getElementById("detail-next");
+let detailImages = [];
+let detailIndex = 0;
+
+function goDetail(i) {
+  detailIndex = ((i % detailImages.length) + detailImages.length) % detailImages.length;
+  detailTrack.style.transform = `translateX(-${detailIndex * 100}%)`;
+  detailDots.querySelectorAll("button").forEach((d, idx) => {
+    d.classList.toggle("bg-ink", idx === detailIndex);
+    d.classList.toggle("bg-ink/30", idx !== detailIndex);
+  });
+}
+
+detailPrev.addEventListener("click", () => goDetail(detailIndex - 1));
+detailNext.addEventListener("click", () => goDetail(detailIndex + 1));
+
+// Swipe trên điện thoại
+let detailTouchX = null;
+detailTrack.addEventListener("touchstart", (e) => { detailTouchX = e.touches[0].clientX; }, { passive: true });
+detailTrack.addEventListener("touchend", (e) => {
+  if (detailTouchX === null || detailImages.length < 2) return;
+  const dx = e.changedTouches[0].clientX - detailTouchX;
+  if (dx > 40) goDetail(detailIndex - 1);
+  else if (dx < -40) goDetail(detailIndex + 1);
+  detailTouchX = null;
+});
+
+function openDetailModal(p) {
+  detailImages = [p.image_url, p.image_url2, p.image_url3].filter(Boolean);
+
+  if (!detailImages.length) {
+    detailTrack.innerHTML = `<div class="flex h-full w-full shrink-0 items-center justify-center"><span class="font-serif text-lg italic text-ash">nomnom</span></div>`;
+  } else {
+    detailTrack.innerHTML = detailImages
+      .map((src) => `<div class="h-full w-full shrink-0"><img src="${src}" alt="${p.name}" class="h-full w-full object-cover" /></div>`)
+      .join("");
+  }
+
+  const multi = detailImages.length > 1;
+  detailPrev.classList.toggle("hidden", !multi);
+  detailNext.classList.toggle("hidden", !multi);
+  detailDots.innerHTML = multi
+    ? detailImages
+        .map((_, i) => `<button class="h-2 w-2 rounded-full ${i === 0 ? "bg-ink" : "bg-ink/30"} transition-colors" aria-label="Ảnh ${i + 1}"></button>`)
+        .join("")
+    : "";
+  detailDots.querySelectorAll("button").forEach((d, i) => d.addEventListener("click", () => goDetail(i)));
+  detailIndex = 0;
+  detailTrack.style.transform = "translateX(0)";
+
+  document.getElementById("detail-category").textContent = p.category || "";
+  document.getElementById("detail-name").textContent = p.name;
+  document.getElementById("detail-description").textContent = p.description || "Chưa có mô tả.";
+  document.getElementById("detail-price").innerHTML = p.sale_price
+    ? `<span class="text-ash line-through">${formatPrice(p.price)}</span> <span class="text-red-600">${formatPrice(p.sale_price)}</span>`
+    : formatPrice(p.price);
+
+  const addBtn = document.getElementById("detail-add-cart");
+  addBtn.onclick = () => {
+    addToCart(p);
+    addBtn.textContent = "Đã thêm ✓";
+    setTimeout(() => { addBtn.textContent = "+ Giỏ hàng"; }, 1000);
+  };
+
+  detailModal.classList.remove("hidden");
+  detailModal.classList.add("flex");
+}
+
+document.getElementById("detail-close").addEventListener("click", () => {
+  detailModal.classList.add("hidden");
+  detailModal.classList.remove("flex");
+});
+
+detailModal.addEventListener("click", (e) => {
+  if (e.target === detailModal) {
+    detailModal.classList.add("hidden");
+    detailModal.classList.remove("flex");
+  }
+});
+
+async function loadProducts() {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Lỗi tải sản phẩm:", error.message);
+    document.getElementById("product-grid").innerHTML =
+      `<p class="col-span-full text-center text-sm text-ash py-12">Không thể tải sản phẩm.</p>`;
+    return;
+  }
+
+  allProducts = data;
+  buildCategoryTabs(data);
+  applyFilters();
+}
+
+// ── Product Form ──
+
+const productModal = document.getElementById("product-modal");
+const productForm = document.getElementById("product-form");
+const productError = document.getElementById("product-error");
+
+function openProductForm(product) {
+  document.getElementById("product-form-title").textContent = product
+    ? "Sửa sản phẩm"
+    : "Thêm sản phẩm";
+  productForm.reset();
+  if (product) {
+    productForm.elements.id.value = product.id;
+    productForm.elements.name.value = product.name;
+    productForm.elements.description.value = product.description || "";
+    productForm.elements.price.value = product.price;
+    productForm.elements.sale_price.value = product.sale_price || "";
+    productForm.elements.category.value = product.category || "";
+    productForm.elements.badge.value = product.badge || "";
+  }
+  productError.classList.add("hidden");
+  productModal.classList.remove("hidden");
+  productModal.classList.add("flex");
+}
+
+function closeProductForm() {
+  productModal.classList.add("hidden");
+  productModal.classList.remove("flex");
+  productForm.reset();
+}
+
+document.getElementById("product-cancel").addEventListener("click", closeProductForm);
+productModal.addEventListener("click", (e) => {
+  if (e.target === productModal) closeProductForm();
+});
+
+async function uploadProductImage(file, prefix) {
+  const ext = file.name.split(".").pop();
+  const fileName = `${prefix}${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("product-images")
+    .upload(fileName, file);
+  if (uploadError) throw uploadError;
+  const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
+  return urlData.publicUrl;
+}
+
+productForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = new FormData(productForm);
+  const id = form.get("id");
+
+  const salePriceVal = form.get("sale_price");
+  const row = {
+    name: form.get("name"),
+    description: form.get("description") || null,
+    price: parseInt(form.get("price")),
+    sale_price: salePriceVal ? parseInt(salePriceVal) : null,
+    category: form.get("category") || null,
+    badge: form.get("badge") || null,
+  };
+
+  try {
+    const f1 = productForm.elements.image.files[0];
+    const f2 = productForm.elements.image2.files[0];
+    const f3 = productForm.elements.image3.files[0];
+    if (f1) row.image_url = await uploadProductImage(f1, "");
+    if (f2) row.image_url2 = await uploadProductImage(f2, "p2-");
+    if (f3) row.image_url3 = await uploadProductImage(f3, "p3-");
+  } catch (uploadError) {
+    productError.textContent = "Lỗi upload ảnh: " + uploadError.message;
+    productError.classList.remove("hidden");
+    return;
+  }
+
+  let error;
+  if (id) {
+    ({ error } = await supabase.from("products").update(row).eq("id", id));
+  } else {
+    ({ error } = await supabase.from("products").insert(row));
+  }
+
+  if (error) {
+    productError.textContent = "Lỗi lưu: " + error.message;
+    productError.classList.remove("hidden");
+    return;
+  }
+
+  closeProductForm();
+  loadProducts();
+});
+
+// ── Delete ──
+
+async function deleteProduct(id) {
+  if (!confirm("Bạn chắc chắn muốn xóa sản phẩm này?")) return;
+  const { error } = await supabase.from("products").delete().eq("id", id);
+  if (error) {
+    alert("Lỗi xóa: " + error.message);
+    return;
+  }
+  loadProducts();
+}
+
+// ── Hero Slideshow ──
+
+const heroSlides = document.getElementById("hero-slides");
+const heroEditBtn = document.getElementById("hero-edit-btn");
+const heroPrev = document.getElementById("hero-prev");
+const heroNext = document.getElementById("hero-next");
+const heroDots = document.getElementById("hero-dots");
+const heroSlideshow = document.getElementById("hero-slideshow");
+let currentSlide = 0;
+let slideCount = 0;
+let autoplayTimer = null;
+
+function goToSlide(i) {
+  currentSlide = ((i % slideCount) + slideCount) % slideCount;
+  heroSlides.style.transform = `translateX(-${currentSlide * 100}%)`;
+  heroDots.querySelectorAll("button").forEach((dot, idx) => {
+    dot.classList.toggle("bg-ink", idx === currentSlide);
+    dot.classList.toggle("bg-ink/30", idx !== currentSlide);
+  });
+}
+
+function startAutoplay() {
+  stopAutoplay();
+  if (slideCount > 1) {
+    autoplayTimer = setInterval(() => goToSlide(currentSlide + 1), 4000);
+  }
+}
+
+function stopAutoplay() {
+  if (autoplayTimer) clearInterval(autoplayTimer);
+}
+
+heroPrev.addEventListener("click", () => { goToSlide(currentSlide - 1); startAutoplay(); });
+heroNext.addEventListener("click", () => { goToSlide(currentSlide + 1); startAutoplay(); });
+
+async function loadHeroSlides() {
+  const { data } = await supabase
+    .from("hero_slides")
+    .select("*")
+    .order("sort_order", { ascending: true });
+
+  const slides = data || [];
+  slideCount = slides.length;
+
+  heroEditBtn.classList.toggle("hidden", !isAdmin);
+
+  if (!slides.length) {
+    heroSlides.innerHTML = `<div class="flex h-full w-full shrink-0 items-center justify-center"><span class="font-serif text-xl italic text-ash">Ảnh sản phẩm</span></div>`;
+    heroPrev.classList.add("hidden");
+    heroNext.classList.add("hidden");
+    heroDots.classList.add("hidden");
+    stopAutoplay();
+    return;
+  }
+
+  heroSlides.innerHTML = slides
+    .map((s) => `<div class="h-full w-full shrink-0"><img src="${s.image_url}" alt="" class="h-full w-full object-cover" /></div>`)
+    .join("");
+
+  if (slides.length > 1) {
+    heroPrev.classList.remove("hidden");
+    heroNext.classList.remove("hidden");
+    heroDots.classList.remove("hidden");
+    heroSlideshow.addEventListener("mouseenter", () => {
+      heroPrev.style.opacity = "1";
+      heroNext.style.opacity = "1";
+    });
+    heroSlideshow.addEventListener("mouseleave", () => {
+      heroPrev.style.opacity = "0";
+      heroNext.style.opacity = "0";
+    });
+    heroDots.innerHTML = slides
+      .map((_, i) => `<button class="h-2 w-2 rounded-full ${i === 0 ? "bg-ink" : "bg-ink/30"} transition-colors" aria-label="Slide ${i + 1}"></button>`)
+      .join("");
+    heroDots.querySelectorAll("button").forEach((dot, i) =>
+      dot.addEventListener("click", () => { goToSlide(i); startAutoplay(); })
+    );
+    startAutoplay();
+  } else {
+    heroPrev.classList.add("hidden");
+    heroNext.classList.add("hidden");
+    heroDots.classList.add("hidden");
+  }
+
+  currentSlide = 0;
+  heroSlides.style.transform = "translateX(0)";
+}
+
+// ── Hero Slides Admin ──
+
+const slidesModal = document.getElementById("slides-modal");
+const slidesList = document.getElementById("slides-list");
+const slideUpload = document.getElementById("slide-upload");
+
+heroEditBtn.addEventListener("click", openSlidesModal);
+document.getElementById("slides-close").addEventListener("click", closeSlidesModal);
+slidesModal.addEventListener("click", (e) => { if (e.target === slidesModal) closeSlidesModal(); });
+
+async function openSlidesModal() {
+  slidesModal.classList.remove("hidden");
+  slidesModal.classList.add("flex");
+  await renderSlidesList();
+}
+
+function closeSlidesModal() {
+  slidesModal.classList.add("hidden");
+  slidesModal.classList.remove("flex");
+}
+
+async function renderSlidesList() {
+  const { data } = await supabase.from("hero_slides").select("*").order("sort_order");
+  const slides = data || [];
+
+  if (!slides.length) {
+    slidesList.innerHTML = `<p class="text-sm text-ash">Chưa có ảnh nào.</p>`;
+    return;
+  }
+
+  slidesList.innerHTML = slides
+    .map(
+      (s) => `
+    <div class="flex items-center gap-3 border border-earth/40 p-2">
+      <img src="${s.image_url}" alt="" class="h-16 w-16 object-cover shrink-0" />
+      <span class="text-sm text-ash flex-1 truncate">${s.image_url.split("/").pop()}</span>
+      <button data-delete-slide="${s.id}" class="text-xs text-red-500 hover:text-red-700 shrink-0">Xóa</button>
+    </div>
+  `
+    )
+    .join("");
+
+  slidesList.querySelectorAll("[data-delete-slide]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      await supabase.from("hero_slides").delete().eq("id", btn.dataset.deleteSlide);
+      await renderSlidesList();
+      loadHeroSlides();
+    })
+  );
+}
+
+slideUpload.addEventListener("change", async () => {
+  const file = slideUpload.files[0];
+  if (!file) return;
+
+  const ext = file.name.split(".").pop();
+  const fileName = `hero-${Date.now()}.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("product-images")
+    .upload(fileName, file);
+
+  if (uploadError) {
+    alert("Lỗi upload: " + uploadError.message);
+    return;
+  }
+
+  const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
+
+  const { data: existing } = await supabase.from("hero_slides").select("sort_order").order("sort_order", { ascending: false }).limit(1);
+  const nextOrder = existing?.length ? existing[0].sort_order + 1 : 0;
+
+  await supabase.from("hero_slides").insert({ image_url: urlData.publicUrl, sort_order: nextOrder });
+
+  slideUpload.value = "";
+  await renderSlidesList();
+  loadHeroSlides();
+});
+
+// ── Banner Slideshow ──
+
+const bannerSlides = document.getElementById("banner-slides");
+const bannerDots = document.getElementById("banner-dots");
+const bannerEditBtn = document.getElementById("banner-edit-btn");
+const bannerSection = document.getElementById("banner-section");
+let bannerIndex = 0;
+let bannerCount = 0;
+let bannerTimer = null;
+
+function goToBanner(i) {
+  bannerIndex = ((i % bannerCount) + bannerCount) % bannerCount;
+  bannerSlides.style.transform = `translateX(-${bannerIndex * 100}%)`;
+  bannerDots.querySelectorAll("button").forEach((dot, idx) => {
+    dot.classList.toggle("bg-ink", idx === bannerIndex);
+    dot.classList.toggle("bg-ink/30", idx !== bannerIndex);
+  });
+}
+
+function startBannerAutoplay() {
+  if (bannerTimer) clearInterval(bannerTimer);
+  if (bannerCount > 1) {
+    bannerTimer = setInterval(() => goToBanner(bannerIndex + 1), 10000);
+  }
+}
+
+async function loadBanners() {
+  const { data, error } = await supabase
+    .from("banners")
+    .select("*")
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    bannerSection.classList.add("hidden");
+    return;
+  }
+
+  const slides = data || [];
+  bannerCount = slides.length;
+
+  bannerEditBtn.classList.toggle("hidden", !isAdmin);
+
+  if (!slides.length) {
+    if (isAdmin) {
+      bannerSection.classList.remove("hidden");
+      bannerSlides.innerHTML = `<div class="flex h-[120px] w-full shrink-0 items-center justify-center md:h-[200px]"><span class="text-sm italic text-ash">Chưa có banner</span></div>`;
+    } else {
+      bannerSection.classList.add("hidden");
+    }
+    if (bannerTimer) clearInterval(bannerTimer);
+    return;
+  }
+
+  bannerSection.classList.remove("hidden");
+  bannerSlides.innerHTML = slides
+    .map((s) => `<div class="h-[120px] w-full shrink-0 md:h-[200px]"><img src="${s.image_url}" alt="" class="h-full w-full object-cover" /></div>`)
+    .join("");
+
+  if (slides.length > 1) {
+    bannerDots.classList.remove("hidden");
+    bannerDots.innerHTML = slides
+      .map((_, i) => `<button class="h-2 w-2 rounded-full ${i === 0 ? "bg-ink" : "bg-ink/30"} transition-colors" aria-label="Banner ${i + 1}"></button>`)
+      .join("");
+    bannerDots.querySelectorAll("button").forEach((dot, i) =>
+      dot.addEventListener("click", () => { goToBanner(i); startBannerAutoplay(); })
+    );
+    startBannerAutoplay();
+  } else {
+    bannerDots.classList.add("hidden");
+  }
+
+  bannerIndex = 0;
+  bannerSlides.style.transform = "translateX(0)";
+}
+
+// ── Banner Admin ──
+
+const bannerModal = document.getElementById("banner-modal");
+const bannerList = document.getElementById("banner-list");
+const bannerUpload = document.getElementById("banner-upload");
+
+bannerEditBtn.addEventListener("click", () => {
+  bannerModal.classList.remove("hidden");
+  bannerModal.classList.add("flex");
+  renderBannerList();
+});
+
+document.getElementById("banner-close").addEventListener("click", () => {
+  bannerModal.classList.add("hidden");
+  bannerModal.classList.remove("flex");
+});
+
+bannerModal.addEventListener("click", (e) => {
+  if (e.target === bannerModal) {
+    bannerModal.classList.add("hidden");
+    bannerModal.classList.remove("flex");
+  }
+});
+
+async function renderBannerList() {
+  const { data } = await supabase.from("banners").select("*").order("sort_order");
+  const items = data || [];
+
+  if (!items.length) {
+    bannerList.innerHTML = `<p class="text-sm text-ash">Chưa có banner nào.</p>`;
+    return;
+  }
+
+  bannerList.innerHTML = items
+    .map(
+      (s) => `
+    <div class="flex items-center gap-3 border border-earth/40 p-2">
+      <img src="${s.image_url}" alt="" class="h-12 w-20 object-cover shrink-0" />
+      <span class="text-sm text-ash flex-1 truncate">${s.image_url.split("/").pop()}</span>
+      <button data-delete-banner="${s.id}" class="text-xs text-red-500 hover:text-red-700 shrink-0">Xóa</button>
+    </div>
+  `
+    )
+    .join("");
+
+  bannerList.querySelectorAll("[data-delete-banner]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      await supabase.from("banners").delete().eq("id", btn.dataset.deleteBanner);
+      await renderBannerList();
+      loadBanners();
+    })
+  );
+}
+
+bannerUpload.addEventListener("change", async () => {
+  const file = bannerUpload.files[0];
+  if (!file) return;
+
+  const ext = file.name.split(".").pop();
+  const fileName = `banner-${Date.now()}.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("product-images")
+    .upload(fileName, file);
+
+  if (uploadError) {
+    alert("Lỗi upload: " + uploadError.message);
+    return;
+  }
+
+  const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
+
+  const { data: existing } = await supabase.from("banners").select("sort_order").order("sort_order", { ascending: false }).limit(1);
+  const nextOrder = existing?.length ? existing[0].sort_order + 1 : 0;
+
+  await supabase.from("banners").insert({ image_url: urlData.publicUrl, sort_order: nextOrder });
+
+  bannerUpload.value = "";
+  await renderBannerList();
+  loadBanners();
+});
+
+// ── Contact Buttons ──
+
+const contactEditBtn = document.getElementById("btn-contact-edit");
+const contactModal = document.getElementById("contact-modal");
+const contactForm = document.getElementById("contact-form");
+const contactError = document.getElementById("contact-error");
+
+function updateLogo(data) {
+  const headerLogo = document.getElementById("logo");
+  const footerLogo = document.getElementById("footer-logo");
+  const logoNames = document.querySelectorAll(".logo-name");
+
+  if (data.logo_image_url) {
+    headerLogo.innerHTML = `<img src="${data.logo_image_url}" alt="Logo" class="h-[50px] md:h-[60px] w-auto" />`;
+    footerLogo.innerHTML = `<img src="${data.logo_image_url}" alt="Logo" class="h-8 w-auto" />`;
+  } else {
+    headerLogo.textContent = data.logo_text || "nomnom";
+    footerLogo.textContent = data.logo_text || "nomnom";
+  }
+
+  const name = data.logo_text || "nomnom";
+  logoNames.forEach((el) => { el.textContent = name; });
+  document.title = `${name} — Bánh ngọt thủ công`;
+}
+
+const editableFields = [
+  { id: "hero-subtitle", col: "hero_subtitle" },
+  { id: "hero-title", col: "hero_title" },
+  { id: "hero-description", col: "hero_description" },
+  { id: "hero-cta", col: "hero_cta" },
+  { id: "products-title", col: "products_title" },
+  { id: "products-subtitle", col: "products_subtitle" },
+  { id: "review-title", col: "review_title" },
+  { id: "review-subtitle", col: "review_subtitle" },
+];
+
+function updateHeroContent(data) {
+  editableFields.forEach(({ id, col }) => {
+    const el = document.getElementById(id);
+    if (data[col]) el.textContent = data[col];
+  });
+
+  if (isAdmin) {
+    editableFields.forEach(({ id, col }) => {
+      const el = document.getElementById(id);
+      el.setAttribute("contenteditable", "true");
+      el.removeEventListener("blur", el._saveHandler);
+      el._saveHandler = () => saveField(col, el.textContent.trim());
+      el.addEventListener("blur", el._saveHandler);
+    });
+  } else {
+    editableFields.forEach(({ id }) => {
+      document.getElementById(id).removeAttribute("contenteditable");
+    });
+  }
+}
+
+const saveToast = document.getElementById("save-toast");
+
+async function saveField(column, value) {
+  const { error } = await supabase
+    .from("site_settings")
+    .update({ [column]: value })
+    .eq("id", 1);
+
+  if (!error) {
+    saveToast.classList.add("show");
+    setTimeout(() => saveToast.classList.remove("show"), 1500);
+  }
+}
+
+async function loadContactSettings() {
+  const { data } = await supabase.from("site_settings").select("*").single();
+  if (!data) return;
+
+  updateLogo(data);
+  updateHeroContent(data);
+
+  const zaloBtn = document.getElementById("btn-zalo");
+  const messengerBtn = document.getElementById("btn-messenger");
+
+  zaloBtn.href = data.zalo_url || "#";
+  messengerBtn.href = data.messenger_url || "#";
+
+  zaloBtn.classList.toggle("hidden", !data.zalo_url);
+  messengerBtn.classList.toggle("hidden", !data.messenger_url);
+
+  const footerPhone = document.getElementById("footer-phone");
+  const footerAddress = document.getElementById("footer-address");
+  if (data.phone) {
+    footerPhone.innerHTML = `<a href="tel:${data.phone}" class="hover:text-ink transition-colors">SĐT: ${data.phone}</a>`;
+    footerPhone.classList.remove("hidden");
+  } else {
+    footerPhone.classList.add("hidden");
+  }
+  footerAddress.textContent = data.address_text || "";
+  footerAddress.classList.toggle("hidden", !data.address_text);
+
+  const socials = [
+    ["social-facebook", data.facebook_url],
+    ["social-instagram", data.instagram_url],
+    ["social-threads", data.threads_url],
+  ];
+  socials.forEach(([elId, url]) => {
+    const el = document.getElementById(elId);
+    el.href = url || "#";
+    // khách chỉ thấy icon đã có link; admin luôn thấy cả 3 để điền
+    const show = !!url || isAdmin;
+    el.classList.toggle("hidden", !show);
+    el.classList.toggle("inline-flex", show);
+    el.classList.toggle("opacity-40", !url); // mờ nếu chưa có link (gợi ý cho admin)
+  });
+
+  contactEditBtn.classList.toggle("hidden", !isAdmin);
+
+  bankSettings = {
+    bank_id: data.bank_id || "",
+    bank_account: data.bank_account || "",
+    bank_name: data.bank_name || "",
+    zalo_url: data.zalo_url || "",
+  };
+
+  const dFee = document.getElementById("delivery-fee");
+  const dZones = document.getElementById("delivery-zones");
+  const dTime = document.getElementById("delivery-time");
+  const dInfo = document.getElementById("delivery-info");
+  const hasDel = data.delivery_fee || data.delivery_zones || data.delivery_time;
+  dInfo.classList.toggle("hidden", !hasDel);
+  dFee.textContent = data.delivery_fee ? `🚚 ${data.delivery_fee}` : "";
+  dZones.textContent = data.delivery_zones ? `📍 ${data.delivery_zones}` : "";
+  dTime.textContent = data.delivery_time ? `⏱ ${data.delivery_time}` : "";
+}
+
+contactEditBtn.addEventListener("click", async () => {
+  const { data } = await supabase.from("site_settings").select("*").single();
+  if (data) {
+    contactForm.elements.phone.value = data.phone || "";
+    contactForm.elements.zalo_url.value = data.zalo_url || "";
+    contactForm.elements.address_text.value = data.address_text || "";
+    contactForm.elements.messenger_url.value = data.messenger_url || "";
+    contactForm.elements.facebook_url.value = data.facebook_url || "";
+    contactForm.elements.instagram_url.value = data.instagram_url || "";
+    contactForm.elements.threads_url.value = data.threads_url || "";
+    contactForm.elements.delivery_fee.value = data.delivery_fee || "";
+    contactForm.elements.delivery_zones.value = data.delivery_zones || "";
+    contactForm.elements.delivery_time.value = data.delivery_time || "";
+    contactForm.elements.bank_id.value = data.bank_id || "";
+    contactForm.elements.bank_account.value = data.bank_account || "";
+    contactForm.elements.bank_name.value = data.bank_name || "";
+    const preview = document.getElementById("current-logo-preview");
+    const previewImg = document.getElementById("logo-preview-img");
+    if (data.logo_image_url) {
+      previewImg.src = data.logo_image_url;
+      preview.classList.remove("hidden");
+    } else {
+      preview.classList.add("hidden");
+    }
+  }
+  contactError.classList.add("hidden");
+  contactModal.classList.remove("hidden");
+  contactModal.classList.add("flex");
+});
+
+document.getElementById("contact-cancel").addEventListener("click", closeContactModal);
+contactModal.addEventListener("click", (e) => { if (e.target === contactModal) closeContactModal(); });
+
+function closeContactModal() {
+  contactModal.classList.add("hidden");
+  contactModal.classList.remove("flex");
+}
+
+contactForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = new FormData(contactForm);
+  const logoFile = contactForm.elements.logo_image.files[0];
+
+  let logo_image_url = undefined;
+
+  if (logoFile) {
+    const ext = logoFile.name.split(".").pop();
+    const fileName = `logo-${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("product-images")
+      .upload(fileName, logoFile);
+
+    if (uploadError) {
+      contactError.textContent = "Lỗi upload logo: " + uploadError.message;
+      contactError.classList.remove("hidden");
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
+    logo_image_url = urlData.publicUrl;
+  }
+
+  const row = {
+    phone: form.get("phone") || null,
+    zalo_url: form.get("zalo_url") || null,
+    address_text: form.get("address_text") || null,
+    messenger_url: form.get("messenger_url") || null,
+    facebook_url: form.get("facebook_url") || null,
+    instagram_url: form.get("instagram_url") || null,
+    threads_url: form.get("threads_url") || null,
+    delivery_fee: form.get("delivery_fee") || null,
+    delivery_zones: form.get("delivery_zones") || null,
+    delivery_time: form.get("delivery_time") || null,
+    bank_id: form.get("bank_id") || null,
+    bank_account: form.get("bank_account") || null,
+    bank_name: form.get("bank_name") || null,
+  };
+  if (logo_image_url) row.logo_image_url = logo_image_url;
+
+  const { error } = await supabase.from("site_settings").update(row).eq("id", 1);
+
+  if (error) {
+    contactError.textContent = "Lỗi lưu: " + error.message;
+    contactError.classList.remove("hidden");
+    return;
+  }
+
+  closeContactModal();
+  loadContactSettings();
+});
+
+// ── Reviews ──
+
+const reviewList = document.getElementById("review-list");
+const reviewForm = document.getElementById("review-form");
+const reviewError = document.getElementById("review-error");
+const starPicker = document.getElementById("star-picker");
+let selectedRating = 5;
+
+starPicker.querySelectorAll("[data-star]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    selectedRating = parseInt(btn.dataset.star);
+    reviewForm.elements.rating.value = selectedRating;
+    starPicker.querySelectorAll("[data-star]").forEach((b, i) => {
+      b.classList.toggle("text-[#f39c12]", i < selectedRating);
+      b.classList.toggle("text-earth/50", i >= selectedRating);
+    });
+  });
+});
+
+function renderStars(n) {
+  return "★".repeat(n) + "☆".repeat(5 - n);
+}
+
+function renderReviews(reviews) {
+  if (!reviews.length) {
+    reviewList.innerHTML = `<p class="text-sm text-ash">Chưa có đánh giá nào. Hãy là người đầu tiên!</p>`;
+    return;
+  }
+
+  reviewList.innerHTML = reviews
+    .map(
+      (r) => `
+    <div class="w-[280px] shrink-0 snap-start border border-earth/40 p-5 md:w-[320px] ${isAdmin ? "group relative" : ""}">
+      ${r.image_url ? `<img src="${r.image_url}" alt="Ảnh đánh giá" class="mb-4 h-40 w-full rounded object-cover" />` : ""}
+      <div class="flex items-center gap-2">
+        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-earth/30 font-serif text-sm text-ink">
+          ${r.name.charAt(0).toUpperCase()}
+        </div>
+        <span class="text-sm font-medium text-ink">${r.name}</span>
+      </div>
+      <div class="mt-2 text-sm text-[#f39c12]">${renderStars(r.rating)}</div>
+      <p class="mt-2 text-sm text-ash line-clamp-3">${r.comment}</p>
+      ${isAdmin ? `<button data-delete-review="${r.id}" class="absolute top-2 right-2 text-xs text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity">✕</button>` : ""}
+    </div>
+  `
+    )
+    .join("");
+
+  if (isAdmin) {
+    reviewList.querySelectorAll("[data-delete-review]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        await supabase.from("reviews").delete().eq("id", btn.dataset.deleteReview);
+        loadReviews();
+      })
+    );
+  }
+}
+
+async function loadReviews() {
+  const { data } = await supabase
+    .from("reviews")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  renderReviews(data || []);
+}
+
+reviewForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = new FormData(reviewForm);
+  const imageFile = reviewForm.elements.image.files[0];
+
+  let image_url = null;
+
+  if (imageFile) {
+    const ext = imageFile.name.split(".").pop();
+    const fileName = `review-${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("product-images")
+      .upload(fileName, imageFile);
+
+    if (uploadError) {
+      reviewError.textContent = "Lỗi upload ảnh: " + uploadError.message;
+      reviewError.classList.remove("hidden");
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
+    image_url = urlData.publicUrl;
+  }
+
+  const row = {
+    name: form.get("name"),
+    rating: parseInt(form.get("rating")),
+    comment: form.get("comment"),
+  };
+  if (image_url) row.image_url = image_url;
+
+  const { error } = await supabase.from("reviews").insert(row);
+
+  if (error) {
+    reviewError.textContent = "Lỗi gửi đánh giá: " + error.message;
+    reviewError.classList.remove("hidden");
+    return;
+  }
+
+  reviewError.classList.add("hidden");
+  reviewForm.reset();
+  selectedRating = 5;
+  starPicker.querySelectorAll("[data-star]").forEach((b) => b.classList.replace("text-earth/50", "text-[#f39c12]"));
+  loadReviews();
+});
+
+// ── Admin: Quản lý đơn hàng ──
+
+const adminOrdersBtn = document.getElementById("admin-orders-btn");
+const adminOrdersBadge = document.getElementById("admin-orders-badge");
+const ordersDrawer = document.getElementById("orders-drawer");
+const ordersOverlay = document.getElementById("orders-overlay");
+const ordersList = document.getElementById("orders-list");
+const ordersTabs = document.getElementById("orders-tabs");
+let ordersFilter = "active";
+let adminOrdersPoller = null;
+let adminOrdersCache = [];
+
+const ORDER_STATUS_LABEL = {
+  pending: { text: "Chờ thanh toán", cls: "bg-[#f39c12]" },
+  paid: { text: "Đã thanh toán", cls: "bg-[#34C759]" },
+  delivered: { text: "Đã giao", cls: "bg-ash" },
+  cancelled: { text: "Đã huỷ", cls: "bg-red-500" },
+};
+
+adminOrdersBtn.addEventListener("click", openOrdersDrawer);
+document.getElementById("orders-close").addEventListener("click", closeOrdersDrawer);
+ordersOverlay.addEventListener("click", closeOrdersDrawer);
+
+ordersTabs.querySelectorAll("[data-otab]").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    ordersFilter = btn.dataset.otab;
+    ordersTabs.querySelectorAll("[data-otab]").forEach((b) => {
+      const on = b.dataset.otab === ordersFilter;
+      b.classList.toggle("bg-ink", on);
+      b.classList.toggle("text-white", on);
+      b.classList.toggle("border-ink", on);
+      b.classList.toggle("text-ink", !on);
+      b.classList.toggle("border-earth", !on);
+    });
+    renderAdminOrders();
+  })
+);
+
+function openOrdersDrawer() {
+  ordersDrawer.classList.remove("-translate-x-full");
+  ordersOverlay.classList.remove("hidden");
+  fetchAdminOrders();
+}
+
+function closeOrdersDrawer() {
+  ordersDrawer.classList.add("-translate-x-full");
+  ordersOverlay.classList.add("hidden");
+}
+
+async function fetchAdminOrders() {
+  if (!isAdmin) return;
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) return;
+
+  adminOrdersCache = data || [];
+  const active = adminOrdersCache.filter(
+    (o) => o.status === "pending" || o.status === "paid"
+  ).length;
+  adminOrdersBadge.textContent = active;
+  adminOrdersBadge.classList.toggle("hidden", active === 0);
+
+  if (!ordersDrawer.classList.contains("-translate-x-full")) renderAdminOrders();
+}
+
+function renderAdminOrders() {
+  let list = adminOrdersCache;
+  if (ordersFilter === "active")
+    list = list.filter((o) => o.status === "pending" || o.status === "paid");
+  else if (ordersFilter !== "all")
+    list = list.filter((o) => o.status === ordersFilter);
+
+  if (!list.length) {
+    ordersList.innerHTML = `<p class="text-center text-sm text-ash py-12">Không có đơn nào.</p>`;
+    return;
+  }
+
+  ordersList.innerHTML = list
+    .map((o) => {
+      const items = Array.isArray(o.items) ? o.items : [];
+      const st = ORDER_STATUS_LABEL[o.status] || { text: o.status, cls: "bg-ash" };
+      const time = new Date(o.created_at).toLocaleString("vi-VN", {
+        hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit",
+      });
+      return `
+    <div class="border border-earth/40 p-4">
+      <div class="flex items-center justify-between">
+        <span class="font-medium text-ink">${o.order_code}</span>
+        <span class="${st.cls} px-2 py-0.5 text-[10px] font-medium text-white">${st.text}</span>
+      </div>
+      <p class="mt-1 text-xs text-ash">${time}</p>
+      <div class="mt-3 space-y-0.5 text-sm text-ink">
+        ${items
+          .map(
+            (i) =>
+              `<div class="flex justify-between"><span>${i.name} ×${i.qty}</span><span class="text-ash">${formatPrice(i.price * i.qty)}</span></div>`
+          )
+          .join("")}
+      </div>
+      <div class="mt-2 flex justify-between border-t border-dashed border-earth pt-2 text-sm font-medium text-ink">
+        <span>Tổng</span><span>${formatPrice(o.total)}</span>
+      </div>
+      <div class="mt-3 space-y-1 text-xs text-ash">
+        <p>👤 ${o.customer_name || "—"}${o.customer_phone ? ` · <a href="tel:${o.customer_phone}" class="text-ink hover:underline">${o.customer_phone}</a>` : ""}</p>
+        <p>📍 ${o.customer_address || "—"}</p>
+        <p>⏰ ${o.delivery_time || "Giao sớm nhất"}</p>
+        ${o.note ? `<p>📝 ${o.note}</p>` : ""}
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        ${o.status === "pending" ? `<button data-order-paid="${o.id}" class="bg-[#34C759] px-3 py-2 text-xs font-medium text-white hover:opacity-90">✓ Đã nhận tiền</button>` : ""}
+        ${o.status === "paid" ? `<button data-order-delivered="${o.id}" class="bg-ink px-3 py-2 text-xs font-medium text-white hover:opacity-90">🚚 Đã giao</button>` : ""}
+        ${o.status === "pending" || o.status === "paid" ? `<button data-order-cancel="${o.id}" class="border border-red-400 px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50">✕ Huỷ</button>` : ""}
+      </div>
+    </div>`;
+    })
+    .join("");
+
+  ordersList.querySelectorAll("[data-order-paid]").forEach((b) =>
+    b.addEventListener("click", () => setOrderStatus(b.dataset.orderPaid, "paid"))
+  );
+  ordersList.querySelectorAll("[data-order-delivered]").forEach((b) =>
+    b.addEventListener("click", () => setOrderStatus(b.dataset.orderDelivered, "delivered"))
+  );
+  ordersList.querySelectorAll("[data-order-cancel]").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (confirm("Huỷ đơn này?")) setOrderStatus(b.dataset.orderCancel, "cancelled");
+    })
+  );
+}
+
+async function setOrderStatus(id, status) {
+  const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+  if (error) {
+    alert("Lỗi cập nhật: " + error.message);
+    return;
+  }
+  fetchAdminOrders();
+}
+
+function startAdminOrdersPolling() {
+  stopAdminOrdersPolling();
+  fetchAdminOrders();
+  adminOrdersPoller = setInterval(fetchAdminOrders, 15000);
+}
+
+function stopAdminOrdersPolling() {
+  if (adminOrdersPoller) {
+    clearInterval(adminOrdersPoller);
+    adminOrdersPoller = null;
+  }
+}
+
+// ── Init ──
+
+updateCartCount();
+loadProducts();
+loadHeroSlides();
+loadBanners();
+loadContactSettings();
+loadReviews();
