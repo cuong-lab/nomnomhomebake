@@ -16,6 +16,14 @@ function updateCartCount() {
   const total = cart.reduce((sum, item) => sum + item.qty, 0);
   document.getElementById("cart-count").textContent = `Giỏ hàng (${total})`;
   document.getElementById("cart-count-mobile").textContent = total;
+  const fc = document.getElementById("floating-cart-count");
+  if (fc) fc.textContent = total;
+  const fb = document.getElementById("floating-cart");
+  if (fb) {
+    const show = window.scrollY > 200 && total > 0;
+    fb.classList.toggle("hidden", !show);
+    fb.classList.toggle("flex", show);
+  }
 }
 
 function addToCart(product) {
@@ -46,6 +54,14 @@ const cartCheckout = document.getElementById("cart-checkout");
 document.getElementById("cart-btn").addEventListener("click", openCart);
 document.getElementById("cart-close").addEventListener("click", closeCart);
 cartOverlay.addEventListener("click", closeCart);
+
+const floatingCart = document.getElementById("floating-cart");
+floatingCart.addEventListener("click", openCart);
+window.addEventListener("scroll", () => {
+  const show = window.scrollY > 200 && cart.length > 0;
+  floatingCart.classList.toggle("hidden", !show);
+  floatingCart.classList.toggle("flex", show);
+}, { passive: true });
 
 function openCart() {
   cartDrawer.classList.remove("translate-x-full");
@@ -448,18 +464,16 @@ function renderProducts(products) {
       <div class="mt-4">
         <h3 data-detail="${p.id}" class="font-serif text-lg text-ink cursor-pointer hover:text-ash transition-colors">${p.name}</h3>
         ${p.description ? `<p class="mt-1 text-sm text-ash line-clamp-2">${p.description}</p>` : ""}
-        <div class="mt-2 flex items-center justify-between">
-          <p class="text-sm font-medium text-ink">
+        <p class="mt-2 text-sm font-medium text-ink">
             ${p.sale_price
               ? `<span class="text-ash line-through">${formatPrice(p.price)}</span> <span class="text-red-600">${formatPrice(p.sale_price)}</span>`
               : formatPrice(p.price)
             }
-          </p>
-          ${p.badge === "soldout"
-            ? `<span class="text-xs text-ash">Hết hàng</span>`
-            : `<button data-add-cart="${p.id}" class="bg-ink px-4 py-2 text-xs font-medium text-white hover:opacity-90 active:scale-95 transition-all">+ Giỏ hàng</button>`
-          }
-        </div>
+        </p>
+        ${p.badge === "soldout"
+          ? `<span class="mt-2 block text-xs text-ash">Hết hàng</span>`
+          : `<button data-add-cart="${p.id}" class="mt-2 w-full bg-ink py-2 text-[11px] sm:text-xs font-medium text-white hover:opacity-90 active:scale-95 transition-all">+ Giỏ hàng</button>`
+        }
       </div>
       ${
         isAdmin
