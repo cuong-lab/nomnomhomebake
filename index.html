@@ -106,8 +106,8 @@
         <img id="hero-side-image" class="hero-side absolute right-0 top-0 h-full object-cover" style="width:calc((100% - 72rem)/2)" alt="" />
         <button id="hero-side-edit" class="hidden absolute right-2 bottom-2 z-10 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors" aria-label="Đổi ảnh">Đổi ảnh</button>
         <div class="mx-auto max-w-6xl px-6 py-10 md:py-14">
-        <div class="grid items-end gap-16 md:grid-cols-2">
-          <div class="animate-fade-up md:pt-16">
+        <div class="grid items-start gap-16 md:grid-cols-2">
+          <div class="animate-fade-up">
             <p id="hero-subtitle" class="mb-5 text-xs font-medium uppercase tracking-[0.25em] text-ash">
               Tiệm bánh thủ công
             </p>
@@ -175,7 +175,7 @@
       <section id="about" class="mx-auto max-w-6xl px-6 py-12 scroll-mt-24">
         <div class="grid items-center gap-10 md:grid-cols-2">
           <!-- Ảnh About -->
-          <div class="relative aspect-[4/3] overflow-hidden rounded-2xl bg-earth/30" id="about-image-wrap">
+          <div class="reveal relative aspect-[4/3] overflow-hidden rounded-2xl bg-earth/30" id="about-image-wrap">
             <img id="about-image" class="h-full w-full object-cover" alt="" style="display:none" />
             <div id="about-image-placeholder" class="flex h-full w-full items-center justify-center">
               <span class="font-serif text-xl italic text-ash">nomnom</span>
@@ -184,11 +184,11 @@
           </div>
           <!-- Nội dung About -->
           <div>
-            <h2 id="about-title" class="inline-block border-b border-ink pb-2 font-serif text-3xl text-ink md:text-4xl">Về nomnom</h2>
-            <p id="about-text" class="mt-6 text-base leading-relaxed text-ash">
+            <h2 id="about-title" class="reveal reveal-1 inline-block border-b border-ink pb-2 font-serif text-3xl text-ink md:text-4xl">Về nomnom</h2>
+            <p id="about-text" class="reveal reveal-2 mt-6 text-base leading-relaxed text-ash">
               nomnom là tiệm bánh thủ công nhỏ, làm mỗi mẻ bánh bằng cả tấm lòng. Chúng mình tin rằng một chiếc bánh ngon bắt đầu từ nguyên liệu thật và sự tỉ mỉ trong từng công đoạn.
             </p>
-            <div class="mt-8">
+            <div class="reveal reveal-3 mt-8">
               <a href="#products" class="inline-block rounded-full bg-[#7a0c1f] px-10 py-4 text-sm font-medium text-white shadow-md transition-transform duration-300 hover:scale-[1.03]">
                 Mua bánh thôi
               </a>
