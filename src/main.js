@@ -20,7 +20,7 @@ function updateCartCount() {
   if (fc) fc.textContent = total;
   const fb = document.getElementById("floating-cart");
   if (fb) {
-    const show = window.scrollY > 200 && total > 0;
+    const show = window.scrollY > 200 && total > 0 && !isAdmin;
     fb.classList.toggle("hidden", !show);
     fb.classList.toggle("flex", show);
   }
@@ -58,7 +58,7 @@ cartOverlay.addEventListener("click", closeCart);
 const floatingCart = document.getElementById("floating-cart");
 floatingCart.addEventListener("click", openCart);
 window.addEventListener("scroll", () => {
-  const show = window.scrollY > 200 && cart.length > 0;
+  const show = window.scrollY > 200 && cart.length > 0 && !isAdmin;
   floatingCart.classList.toggle("hidden", !show);
   floatingCart.classList.toggle("flex", show);
 }, { passive: true });
@@ -1169,6 +1169,7 @@ async function loadContactSettings() {
   });
 
   contactEditBtn.classList.toggle("hidden", !isAdmin);
+  contactEditBtn.classList.toggle("flex", isAdmin);
 
   bankSettings = {
     bank_id: data.bank_id || "",
