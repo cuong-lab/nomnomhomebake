@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
   const { data: order, error: fetchErr } = await supabase
     .from("orders")
-    .select("id, total, status")
+    .select("id, total, status, customer_phone, customer_name, customer_address, voucher_percent")
     .eq("order_code", orderCode)
     .maybeSingle();
 
@@ -57,6 +57,39 @@ export default async function handler(req, res) {
 
   if (updateErr) {
     return res.status(500).json({ success: false, message: updateErr.message });
+  }
+
+  // Tích điểm cho khách (theo SĐT): +1 điểm, trừ voucher nếu đơn này có dùng
+  if (order.customer_phone) {
+    try {
+      const { data: cust } = await supabase
+        .from("customers")
+        .select("*")
+        .eq("phone", order.customer_phone)
+        .maybeSingle();
+
+      const usedVoucher = (order.voucher_percent || 0) > 0 ? 1 : 0;
+
+      if (cust) {
+        await supabase
+          .from("customers")
+          .update({
+            points: (cust.points || 0) + 1,
+            vouchers_used: (cust.vouchers_used || 0) + usedVoucher,
+          })
+          .eq("phone", order.customer_phone);
+      } else {
+        await supabase.from("customers").insert({
+          phone: order.customer_phone,
+          name: order.customer_name || null,
+          address: order.customer_address || null,
+          points: 1,
+          vouchers_used: usedVoucher,
+        });
+      }
+    } catch (e) {
+      // không chặn việc đánh dấu paid nếu tích điểm lỗi
+    }
   }
 
   return res.status(200).json({ success: true, message: `Order ${orderCode} marked as paid` });
