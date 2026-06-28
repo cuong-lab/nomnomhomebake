@@ -311,7 +311,8 @@ const logo = document.getElementById("logo");
 let tapCount = 0;
 let tapTimer = null;
 
-logo.addEventListener("click", () => {
+logo.addEventListener("click", (e) => {
+  e.preventDefault();
   if (isAdmin) {
     supabase.auth.signOut();
     return;
