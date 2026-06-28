@@ -1897,15 +1897,16 @@ document.getElementById("customer-logout").addEventListener("click", () => {
   closeCustomerModal();
 });
 
-// ── Reveal on scroll (fade + slide) ──
+// ── Reveal on scroll (fade + slide) — lặp lại mỗi lần vào tầm nhìn ──
+
+// reload luôn về đầu trang để hiệu ứng chạy lại từ đầu
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
 const revealObserver = new IntersectionObserver(
   (entries) => {
     entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add("in-view");
-        revealObserver.unobserve(entry.target);
-      }
+      // vào tầm nhìn → hiện (animate); ra khỏi → ẩn lại để lần sau chạy lại
+      entry.target.classList.toggle("in-view", entry.isIntersecting);
     });
   },
   { threshold: 0.15 }
