@@ -102,13 +102,16 @@ body {
   }
 }
 
-/* Hero side elements — chỉ hiện trên desktop rộng hơn max-w-6xl */
-.hero-side-visible {
-  display: none;
+/* Hero side elements — mặc định ẩn, chỉ hiện trên desktop rộng hơn max-w-6xl */
+.hero-side {
+  display: none !important;
+}
+.hero-side.hero-side-visible {
+  display: none !important;
 }
 @media (min-width: 72rem) {
-  .hero-side-visible {
-    display: block;
+  .hero-side.hero-side-visible {
+    display: block !important;
   }
 }
 
