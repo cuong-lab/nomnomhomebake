@@ -451,7 +451,7 @@ function renderProducts(products) {
     products
       .map(
         (p) => `
-    <article class="group relative">
+    <article class="group relative flex flex-col">
       <div data-detail="${p.id}" class="aspect-[4/5] overflow-hidden bg-earth/30 cursor-pointer relative">
         ${
           p.image_url
@@ -462,19 +462,21 @@ function renderProducts(products) {
         ${p.badge === "new" ? `<span class="absolute top-2 left-2 bg-[#34C759] px-2 py-0.5 text-[10px] font-medium text-white">Mới</span>` : ""}
         ${p.badge === "soldout" ? `<span class="absolute top-2 left-2 bg-ink px-2 py-0.5 text-[10px] font-medium text-white">Hết hàng</span>` : ""}
       </div>
-      <div class="mt-4">
-        <h3 data-detail="${p.id}" class="font-serif text-lg text-ink cursor-pointer hover:text-ash transition-colors">${p.name}</h3>
-        ${p.description ? `<p class="mt-1 text-sm text-ash line-clamp-2">${p.description}</p>` : ""}
-        <p class="mt-2 text-sm font-medium text-ink">
-            ${p.sale_price
-              ? `<span class="text-ash line-through">${formatPrice(p.price)}</span> <span class="text-red-600">${formatPrice(p.sale_price)}</span>`
-              : formatPrice(p.price)
-            }
-        </p>
-        ${p.badge === "soldout"
-          ? `<span class="mt-2 block text-xs text-ash">Hết hàng</span>`
-          : `<button data-add-cart="${p.id}" class="mt-2 w-full bg-ink py-2 text-[11px] sm:text-xs font-medium text-white hover:opacity-90 active:scale-95 transition-all">+ Giỏ hàng</button>`
-        }
+      <div class="mt-2 sm:mt-4 flex flex-col flex-1">
+        <h3 data-detail="${p.id}" class="font-serif text-xs sm:text-lg text-ink cursor-pointer hover:text-ash transition-colors line-clamp-2">${p.name}</h3>
+        ${p.description ? `<p class="mt-0.5 sm:mt-1 text-[10px] sm:text-sm text-ash line-clamp-1 sm:line-clamp-2">${p.description}</p>` : ""}
+        <div class="mt-auto pt-1 sm:pt-2">
+          <p class="text-[11px] sm:text-sm font-medium text-ink">
+              ${p.sale_price
+                ? `<span class="text-ash line-through">${formatPrice(p.price)}</span> <span class="text-red-600">${formatPrice(p.sale_price)}</span>`
+                : formatPrice(p.price)
+              }
+          </p>
+          ${p.badge === "soldout"
+            ? `<span class="mt-1 sm:mt-2 block text-[10px] sm:text-xs text-ash">Hết hàng</span>`
+            : `<button data-add-cart="${p.id}" class="mt-1 sm:mt-2 w-full bg-ink py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium text-white hover:opacity-90 active:scale-95 transition-all">+ Giỏ hàng</button>`
+          }
+        </div>
       </div>
       ${
         isAdmin
