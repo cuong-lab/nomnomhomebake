@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.SEPAY_API_KEY;
-  if (apiKey && req.headers["authorization"] !== `Bearer ${apiKey}`) {
+  if (apiKey && req.headers["authorization"] !== `Apikey ${apiKey}`) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
