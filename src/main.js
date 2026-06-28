@@ -167,7 +167,7 @@ document.getElementById("cust-back").addEventListener("click", () => {
   cartFooter.classList.remove("hidden");
 });
 
-cartCheckout.addEventListener("click", () => {
+cartCheckout.addEventListener("click", async () => {
   const custName = document.getElementById("cust-name").value.trim();
   const custPhone = document.getElementById("cust-phone").value.trim();
   const custAddress = document.getElementById("cust-address").value.trim();
