@@ -122,6 +122,31 @@ body {
   }
 }
 
+/* Toast thông báo (thêm giỏ hàng…) */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(20px);
+  background: var(--color-ink);
+  color: #fff;
+  padding: 0.65rem 1.3rem;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s var(--ease-soft), transform 0.35s var(--ease-soft);
+  z-index: 60;
+  box-shadow: 0 10px 28px -8px rgba(10, 10, 10, 0.45);
+  max-width: 90vw;
+  text-align: center;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* Bản đồ liên hệ — hơi 3D bằng đổ bóng sâu + nghiêng nhẹ */
 .map-3d {
   overflow: hidden;

@@ -9,6 +9,7 @@ let cart = JSON.parse(localStorage.getItem("nomnom-cart") || "[]");
 let currentCustomer = JSON.parse(localStorage.getItem("nomnom_customer") || "null");
 let rewardConfig = { cycle: 10, percent: 20 };
 let appliedVoucherPercent = 0;
+let freeShipThreshold = 0;
 
 function saveCart() {
   localStorage.setItem("nomnom-cart", JSON.stringify(cart));
@@ -44,6 +45,48 @@ function addToCart(product) {
   }
   saveCart();
   shakeCart();
+  showToast(`Đã thêm “${product.name}” vào giỏ 🛒`);
+}
+
+// Tự tính Mở/Đóng cửa từ chuỗi giờ mở cửa (lấy 2 mốc giờ đầu tiên)
+function updateOpenStatus(hoursStr) {
+  const el = document.getElementById("open-status");
+  if (!el) return;
+  const times = (hoursStr || "").match(/(\d{1,2})[:h](\d{2})/g);
+  if (!times || times.length < 2) {
+    el.classList.add("hidden");
+    el.classList.remove("inline-flex");
+    return;
+  }
+  const toMin = (t) => {
+    const [h, m] = t.split(/[:h]/).map(Number);
+    return h * 60 + m;
+  };
+  const open = toMin(times[0]);
+  const close = toMin(times[1]);
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const isOpen = close > open ? cur >= open && cur < close : cur >= open || cur < close;
+
+  el.classList.remove("hidden");
+  el.classList.add("inline-flex");
+  if (isOpen) {
+    el.innerHTML = `<span class="h-1.5 w-1.5 rounded-full bg-[#34C759]"></span>Đang mở cửa`;
+    el.className = "open-status inline-flex items-center gap-1.5 rounded-full bg-[#34C759]/15 px-2.5 py-1 text-[11px] font-medium text-[#1d8a3e]";
+  } else {
+    el.innerHTML = `<span class="h-1.5 w-1.5 rounded-full bg-ash"></span>Đã đóng cửa`;
+    el.className = "open-status inline-flex items-center gap-1.5 rounded-full bg-ash/15 px-2.5 py-1 text-[11px] font-medium text-ash";
+  }
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1900);
 }
 
 // lắc nhẹ icon giỏ hàng ~1s mỗi khi thêm món
@@ -128,6 +171,24 @@ function renderCart() {
   cartTotal.textContent = formatPrice(total);
   cartFooter.classList.remove("hidden");
   document.getElementById("cart-qr").classList.add("hidden");
+
+  // Thanh tiến trình freeship
+  const fsBar = document.getElementById("freeship-bar");
+  if (freeShipThreshold > 0) {
+    fsBar.classList.remove("hidden");
+    const fsText = document.getElementById("freeship-text");
+    const fsFill = document.getElementById("freeship-fill");
+    if (total >= freeShipThreshold) {
+      fsText.innerHTML = "🎉 Bạn được <b>miễn phí ship</b>!";
+      fsFill.style.width = "100%";
+    } else {
+      const remain = freeShipThreshold - total;
+      fsText.innerHTML = `Mua thêm <b>${formatPrice(remain)}</b> để được <b>miễn phí ship</b> 🚚`;
+      fsFill.style.width = `${Math.round((total / freeShipThreshold) * 100)}%`;
+    }
+  } else {
+    fsBar.classList.add("hidden");
+  }
 
   cartItems.querySelectorAll("[data-cart-minus]").forEach((btn) =>
     btn.addEventListener("click", () => {
@@ -671,8 +732,44 @@ function openDetailModal(p) {
     setTimeout(() => { addBtn.textContent = "+ Giỏ hàng"; }, 1000);
   };
 
+  renderRelated(p);
+
   detailModal.classList.remove("hidden");
   detailModal.classList.add("flex");
+}
+
+// Gợi ý "Có thể bạn cũng thích" — ưu tiên cùng phân loại, bù bằng món khác
+function renderRelated(p) {
+  const wrap = document.getElementById("detail-related");
+  const list = document.getElementById("detail-related-list");
+  const others = allProducts.filter((x) => x.id !== p.id && x.badge !== "soldout");
+  const sameCat = others.filter((x) => x.category && x.category === p.category);
+  const rest = others.filter((x) => !sameCat.includes(x));
+  const picks = [...sameCat, ...rest].slice(0, 3);
+
+  if (!picks.length) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  wrap.classList.remove("hidden");
+  list.innerHTML = picks
+    .map(
+      (x) => `
+    <button data-related="${x.id}" class="group text-left">
+      <div class="aspect-square overflow-hidden rounded-lg bg-earth/30">
+        ${x.image_url ? `<img src="${x.image_url}" alt="${x.name}" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />` : `<div class="flex h-full items-center justify-center"><span class="font-serif text-sm italic text-ash">nomnom</span></div>`}
+      </div>
+      <p class="mt-1.5 line-clamp-1 text-xs font-medium text-ink">${x.name}</p>
+      <p class="text-xs text-ash">${formatPrice(x.sale_price || x.price)}</p>
+    </button>`
+    )
+    .join("");
+  list.querySelectorAll("[data-related]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const prod = allProducts.find((x) => x.id === b.dataset.related);
+      if (prod) openDetailModal(prod);
+    })
+  );
 }
 
 document.getElementById("detail-close").addEventListener("click", () => {
@@ -1236,6 +1333,8 @@ const editableFields = [
   { id: "badge3-sub", col: "badge3_sub" },
   { id: "badge4-title", col: "badge4_title" },
   { id: "badge4-sub", col: "badge4_sub" },
+  { id: "custom-title", col: "custom_title" },
+  { id: "custom-text", col: "custom_text" },
 ];
 
 function updateHeroContent(data) {
@@ -1334,6 +1433,9 @@ async function loadContactSettings() {
   const footerHours = document.getElementById("footer-hours");
   footerHours.textContent = data.opening_hours || "8:00 – 20:00";
 
+  // Trạng thái Mở/Đóng cửa (tự tính từ giờ mở cửa)
+  updateOpenStatus(data.opening_hours);
+
   // Bản đồ Google Maps nhúng theo địa chỉ (không cần API key)
   const mapFrame = document.getElementById("footer-map");
   if (data.address_text) {
@@ -1341,6 +1443,14 @@ async function loadContactSettings() {
   } else {
     mapFrame.removeAttribute("src");
   }
+
+  // CTA "Bánh đặt riêng" → ưu tiên Zalo, fallback Messenger / điện thoại
+  const customCta = document.getElementById("custom-cta");
+  customCta.href = data.zalo_url || data.messenger_url || (data.phone ? `tel:${data.phone}` : "#");
+
+  // Ngưỡng miễn phí ship (để giỏ hàng tính thanh freeship)
+  freeShipThreshold = parseInt(data.free_ship_threshold) || 0;
+  if (!cartFooter.classList.contains("hidden")) renderCart();
 
   const socials = [
     ["social-facebook", data.facebook_url],
@@ -1408,6 +1518,7 @@ contactEditBtn.addEventListener("click", async () => {
     contactForm.elements.delivery_fee.value = data.delivery_fee || "";
     contactForm.elements.delivery_zones.value = data.delivery_zones || "";
     contactForm.elements.delivery_time.value = data.delivery_time || "";
+    contactForm.elements.free_ship_threshold.value = data.free_ship_threshold || "";
     contactForm.elements.bank_id.value = data.bank_id || "";
     contactForm.elements.bank_account.value = data.bank_account || "";
     contactForm.elements.bank_name.value = data.bank_name || "";
@@ -1519,6 +1630,7 @@ contactForm.addEventListener("submit", async (e) => {
     delivery_fee: form.get("delivery_fee") || null,
     delivery_zones: form.get("delivery_zones") || null,
     delivery_time: form.get("delivery_time") || null,
+    free_ship_threshold: form.get("free_ship_threshold") ? parseInt(form.get("free_ship_threshold")) : null,
     bank_id: form.get("bank_id") || null,
     bank_account: form.get("bank_account") || null,
     bank_name: form.get("bank_name") || null,

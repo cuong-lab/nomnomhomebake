@@ -21,16 +21,20 @@
       <nav
         class="mx-auto flex max-w-6xl items-center justify-between px-5 py-1.5 md:px-6 md:py-2"
       >
-        <span
-          id="logo"
-          class="relative z-10 cursor-pointer select-none font-serif text-2xl tracking-tight text-ink touch-action-manipulation"
-          style="touch-action:manipulation"
-          >nomnom</span
-        >
+        <div class="flex items-center gap-2.5">
+          <span
+            id="logo"
+            class="relative z-10 cursor-pointer select-none font-serif text-2xl tracking-tight text-ink touch-action-manipulation"
+            style="touch-action:manipulation"
+            >nomnom</span
+          >
+          <span id="open-status" class="hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium"></span>
+        </div>
         <ul
           class="hidden items-center gap-10 text-base font-medium text-ink md:flex"
         >
           <li><a class="transition-colors hover:text-ash" href="#products">Bánh ngọt</a></li>
+          <li><a class="font-medium text-[#7a0c1f] transition-colors hover:text-ash" href="#custom-order">Đặt bánh riêng</a></li>
           <li><a class="transition-colors hover:text-ash" href="#contact">Liên hệ</a></li>
         </ul>
         <div class="flex items-center gap-4">
@@ -63,6 +67,7 @@
       <div id="mobile-menu" class="hidden border-t border-earth/40 md:hidden">
         <ul class="flex flex-col gap-1 px-5 py-4 text-sm font-medium text-ink">
           <li><a class="block py-2 transition-colors hover:text-ash" href="#products">Bánh ngọt</a></li>
+          <li><a class="block py-2 font-medium text-[#7a0c1f] transition-colors hover:text-ash" href="#custom-order">Đặt bánh riêng</a></li>
           <li><a class="block py-2 transition-colors hover:text-ash" href="#contact">Liên hệ</a></li>
         </ul>
       </div>
@@ -292,6 +297,20 @@
           </div>
         </div>
       </section>
+      <!-- ===== Bánh đặt riêng ===== -->
+      <section id="custom-order" class="border-t border-dashed border-earth bg-earth/10 scroll-mt-20">
+        <div class="mx-auto max-w-3xl px-6 py-16 text-center">
+          <span class="text-4xl">🎂</span>
+          <h2 id="custom-title" class="reveal mt-4 font-serif text-3xl text-ink md:text-4xl">Bánh đặt riêng theo yêu cầu</h2>
+          <p id="custom-text" class="reveal reveal-1 mx-auto mt-4 max-w-xl text-base leading-relaxed text-ash">
+            Sinh nhật, kỷ niệm hay món quà đặc biệt? Nhắn nomnom để đặt bánh thiết kế riêng theo đúng ý bạn — từ hương vị đến hình dáng.
+          </p>
+          <a id="custom-cta" href="#" target="_blank" rel="noopener" class="reveal reveal-2 mt-8 inline-flex items-center gap-2 rounded-full bg-[#0068ff] px-8 py-4 text-sm font-medium text-white shadow-md transition-transform duration-300 hover:scale-[1.03]">
+            <svg width="18" height="18" viewBox="0 0 48 48" fill="currentColor"><path d="M24 4C12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20S35.05 4 24 4zm8.95 27.47c0 1.1-.9 2-2 2H17.05c-1.1 0-2-.9-2-2v-1.4l8.8-10.14h-7.47c-.55 0-1-.45-1-1s.45-1 1-1h12.55c1.1 0 2 .9 2 2v1.4L22.13 30.47h8.82c.55 0 1 .45 1 1v.01z"/></svg>
+            Nhắn đặt bánh riêng
+          </a>
+        </div>
+      </section>
       <hr class="mx-auto max-w-6xl border-dashed border-earth" />
       <!-- ===== Reviews ===== -->
       <section id="reviews" class="mx-auto max-w-6xl px-6 py-10">
@@ -338,6 +357,9 @@
       </svg>
       <span id="floating-cart-count" class="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#e74c3c] px-1 text-[10px] font-medium text-white">0</span>
     </button>
+
+    <!-- ===== Toast ===== -->
+    <div id="toast" class="toast"></div>
 
     <!-- ===== Admin: Nút đơn hàng (chỉ admin) ===== -->
     <button id="admin-orders-btn" class="hidden fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-4 z-40 flex items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-medium text-white shadow-lg active:scale-95 transition-transform md:bottom-6 md:left-6">
@@ -392,6 +414,10 @@
               + Giỏ hàng
             </button>
           </div>
+          <div id="detail-related" class="mt-6 hidden border-t border-dashed border-earth pt-5">
+            <p class="font-serif text-base text-ink">Có thể bạn cũng thích</p>
+            <div id="detail-related-list" class="mt-3 grid grid-cols-3 gap-3"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -407,6 +433,12 @@
       </div>
       <div id="cart-items" class="flex-1 overflow-y-auto px-6 py-4"></div>
       <div id="cart-footer" class="border-t border-dashed border-earth px-6 py-4 hidden">
+        <div id="freeship-bar" class="mb-4 hidden">
+          <p id="freeship-text" class="text-xs text-ink"></p>
+          <div class="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-earth/30">
+            <div id="freeship-fill" class="h-full rounded-full bg-[#34C759] transition-all duration-500" style="width:0%"></div>
+          </div>
+        </div>
         <div class="flex items-center justify-between text-ink">
           <span class="font-medium">Tổng cộng</span>
           <span id="cart-total" class="font-serif text-xl"></span>
@@ -748,6 +780,10 @@
         />
         <input
           type="text" name="delivery_time" placeholder="Thời gian (VD: Giao trong 1-2 giờ)"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="number" name="free_ship_threshold" placeholder="Miễn phí ship từ (VNĐ, để trống = tắt)" min="0"
           class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
         />
         <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Thanh toán</p>
