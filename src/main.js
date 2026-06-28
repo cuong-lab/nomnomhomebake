@@ -6,6 +6,9 @@ if (yearEl) yearEl.textContent = new Date().getFullYear();
 
 let isAdmin = false;
 let cart = JSON.parse(localStorage.getItem("nomnom-cart") || "[]");
+let currentCustomer = JSON.parse(localStorage.getItem("nomnom_customer") || "null");
+let rewardConfig = { cycle: 10, percent: 20 };
+let appliedVoucherPercent = 0;
 
 function saveCart() {
   localStorage.setItem("nomnom-cart", JSON.stringify(cart));
@@ -146,7 +149,62 @@ document.getElementById("cart-checkout-step").addEventListener("click", () => {
   cartItems.classList.add("hidden");
   cartFooter.classList.add("hidden");
   cartCustomer.classList.remove("hidden");
+
+  // Tự điền sẵn thông tin nếu khách đã đăng nhập
+  if (currentCustomer) {
+    const nameEl = document.getElementById("cust-name");
+    const phoneEl = document.getElementById("cust-phone");
+    const addrEl = document.getElementById("cust-address");
+    if (!nameEl.value) nameEl.value = currentCustomer.name || "";
+    if (!phoneEl.value) phoneEl.value = currentCustomer.phone || "";
+    if (!addrEl.value) addrEl.value = currentCustomer.address || "";
+  }
+
+  setupVoucherUI();
 });
+
+function setupVoucherUI() {
+  const row = document.getElementById("voucher-row");
+  const check = document.getElementById("voucher-check");
+  const vouchers = availableVouchers(currentCustomer);
+  if (currentCustomer && vouchers > 0) {
+    row.classList.remove("hidden");
+    row.classList.add("flex");
+    document.getElementById("voucher-label").textContent =
+      `Dùng ưu đãi giảm ${rewardConfig.percent}% (bạn có ${vouchers})`;
+    check.checked = false;
+  } else {
+    row.classList.add("hidden");
+    row.classList.remove("flex");
+    check.checked = false;
+  }
+  renderCheckoutSummary();
+}
+
+function renderCheckoutSummary() {
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const check = document.getElementById("voucher-check");
+  appliedVoucherPercent = check && check.checked ? rewardConfig.percent : 0;
+  const discount = Math.round((subtotal * appliedVoucherPercent) / 100);
+  const total = subtotal - discount;
+
+  const summary = document.getElementById("checkout-summary");
+  summary.classList.remove("hidden");
+  document.getElementById("sum-subtotal").textContent = formatPrice(subtotal);
+  document.getElementById("sum-total").textContent = formatPrice(total);
+  const dRow = document.getElementById("sum-discount-row");
+  if (discount > 0) {
+    dRow.classList.remove("hidden");
+    dRow.classList.add("flex");
+    document.getElementById("sum-discount").textContent = "-" + formatPrice(discount);
+  } else {
+    dRow.classList.add("hidden");
+    dRow.classList.remove("flex");
+  }
+  return total;
+}
+
+document.getElementById("voucher-check").addEventListener("change", renderCheckoutSummary);
 
 function buildDeliveryTime() {
   const d = document.getElementById("cust-date").value; // YYYY-MM-DD
@@ -185,7 +243,9 @@ cartCheckout.addEventListener("click", async () => {
     return;
   }
 
-  const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const voucherPercent = appliedVoucherPercent || 0;
+  const total = subtotal - Math.round((subtotal * voucherPercent) / 100);
   const orderCode = "NN" + Date.now().toString().slice(-8);
   lastOrderCode = orderCode;
   const content = `${orderCode} nomnom`;
@@ -200,6 +260,7 @@ cartCheckout.addEventListener("click", async () => {
     customer_address: custAddress,
     delivery_time: buildDeliveryTime(),
     note: custNote || null,
+    voucher_percent: voucherPercent,
   });
 
   if (orderErr) {
@@ -274,6 +335,10 @@ function showPaymentSuccess() {
   }
 
   document.getElementById("cart-success").classList.remove("hidden");
+
+  appliedVoucherPercent = 0;
+  // cập nhật lại điểm tích lũy sau khi webhook đã cộng (đợi 1.5s cho chắc)
+  if (currentCustomer) setTimeout(refreshCustomerData, 1500);
 }
 
 document.getElementById("success-close").addEventListener("click", () => {
@@ -1082,8 +1147,11 @@ const editableFields = [
   { id: "hero-title", col: "hero_title" },
   { id: "hero-description", col: "hero_description" },
   { id: "hero-cta", col: "hero_cta" },
+  { id: "hero-about-cta", col: "hero_about_cta" },
   { id: "products-title", col: "products_title" },
   { id: "products-subtitle", col: "products_subtitle" },
+  { id: "about-title", col: "about_title" },
+  { id: "about-text", col: "about_text" },
   { id: "review-title", col: "review_title" },
   { id: "review-subtitle", col: "review_subtitle" },
 ];
@@ -1150,6 +1218,19 @@ async function loadContactSettings() {
   }
   heroSideEdit.classList.toggle("hidden", !isAdmin);
 
+  const aboutImg = document.getElementById("about-image");
+  const aboutPlaceholder = document.getElementById("about-image-placeholder");
+  const aboutImgEdit = document.getElementById("about-image-edit");
+  if (data.about_image_url) {
+    aboutImg.src = data.about_image_url;
+    aboutImg.style.display = "block";
+    aboutPlaceholder.style.display = "none";
+  } else {
+    aboutImg.style.display = "none";
+    aboutPlaceholder.style.display = "flex";
+  }
+  aboutImgEdit.classList.toggle("hidden", !isAdmin);
+
   const zaloBtn = document.getElementById("btn-zalo");
   const messengerBtn = document.getElementById("btn-messenger");
 
@@ -1195,6 +1276,12 @@ async function loadContactSettings() {
     zalo_url: data.zalo_url || "",
   };
 
+  rewardConfig = {
+    cycle: parseInt(data.reward_cycle_orders) || 10,
+    percent: parseInt(data.reward_percent) || 20,
+  };
+  if (currentCustomer) refreshCustomerData();
+
   const dFee = document.getElementById("delivery-fee");
   const dZones = document.getElementById("delivery-zones");
   const dTime = document.getElementById("delivery-time");
@@ -1210,6 +1297,9 @@ document.getElementById("hero-video-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
 document.getElementById("hero-side-edit").addEventListener("click", () => {
+  contactEditBtn.click();
+});
+document.getElementById("about-image-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
 
@@ -1229,6 +1319,8 @@ contactEditBtn.addEventListener("click", async () => {
     contactForm.elements.bank_id.value = data.bank_id || "";
     contactForm.elements.bank_account.value = data.bank_account || "";
     contactForm.elements.bank_name.value = data.bank_name || "";
+    contactForm.elements.reward_cycle_orders.value = data.reward_cycle_orders || "";
+    contactForm.elements.reward_percent.value = data.reward_percent || "";
     const preview = document.getElementById("current-logo-preview");
     const previewImg = document.getElementById("logo-preview-img");
     if (data.logo_image_url) {
@@ -1307,6 +1399,22 @@ contactForm.addEventListener("submit", async (e) => {
     hero_side_image_url = sUrl.publicUrl;
   }
 
+  let about_image_url = undefined;
+  const aboutFile = contactForm.elements.about_image.files[0];
+  if (aboutFile) {
+    const aName = `about-${Date.now()}.${aboutFile.name.split(".").pop()}`;
+    const { error: aErr } = await supabase.storage
+      .from("product-images")
+      .upload(aName, aboutFile);
+    if (aErr) {
+      contactError.textContent = "Lỗi upload ảnh About: " + aErr.message;
+      contactError.classList.remove("hidden");
+      return;
+    }
+    const { data: aUrl } = supabase.storage.from("product-images").getPublicUrl(aName);
+    about_image_url = aUrl.publicUrl;
+  }
+
   const row = {
     phone: form.get("phone") || null,
     zalo_url: form.get("zalo_url") || null,
@@ -1321,10 +1429,13 @@ contactForm.addEventListener("submit", async (e) => {
     bank_id: form.get("bank_id") || null,
     bank_account: form.get("bank_account") || null,
     bank_name: form.get("bank_name") || null,
+    reward_cycle_orders: form.get("reward_cycle_orders") ? parseInt(form.get("reward_cycle_orders")) : null,
+    reward_percent: form.get("reward_percent") ? parseInt(form.get("reward_percent")) : null,
   };
   if (logo_image_url) row.logo_image_url = logo_image_url;
   if (hero_video_url) row.hero_video_url = hero_video_url;
   if (hero_side_image_url) row.hero_side_image_url = hero_side_image_url;
+  if (about_image_url) row.about_image_url = about_image_url;
 
   const { error } = await supabase.from("site_settings").update(row).eq("id", 1);
 
@@ -1361,6 +1472,16 @@ function renderStars(n) {
   return "★".repeat(n) + "☆".repeat(5 - n);
 }
 
+function formatReviewDate(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays === 0) return "Hôm nay";
+  if (diffDays === 1) return "Hôm qua";
+  if (diffDays < 7) return `${diffDays} ngày trước`;
+  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 function renderReviews(reviews) {
   if (!reviews.length) {
     reviewList.innerHTML = `<p class="text-sm text-ash">Chưa có đánh giá nào. Hãy là người đầu tiên!</p>`;
@@ -1376,7 +1497,10 @@ function renderReviews(reviews) {
         <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-earth/30 font-serif text-sm text-ink">
           ${r.name.charAt(0).toUpperCase()}
         </div>
-        <span class="text-sm font-medium text-ink">${r.name}</span>
+        <div class="min-w-0">
+          <span class="block text-sm font-medium text-ink leading-tight">${r.name}</span>
+          ${r.created_at ? `<span class="block text-[11px] text-ash">${formatReviewDate(r.created_at)}</span>` : ""}
+        </div>
       </div>
       <div class="mt-2 text-sm text-[#f39c12]">${renderStars(r.rating)}</div>
       <p class="mt-2 text-sm text-ash line-clamp-3">${r.comment}</p>
@@ -1605,9 +1729,178 @@ function stopAdminOrdersPolling() {
   }
 }
 
+// ── Customer Account (đăng nhập bằng SĐT, tích điểm) ──
+
+const customerModal = document.getElementById("customer-modal");
+const customerLoginForm = document.getElementById("customer-login-form");
+const customerPanel = document.getElementById("customer-panel");
+const customerLoginError = document.getElementById("customer-login-error");
+
+function availableVouchers(c) {
+  if (!c) return 0;
+  const earned = Math.floor((c.points || 0) / rewardConfig.cycle);
+  return Math.max(0, earned - (c.vouchers_used || 0));
+}
+
+function openCustomerModal() {
+  if (currentCustomer) {
+    customerLoginForm.classList.add("hidden");
+    customerPanel.classList.remove("hidden");
+    renderCustomerPanel();
+  } else {
+    customerLoginForm.classList.remove("hidden");
+    customerPanel.classList.add("hidden");
+    customerLoginError.classList.add("hidden");
+  }
+  customerModal.classList.remove("hidden");
+  customerModal.classList.add("flex");
+}
+
+function closeCustomerModal() {
+  customerModal.classList.add("hidden");
+  customerModal.classList.remove("flex");
+}
+
+function updateAccountLabel() {
+  const label = document.getElementById("account-label");
+  if (currentCustomer) {
+    label.textContent = currentCustomer.name || "Tài khoản";
+  } else {
+    label.textContent = "Đăng nhập";
+  }
+}
+
+function renderCustomerPanel() {
+  const c = currentCustomer;
+  document.getElementById("customer-avatar").textContent = (c.name || c.phone || "?").charAt(0).toUpperCase();
+  document.getElementById("customer-name-display").textContent = c.name || "Khách nomnom";
+  document.getElementById("customer-phone-display").textContent = c.phone;
+  document.getElementById("customer-points").textContent = c.points || 0;
+
+  const cycle = rewardConfig.cycle;
+  const intoCycle = (c.points || 0) % cycle;
+  const remain = cycle - intoCycle;
+  document.getElementById("customer-progress").style.width = `${(intoCycle / cycle) * 100}%`;
+  document.getElementById("customer-progress-text").textContent =
+    `Còn ${remain} đơn nữa để nhận ưu đãi giảm ${rewardConfig.percent}%`;
+
+  const vouchers = availableVouchers(c);
+  const voucherBox = document.getElementById("customer-voucher");
+  if (vouchers > 0) {
+    voucherBox.classList.remove("hidden");
+    document.getElementById("customer-voucher-text").textContent =
+      `${vouchers} ưu đãi giảm ${rewardConfig.percent}% — tự áp dụng khi thanh toán.`;
+  } else {
+    voucherBox.classList.add("hidden");
+  }
+
+  document.getElementById("customer-edit-name").value = c.name || "";
+  document.getElementById("customer-edit-address").value = c.address || "";
+}
+
+async function refreshCustomerData() {
+  if (!currentCustomer) return;
+  const { data } = await supabase
+    .from("customers")
+    .select("*")
+    .eq("phone", currentCustomer.phone)
+    .maybeSingle();
+  if (data) {
+    currentCustomer = data;
+    localStorage.setItem("nomnom_customer", JSON.stringify(data));
+    updateAccountLabel();
+    if (!customerPanel.classList.contains("hidden")) renderCustomerPanel();
+  }
+}
+
+document.getElementById("account-btn").addEventListener("click", openCustomerModal);
+document.getElementById("customer-login-cancel").addEventListener("click", closeCustomerModal);
+document.getElementById("customer-panel-close").addEventListener("click", closeCustomerModal);
+customerModal.addEventListener("click", (e) => {
+  if (e.target === customerModal) closeCustomerModal();
+});
+
+customerLoginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const phone = customerLoginForm.elements.phone.value.trim();
+  const name = customerLoginForm.elements.name.value.trim();
+  const address = customerLoginForm.elements.address.value.trim();
+
+  if (!/^[0-9]{8,12}$/.test(phone)) {
+    customerLoginError.textContent = "Số điện thoại không hợp lệ.";
+    customerLoginError.classList.remove("hidden");
+    return;
+  }
+
+  const { data: existing } = await supabase
+    .from("customers")
+    .select("*")
+    .eq("phone", phone)
+    .maybeSingle();
+
+  let customer;
+  if (existing) {
+    // cập nhật tên/địa chỉ nếu khách nhập mới
+    const patch = {};
+    if (name) patch.name = name;
+    if (address) patch.address = address;
+    if (Object.keys(patch).length) {
+      const { data: upd } = await supabase
+        .from("customers").update(patch).eq("phone", phone).select().maybeSingle();
+      customer = upd || { ...existing, ...patch };
+    } else {
+      customer = existing;
+    }
+  } else {
+    const { data: created, error } = await supabase
+      .from("customers")
+      .insert({ phone, name: name || null, address: address || null, points: 0, vouchers_used: 0 })
+      .select()
+      .maybeSingle();
+    if (error) {
+      customerLoginError.textContent = "Lỗi: " + error.message;
+      customerLoginError.classList.remove("hidden");
+      return;
+    }
+    customer = created;
+  }
+
+  currentCustomer = customer;
+  localStorage.setItem("nomnom_customer", JSON.stringify(customer));
+  updateAccountLabel();
+  customerLoginForm.reset();
+  openCustomerModal();
+});
+
+document.getElementById("customer-save").addEventListener("click", async () => {
+  if (!currentCustomer) return;
+  const name = document.getElementById("customer-edit-name").value.trim();
+  const address = document.getElementById("customer-edit-address").value.trim();
+  const { data } = await supabase
+    .from("customers")
+    .update({ name: name || null, address: address || null })
+    .eq("phone", currentCustomer.phone)
+    .select()
+    .maybeSingle();
+  if (data) {
+    currentCustomer = data;
+    localStorage.setItem("nomnom_customer", JSON.stringify(data));
+    updateAccountLabel();
+    renderCustomerPanel();
+  }
+});
+
+document.getElementById("customer-logout").addEventListener("click", () => {
+  currentCustomer = null;
+  localStorage.removeItem("nomnom_customer");
+  updateAccountLabel();
+  closeCustomerModal();
+});
+
 // ── Init ──
 
 updateCartCount();
+updateAccountLabel();
 loadProducts();
 loadHeroSlides();
 loadBanners();
