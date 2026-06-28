@@ -477,18 +477,18 @@ const priceFilter = document.getElementById("price-filter");
 
 function renderProductCard(p) {
   return `
-    <article class="group relative flex flex-col">
-      <div data-detail="${p.id}" class="aspect-[4/5] overflow-hidden bg-earth/30 cursor-pointer relative">
+    <article class="group relative flex flex-col overflow-hidden rounded-2xl border border-earth/50 bg-cream/70 p-2 shadow-[0_3px_14px_-6px_rgba(10,10,10,0.18)] transition-all duration-300 hover:-translate-y-1 hover:border-earth hover:shadow-[0_16px_30px_-10px_rgba(10,10,10,0.28)] sm:p-3">
+      <div data-detail="${p.id}" class="aspect-[4/5] overflow-hidden rounded-xl bg-earth/30 cursor-pointer relative">
         ${
           p.image_url
             ? `<img src="${p.image_url}" alt="${p.name}" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />`
             : `<div class="flex h-full items-center justify-center"><span class="font-serif text-lg italic text-ash">nomnom</span></div>`
         }
-        ${p.badge === "bestseller" ? `<span class="absolute top-2 left-2 bg-[#f39c12] px-2 py-0.5 text-[10px] font-medium text-white">Bán chạy</span>` : ""}
-        ${p.badge === "new" ? `<span class="absolute top-2 left-2 bg-[#34C759] px-2 py-0.5 text-[10px] font-medium text-white">Mới</span>` : ""}
-        ${p.badge === "soldout" ? `<span class="absolute top-2 left-2 bg-ink px-2 py-0.5 text-[10px] font-medium text-white">Hết hàng</span>` : ""}
+        ${p.badge === "bestseller" ? `<span class="absolute top-2 left-2 bg-[#f39c12] px-2 py-0.5 text-[10px] font-medium text-white rounded-full">Bán chạy</span>` : ""}
+        ${p.badge === "new" ? `<span class="absolute top-2 left-2 bg-[#34C759] px-2 py-0.5 text-[10px] font-medium text-white rounded-full">Mới</span>` : ""}
+        ${p.badge === "soldout" ? `<span class="absolute top-2 left-2 bg-ink px-2 py-0.5 text-[10px] font-medium text-white rounded-full">Hết hàng</span>` : ""}
       </div>
-      <div class="mt-2 sm:mt-4 flex flex-col flex-1">
+      <div class="mt-2 sm:mt-3 flex flex-col flex-1 px-1">
         <h3 data-detail="${p.id}" class="font-serif text-xs sm:text-lg text-ink cursor-pointer hover:text-ash transition-colors line-clamp-2">${p.name}</h3>
         ${p.description ? `<p class="mt-0.5 sm:mt-1 text-[10px] sm:text-sm text-ash line-clamp-2">${p.description}</p>` : ""}
         <div class="mt-auto pt-1 sm:pt-2">
@@ -526,7 +526,7 @@ function renderProducts() {
   }
 
   const addBtn = isAdmin
-    ? `<button class="add-product-btn flex aspect-[4/5] items-center justify-center border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink transition-colors cursor-pointer">
+    ? `<button class="add-product-btn flex aspect-[4/5] items-center justify-center rounded-2xl border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink hover:bg-cream/50 transition-colors cursor-pointer">
         <span class="text-center"><span class="block text-3xl leading-none">+</span><span class="mt-2 block text-sm">Thêm sản phẩm</span></span>
       </button>`
     : "";
@@ -1228,6 +1228,14 @@ const editableFields = [
   { id: "step3-title", col: "step3_title" },
   { id: "step3-desc", col: "step3_desc" },
   { id: "contact-title", col: "contact_title" },
+  { id: "badge1-title", col: "badge1_title" },
+  { id: "badge1-sub", col: "badge1_sub" },
+  { id: "badge2-title", col: "badge2_title" },
+  { id: "badge2-sub", col: "badge2_sub" },
+  { id: "badge3-title", col: "badge3_title" },
+  { id: "badge3-sub", col: "badge3_sub" },
+  { id: "badge4-title", col: "badge4_title" },
+  { id: "badge4-sub", col: "badge4_sub" },
 ];
 
 function updateHeroContent(data) {
@@ -1711,16 +1719,18 @@ function closeOrdersDrawer() {
 
 async function fetchAdminOrders() {
   if (!isAdmin) return;
+  // Chỉ lấy đơn ĐÃ THANH TOÁN trở đi — đơn 'pending' (chưa chuyển khoản)
+  // không hiện cho cô chủ. Đơn pending vẫn nằm trong DB để webhook Sepay
+  // match mã đơn và cập nhật thành 'paid' khi khách trả tiền.
   const { data, error } = await supabase
     .from("orders")
     .select("*")
+    .neq("status", "pending")
     .order("created_at", { ascending: false });
   if (error) return;
 
   adminOrdersCache = data || [];
-  const active = adminOrdersCache.filter(
-    (o) => o.status === "pending" || o.status === "paid"
-  ).length;
+  const active = adminOrdersCache.filter((o) => o.status === "paid").length;
   adminOrdersBadge.textContent = active;
   adminOrdersBadge.classList.toggle("hidden", active === 0);
 
@@ -1730,7 +1740,7 @@ async function fetchAdminOrders() {
 function renderAdminOrders() {
   let list = adminOrdersCache;
   if (ordersFilter === "active")
-    list = list.filter((o) => o.status === "pending" || o.status === "paid");
+    list = list.filter((o) => o.status === "paid");
   else if (ordersFilter !== "all")
     list = list.filter((o) => o.status === ordersFilter);
 
@@ -1771,17 +1781,13 @@ function renderAdminOrders() {
         ${o.note ? `<p>📝 ${o.note}</p>` : ""}
       </div>
       <div class="mt-3 flex flex-wrap gap-2">
-        ${o.status === "pending" ? `<button data-order-paid="${o.id}" class="bg-[#34C759] px-3 py-2 text-xs font-medium text-white hover:opacity-90">✓ Đã nhận tiền</button>` : ""}
         ${o.status === "paid" ? `<button data-order-delivered="${o.id}" class="bg-ink px-3 py-2 text-xs font-medium text-white hover:opacity-90">🚚 Đã giao</button>` : ""}
-        ${o.status === "pending" || o.status === "paid" ? `<button data-order-cancel="${o.id}" class="border border-red-400 px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50">✕ Huỷ</button>` : ""}
+        ${o.status === "paid" ? `<button data-order-cancel="${o.id}" class="border border-red-400 px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50">✕ Huỷ</button>` : ""}
       </div>
     </div>`;
     })
     .join("");
 
-  ordersList.querySelectorAll("[data-order-paid]").forEach((b) =>
-    b.addEventListener("click", () => setOrderStatus(b.dataset.orderPaid, "paid"))
-  );
   ordersList.querySelectorAll("[data-order-delivered]").forEach((b) =>
     b.addEventListener("click", () => setOrderStatus(b.dataset.orderDelivered, "delivered"))
   );
