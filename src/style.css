@@ -122,6 +122,29 @@ body {
   }
 }
 
+/* Bản đồ liên hệ — hơi 3D bằng đổ bóng sâu + nghiêng nhẹ */
+.map-3d {
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-earth);
+  box-shadow:
+    0 22px 45px -18px rgba(10, 10, 10, 0.45),
+    0 10px 18px -10px rgba(10, 10, 10, 0.25);
+  transform: perspective(1400px) rotateX(3deg) rotateY(-2deg);
+  transition: transform 0.5s var(--ease-soft), box-shadow 0.5s var(--ease-soft);
+  will-change: transform;
+}
+.map-3d:hover {
+  transform: perspective(1400px) rotateX(0deg) rotateY(0deg);
+  box-shadow:
+    0 30px 55px -20px rgba(10, 10, 10, 0.5),
+    0 12px 22px -10px rgba(10, 10, 10, 0.28);
+}
+.map-3d iframe {
+  display: block;
+  filter: grayscale(0.25) contrast(1.02);
+}
+
 /* Reveal on scroll — fade + slide */
 .reveal {
   opacity: 0;

@@ -1220,6 +1220,14 @@ const editableFields = [
   { id: "about-text", col: "about_text" },
   { id: "review-title", col: "review_title" },
   { id: "review-subtitle", col: "review_subtitle" },
+  { id: "process-title", col: "process_title" },
+  { id: "step1-title", col: "step1_title" },
+  { id: "step1-desc", col: "step1_desc" },
+  { id: "step2-title", col: "step2_title" },
+  { id: "step2-desc", col: "step2_desc" },
+  { id: "step3-title", col: "step3_title" },
+  { id: "step3-desc", col: "step3_desc" },
+  { id: "contact-title", col: "contact_title" },
 ];
 
 function updateHeroContent(data) {
@@ -1309,13 +1317,22 @@ async function loadContactSettings() {
   const footerPhone = document.getElementById("footer-phone");
   const footerAddress = document.getElementById("footer-address");
   if (data.phone) {
-    footerPhone.innerHTML = `<a href="tel:${data.phone}" class="hover:text-ink transition-colors">SĐT: ${data.phone}</a>`;
-    footerPhone.classList.remove("hidden");
+    footerPhone.innerHTML = `<a href="tel:${data.phone}" class="hover:text-ash transition-colors">${data.phone}</a>`;
   } else {
-    footerPhone.classList.add("hidden");
+    footerPhone.textContent = "Đang cập nhật";
   }
-  footerAddress.textContent = data.address_text || "";
-  footerAddress.classList.toggle("hidden", !data.address_text);
+  footerAddress.textContent = data.address_text || "Đang cập nhật";
+
+  const footerHours = document.getElementById("footer-hours");
+  footerHours.textContent = data.opening_hours || "8:00 – 20:00";
+
+  // Bản đồ Google Maps nhúng theo địa chỉ (không cần API key)
+  const mapFrame = document.getElementById("footer-map");
+  if (data.address_text) {
+    mapFrame.src = `https://maps.google.com/maps?q=${encodeURIComponent(data.address_text)}&z=15&output=embed`;
+  } else {
+    mapFrame.removeAttribute("src");
+  }
 
   const socials = [
     ["social-facebook", data.facebook_url],
@@ -1375,6 +1392,7 @@ contactEditBtn.addEventListener("click", async () => {
     contactForm.elements.phone.value = data.phone || "";
     contactForm.elements.zalo_url.value = data.zalo_url || "";
     contactForm.elements.address_text.value = data.address_text || "";
+    contactForm.elements.opening_hours.value = data.opening_hours || "";
     contactForm.elements.messenger_url.value = data.messenger_url || "";
     contactForm.elements.facebook_url.value = data.facebook_url || "";
     contactForm.elements.instagram_url.value = data.instagram_url || "";
@@ -1485,6 +1503,7 @@ contactForm.addEventListener("submit", async (e) => {
     phone: form.get("phone") || null,
     zalo_url: form.get("zalo_url") || null,
     address_text: form.get("address_text") || null,
+    opening_hours: form.get("opening_hours") || null,
     messenger_url: form.get("messenger_url") || null,
     facebook_url: form.get("facebook_url") || null,
     instagram_url: form.get("instagram_url") || null,
