@@ -464,7 +464,7 @@ function renderProducts(products) {
       </div>
       <div class="mt-2 sm:mt-4 flex flex-col flex-1">
         <h3 data-detail="${p.id}" class="font-serif text-xs sm:text-lg text-ink cursor-pointer hover:text-ash transition-colors line-clamp-2">${p.name}</h3>
-        ${p.description ? `<p class="mt-0.5 sm:mt-1 text-[10px] sm:text-sm text-ash line-clamp-1 sm:line-clamp-2">${p.description}</p>` : ""}
+        ${p.description ? `<p class="mt-0.5 sm:mt-1 text-[10px] sm:text-sm text-ash line-clamp-2">${p.description}</p>` : ""}
         <div class="mt-auto pt-1 sm:pt-2">
           <p class="text-[11px] sm:text-sm font-medium text-ink">
               ${p.sale_price
