@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     .from("orders")
     .select("id, total, status")
     .eq("order_code", orderCode)
-    .single();
+    .maybeSingle();
 
   if (fetchErr) {
     return res.status(200).json({ success: false, message: "DB error", error: fetchErr.message, orderCode });

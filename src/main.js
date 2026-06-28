@@ -190,7 +190,7 @@ cartCheckout.addEventListener("click", () => {
   lastOrderCode = orderCode;
   const content = `${orderCode} nomnom`;
 
-  supabase.from("orders").insert({
+  const { error: orderErr } = await supabase.from("orders").insert({
     order_code: orderCode,
     items: cart.map((item) => ({ name: item.name, qty: item.qty, price: item.price })),
     total,
@@ -201,6 +201,13 @@ cartCheckout.addEventListener("click", () => {
     delivery_time: buildDeliveryTime(),
     note: custNote || null,
   });
+
+  if (orderErr) {
+    const ce = document.getElementById("cust-error");
+    ce.textContent = "Lỗi tạo đơn: " + orderErr.message;
+    ce.classList.remove("hidden");
+    return;
+  }
 
   const qrUrl = `https://img.vietqr.io/image/${bankSettings.bank_id}-${bankSettings.bank_account}-compact.jpg?amount=${total}&addInfo=${encodeURIComponent(content)}`;
 
