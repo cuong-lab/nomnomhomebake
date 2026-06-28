@@ -102,6 +102,16 @@ body {
   }
 }
 
+/* Hero side elements — chỉ hiện trên desktop rộng hơn max-w-6xl */
+.hero-side-visible {
+  display: none;
+}
+@media (min-width: 72rem) {
+  .hero-side-visible {
+    display: block;
+  }
+}
+
 /* Touch feedback on mobile */
 @media (hover: none) {
   .active\:scale-95:active {

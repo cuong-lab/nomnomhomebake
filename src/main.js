@@ -1144,10 +1144,9 @@ async function loadContactSettings() {
   const heroVideoEdit = document.getElementById("hero-video-edit");
   if (data.hero_video_url) {
     heroVideo.src = data.hero_video_url;
-    heroVideo.classList.remove("lg:hidden");
+    heroVideo.classList.add("hero-side-visible");
   } else {
-    heroVideo.removeAttribute("src");
-    heroVideo.classList.add("lg:hidden");
+    heroVideo.classList.remove("hero-side-visible");
   }
   heroVideoEdit.classList.toggle("hidden", !isAdmin);
 
@@ -1155,10 +1154,9 @@ async function loadContactSettings() {
   const heroSideEdit = document.getElementById("hero-side-edit");
   if (data.hero_side_image_url) {
     heroSideImg.src = data.hero_side_image_url;
-    heroSideImg.classList.remove("lg:hidden");
+    heroSideImg.classList.add("hero-side-visible");
   } else {
-    heroSideImg.removeAttribute("src");
-    heroSideImg.classList.add("lg:hidden");
+    heroSideImg.classList.remove("hero-side-visible");
   }
   heroSideEdit.classList.toggle("hidden", !isAdmin);
 
