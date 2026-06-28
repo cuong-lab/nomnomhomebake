@@ -1747,6 +1747,7 @@ function openCustomerModal() {
     customerLoginForm.classList.add("hidden");
     customerPanel.classList.remove("hidden");
     renderCustomerPanel();
+    refreshCustomerData(); // lấy điểm mới nhất khi mở
   } else {
     customerLoginForm.classList.remove("hidden");
     customerPanel.classList.add("hidden");
@@ -1772,7 +1773,17 @@ function updateAccountLabel() {
 
 function renderCustomerPanel() {
   const c = currentCustomer;
-  document.getElementById("customer-avatar").textContent = (c.name || c.phone || "?").charAt(0).toUpperCase();
+  const avImg = document.getElementById("customer-avatar-img");
+  const avLetter = document.getElementById("customer-avatar-letter");
+  if (c.avatar_url) {
+    avImg.src = c.avatar_url;
+    avImg.style.display = "block";
+    avLetter.style.display = "none";
+  } else {
+    avImg.style.display = "none";
+    avLetter.style.display = "block";
+    avLetter.textContent = (c.name || c.phone || "?").charAt(0).toUpperCase();
+  }
   document.getElementById("customer-name-display").textContent = c.name || "Khách nomnom";
   document.getElementById("customer-phone-display").textContent = c.phone;
   document.getElementById("customer-points").textContent = c.points || 0;
@@ -1800,17 +1811,26 @@ function renderCustomerPanel() {
 
 async function refreshCustomerData() {
   if (!currentCustomer) return;
+  // hồ sơ (tên/địa chỉ/avatar)
   const { data } = await supabase
     .from("customers")
     .select("*")
     .eq("phone", currentCustomer.phone)
     .maybeSingle();
-  if (data) {
-    currentCustomer = data;
-    localStorage.setItem("nomnom_customer", JSON.stringify(data));
-    updateAccountLabel();
-    if (!customerPanel.classList.contains("hidden")) renderCustomerPanel();
+  if (data) currentCustomer = { ...currentCustomer, ...data };
+
+  // điểm tính động từ đơn đã thanh toán/đã giao — đúng với MỌI cách thanh toán
+  const { data: stats } = await supabase.rpc("customer_stats", {
+    p_phone: currentCustomer.phone,
+  });
+  if (stats && stats.length) {
+    currentCustomer.points = stats[0].points || 0;
+    currentCustomer.vouchers_used = stats[0].vouchers_used || 0;
   }
+
+  localStorage.setItem("nomnom_customer", JSON.stringify(currentCustomer));
+  updateAccountLabel();
+  if (!customerPanel.classList.contains("hidden")) renderCustomerPanel();
 }
 
 document.getElementById("account-btn").addEventListener("click", openCustomerModal);
@@ -1896,6 +1916,57 @@ document.getElementById("customer-logout").addEventListener("click", () => {
   updateAccountLabel();
   closeCustomerModal();
 });
+
+// ── Ảnh đại diện: bấm chọn / kéo-thả để upload ──
+const avatarBtn = document.getElementById("customer-avatar");
+const avatarInput = document.getElementById("customer-avatar-input");
+
+avatarBtn.addEventListener("click", () => avatarInput.click());
+avatarInput.addEventListener("change", () => {
+  if (avatarInput.files[0]) uploadAvatar(avatarInput.files[0]);
+  avatarInput.value = "";
+});
+["dragenter", "dragover"].forEach((ev) =>
+  avatarBtn.addEventListener(ev, (e) => {
+    e.preventDefault();
+    avatarBtn.classList.add("ring-2", "ring-ink");
+  })
+);
+["dragleave", "drop"].forEach((ev) =>
+  avatarBtn.addEventListener(ev, (e) => {
+    e.preventDefault();
+    avatarBtn.classList.remove("ring-2", "ring-ink");
+  })
+);
+avatarBtn.addEventListener("drop", (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) uploadAvatar(f);
+});
+
+async function uploadAvatar(file) {
+  if (!currentCustomer || !file.type.startsWith("image/")) return;
+  const ext = file.name.split(".").pop();
+  const name = `avatar-${currentCustomer.phone}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from("product-images")
+    .upload(name, file, { upsert: true });
+  if (error) {
+    alert("Lỗi tải ảnh: " + error.message);
+    return;
+  }
+  const { data: url } = supabase.storage.from("product-images").getPublicUrl(name);
+  const { data } = await supabase
+    .from("customers")
+    .update({ avatar_url: url.publicUrl })
+    .eq("phone", currentCustomer.phone)
+    .select()
+    .maybeSingle();
+  if (data) {
+    currentCustomer = { ...currentCustomer, ...data };
+    localStorage.setItem("nomnom_customer", JSON.stringify(currentCustomer));
+    renderCustomerPanel();
+  }
+}
 
 // ── Reveal on scroll (fade + slide) — lặp lại mỗi lần vào tầm nhìn ──
 

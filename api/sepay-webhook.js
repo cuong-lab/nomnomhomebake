@@ -59,36 +59,25 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: updateErr.message });
   }
 
-  // Tích điểm cho khách (theo SĐT): +1 điểm, trừ voucher nếu đơn này có dùng
+  // Đảm bảo có hồ sơ khách (cho khách vãng lai chưa đăng nhập).
+  // Điểm KHÔNG cộng ở đây — tính động từ bảng orders qua hàm customer_stats,
+  // nên đúng với mọi cách đánh dấu paid (webhook, admin chốt tay, app).
   if (order.customer_phone) {
     try {
       const { data: cust } = await supabase
         .from("customers")
-        .select("*")
+        .select("phone")
         .eq("phone", order.customer_phone)
         .maybeSingle();
-
-      const usedVoucher = (order.voucher_percent || 0) > 0 ? 1 : 0;
-
-      if (cust) {
-        await supabase
-          .from("customers")
-          .update({
-            points: (cust.points || 0) + 1,
-            vouchers_used: (cust.vouchers_used || 0) + usedVoucher,
-          })
-          .eq("phone", order.customer_phone);
-      } else {
+      if (!cust) {
         await supabase.from("customers").insert({
           phone: order.customer_phone,
           name: order.customer_name || null,
           address: order.customer_address || null,
-          points: 1,
-          vouchers_used: usedVoucher,
         });
       }
     } catch (e) {
-      // không chặn việc đánh dấu paid nếu tích điểm lỗi
+      // không chặn việc đánh dấu paid nếu tạo hồ sơ lỗi
     }
   }
 
