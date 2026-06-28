@@ -1144,6 +1144,17 @@ async function loadContactSettings() {
   }
   heroVideoEdit.classList.toggle("hidden", !isAdmin);
 
+  const heroSideImg = document.getElementById("hero-side-image");
+  const heroSideEdit = document.getElementById("hero-side-edit");
+  if (data.hero_side_image_url) {
+    heroSideImg.src = data.hero_side_image_url;
+    heroSideImg.classList.remove("lg:hidden");
+  } else {
+    heroSideImg.removeAttribute("src");
+    heroSideImg.classList.add("lg:hidden");
+  }
+  heroSideEdit.classList.toggle("hidden", !isAdmin);
+
   const zaloBtn = document.getElementById("btn-zalo");
   const messengerBtn = document.getElementById("btn-messenger");
 
@@ -1201,6 +1212,9 @@ async function loadContactSettings() {
 }
 
 document.getElementById("hero-video-edit").addEventListener("click", () => {
+  contactEditBtn.click();
+});
+document.getElementById("hero-side-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
 
@@ -1282,6 +1296,22 @@ contactForm.addEventListener("submit", async (e) => {
     hero_video_url = vUrl.publicUrl;
   }
 
+  let hero_side_image_url = undefined;
+  const sideFile = contactForm.elements.hero_side_image.files[0];
+  if (sideFile) {
+    const sName = `hero-side-${Date.now()}.${sideFile.name.split(".").pop()}`;
+    const { error: sErr } = await supabase.storage
+      .from("product-images")
+      .upload(sName, sideFile);
+    if (sErr) {
+      contactError.textContent = "Lỗi upload ảnh: " + sErr.message;
+      contactError.classList.remove("hidden");
+      return;
+    }
+    const { data: sUrl } = supabase.storage.from("product-images").getPublicUrl(sName);
+    hero_side_image_url = sUrl.publicUrl;
+  }
+
   const row = {
     phone: form.get("phone") || null,
     zalo_url: form.get("zalo_url") || null,
@@ -1299,6 +1329,7 @@ contactForm.addEventListener("submit", async (e) => {
   };
   if (logo_image_url) row.logo_image_url = logo_image_url;
   if (hero_video_url) row.hero_video_url = hero_video_url;
+  if (hero_side_image_url) row.hero_side_image_url = hero_side_image_url;
 
   const { error } = await supabase.from("site_settings").update(row).eq("id", 1);
 
