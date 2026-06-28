@@ -2214,11 +2214,13 @@ if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 const revealObserver = new IntersectionObserver(
   (entries) => {
     entries.forEach((entry) => {
-      // Hysteresis chống nháy: HIỆN khi vào ≥15%, chỉ ẨN lại khi ra HẲN (0%).
-      // Khoảng giữa (0–15%) giữ nguyên trạng thái → dừng ngay mép ngưỡng không bị bật/tắt liên tục.
       if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
+        // Vào tầm nhìn (≥15%) → chạy animation
         entry.target.classList.add("in-view");
-      } else if (entry.intersectionRatio === 0) {
+      } else if (!entry.isIntersecting && entry.boundingClientRect.top > 0) {
+        // CHỈ reset khi phần tử đã ra hẳn phía DƯỚI viewport (do cuộn lên).
+        // Khi nó trôi lên trên mép (top <= 0) thì GIỮ nguyên — tránh vòng lặp
+        // transform đẩy phần tử nhỏ vào lại tầm nhìn gây nháy liên tục.
         entry.target.classList.remove("in-view");
       }
     });
