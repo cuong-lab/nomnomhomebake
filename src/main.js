@@ -689,6 +689,49 @@ async function loadProducts() {
 
   allProducts = data;
   renderProducts();
+  renderKeyProduct();
+}
+
+function renderKeyProduct() {
+  const section = document.getElementById("key-product");
+  const hr = document.getElementById("key-product-hr");
+  const key = allProducts.find((p) => p.is_key);
+
+  if (!key) {
+    section.classList.add("hidden");
+    hr.classList.add("hidden");
+    return;
+  }
+
+  section.classList.remove("hidden");
+  hr.classList.remove("hidden");
+
+  const img = document.getElementById("key-product-img");
+  img.src = key.key_image_url || key.image_url || "";
+  img.alt = key.name;
+  document.getElementById("key-product-name").textContent = key.name;
+  document.getElementById("key-product-price").textContent = key.sale_price
+    ? `${formatPrice(key.sale_price)} (giá gốc ${formatPrice(key.price)})`
+    : formatPrice(key.price);
+
+  const btn = document.getElementById("key-product-btn");
+  if (key.badge === "soldout") {
+    btn.textContent = "Tạm hết hàng";
+    btn.disabled = true;
+    btn.classList.add("opacity-60", "pointer-events-none");
+  } else {
+    btn.textContent = "Đặt bánh ngay";
+    btn.disabled = false;
+    btn.classList.remove("opacity-60", "pointer-events-none");
+  }
+
+  btn.onclick = () => {
+    addToCart(key);
+    openCart();
+  };
+
+  // đăng ký hiệu ứng reveal cho banner mới render
+  section.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));
 }
 
 // ── Product Form ──
@@ -710,6 +753,7 @@ function openProductForm(product) {
     productForm.elements.sale_price.value = product.sale_price || "";
     productForm.elements.category.value = product.category || "";
     productForm.elements.badge.value = product.badge || "";
+    productForm.elements.is_key.checked = !!product.is_key;
   }
   productError.classList.add("hidden");
   productModal.classList.remove("hidden");
@@ -744,6 +788,7 @@ productForm.addEventListener("submit", async (e) => {
   const id = form.get("id");
 
   const salePriceVal = form.get("sale_price");
+  const isKey = form.get("is_key") === "on";
   const row = {
     name: form.get("name"),
     description: form.get("description") || null,
@@ -751,19 +796,27 @@ productForm.addEventListener("submit", async (e) => {
     sale_price: salePriceVal ? parseInt(salePriceVal) : null,
     category: form.get("category") || null,
     badge: form.get("badge") || null,
+    is_key: isKey,
   };
 
   try {
     const f1 = productForm.elements.image.files[0];
     const f2 = productForm.elements.image2.files[0];
     const f3 = productForm.elements.image3.files[0];
+    const fKey = productForm.elements.key_image.files[0];
     if (f1) row.image_url = await uploadProductImage(f1, "");
     if (f2) row.image_url2 = await uploadProductImage(f2, "p2-");
     if (f3) row.image_url3 = await uploadProductImage(f3, "p3-");
+    if (fKey) row.key_image_url = await uploadProductImage(fKey, "key-");
   } catch (uploadError) {
     productError.textContent = "Lỗi upload ảnh: " + uploadError.message;
     productError.classList.remove("hidden");
     return;
+  }
+
+  // Chỉ 1 sản phẩm key: nếu đặt cái này làm key thì bỏ key tất cả cái khác trước
+  if (isKey) {
+    await supabase.from("products").update({ is_key: false }).eq("is_key", true);
   }
 
   let error;
