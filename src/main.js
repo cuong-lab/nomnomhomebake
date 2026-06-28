@@ -1133,6 +1133,17 @@ async function loadContactSettings() {
   updateLogo(data);
   updateHeroContent(data);
 
+  const heroVideo = document.getElementById("hero-video");
+  const heroVideoEdit = document.getElementById("hero-video-edit");
+  if (data.hero_video_url) {
+    heroVideo.src = data.hero_video_url;
+    heroVideo.classList.remove("lg:hidden");
+  } else {
+    heroVideo.removeAttribute("src");
+    heroVideo.classList.add("lg:hidden");
+  }
+  heroVideoEdit.classList.toggle("hidden", !isAdmin);
+
   const zaloBtn = document.getElementById("btn-zalo");
   const messengerBtn = document.getElementById("btn-messenger");
 
@@ -1189,6 +1200,10 @@ async function loadContactSettings() {
   dTime.textContent = data.delivery_time ? `⏱ ${data.delivery_time}` : "";
 }
 
+document.getElementById("hero-video-edit").addEventListener("click", () => {
+  contactEditBtn.click();
+});
+
 contactEditBtn.addEventListener("click", async () => {
   const { data } = await supabase.from("site_settings").select("*").single();
   if (data) {
@@ -1233,6 +1248,7 @@ contactForm.addEventListener("submit", async (e) => {
   const logoFile = contactForm.elements.logo_image.files[0];
 
   let logo_image_url = undefined;
+  let hero_video_url = undefined;
 
   if (logoFile) {
     const ext = logoFile.name.split(".").pop();
@@ -1251,6 +1267,21 @@ contactForm.addEventListener("submit", async (e) => {
     logo_image_url = urlData.publicUrl;
   }
 
+  const videoFile = contactForm.elements.hero_video.files[0];
+  if (videoFile) {
+    const vName = `hero-video-${Date.now()}.mp4`;
+    const { error: vErr } = await supabase.storage
+      .from("product-images")
+      .upload(vName, videoFile, { contentType: videoFile.type });
+    if (vErr) {
+      contactError.textContent = "Lỗi upload video: " + vErr.message;
+      contactError.classList.remove("hidden");
+      return;
+    }
+    const { data: vUrl } = supabase.storage.from("product-images").getPublicUrl(vName);
+    hero_video_url = vUrl.publicUrl;
+  }
+
   const row = {
     phone: form.get("phone") || null,
     zalo_url: form.get("zalo_url") || null,
@@ -1267,6 +1298,7 @@ contactForm.addEventListener("submit", async (e) => {
     bank_name: form.get("bank_name") || null,
   };
   if (logo_image_url) row.logo_image_url = logo_image_url;
+  if (hero_video_url) row.hero_video_url = hero_video_url;
 
   const { error } = await supabase.from("site_settings").update(row).eq("id", 1);
 

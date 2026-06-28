@@ -89,7 +89,11 @@
 
     <!-- ===== Hero ===== -->
     <main>
-      <section class="mx-auto max-w-6xl px-6 py-10 md:py-14">
+      <section class="relative overflow-hidden">
+        <!-- Video bên trái (chỉ desktop rộng) -->
+        <video id="hero-video" class="hidden lg:block absolute left-0 top-0 h-full object-cover" style="width:calc((100vw - 72rem)/2)" autoplay muted loop playsinline></video>
+        <button id="hero-video-edit" class="hidden absolute left-2 bottom-2 z-10 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors" aria-label="Đổi video">Đổi video</button>
+        <div class="mx-auto max-w-6xl px-6 py-10 md:py-14">
         <div class="grid items-center gap-16 md:grid-cols-2">
           <div class="animate-fade-up">
             <p id="hero-subtitle" class="mb-5 text-xs font-medium uppercase tracking-[0.25em] text-ash">
@@ -132,6 +136,7 @@
               Quản lý ảnh
             </button>
           </div>
+        </div>
         </div>
       </section>
       <hr class="mx-auto max-w-6xl border-dashed border-earth" />
@@ -467,6 +472,11 @@
         <div id="current-logo-preview" class="mt-2 hidden">
           <img id="logo-preview-img" src="" alt="Logo hiện tại" class="h-10 w-auto" />
         </div>
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Video Hero (desktop)</p>
+        <label class="mt-2 block">
+          <span class="text-sm text-ash">Upload video (.mp4)</span>
+          <input type="file" name="hero_video" accept="video/mp4,video/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+        </label>
         <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Liên hệ</p>
         <input
           type="text" name="phone" placeholder="Số điện thoại"
