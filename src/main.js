@@ -45,7 +45,7 @@ function addToCart(product) {
   }
   saveCart();
   shakeCart();
-  showToast(`Đã thêm “${product.name}” vào giỏ 🛒`);
+  showToast(`Đã thêm “${product.name}” vào giỏ`);
 }
 
 // Tự tính Mở/Đóng cửa từ chuỗi giờ mở cửa (lấy 2 mốc giờ đầu tiên)
@@ -178,12 +178,14 @@ function renderCart() {
     fsBar.classList.remove("hidden");
     const fsText = document.getElementById("freeship-text");
     const fsFill = document.getElementById("freeship-fill");
+    const truckSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-text-bottom"><path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11"/><path d="M14 9h4l4 4v4c0 .6-.4 1-1 1h-2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>`;
+    const checkSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-text-bottom"><path d="M20 6 9 17l-5-5"/></svg>`;
     if (total >= freeShipThreshold) {
-      fsText.innerHTML = "🎉 Bạn được <b>miễn phí ship</b>!";
+      fsText.innerHTML = `${checkSvg} Bạn được <b>miễn phí ship</b>!`;
       fsFill.style.width = "100%";
     } else {
       const remain = freeShipThreshold - total;
-      fsText.innerHTML = `Mua thêm <b>${formatPrice(remain)}</b> để được <b>miễn phí ship</b> 🚚`;
+      fsText.innerHTML = `${truckSvg} Mua thêm <b>${formatPrice(remain)}</b> để được <b>miễn phí ship</b>`;
       fsFill.style.width = `${Math.round((total / freeShipThreshold) * 100)}%`;
     }
   } else {
@@ -1489,9 +1491,9 @@ async function loadContactSettings() {
   const dInfo = document.getElementById("delivery-info");
   const hasDel = data.delivery_fee || data.delivery_zones || data.delivery_time;
   dInfo.classList.toggle("hidden", !hasDel);
-  dFee.textContent = data.delivery_fee ? `🚚 ${data.delivery_fee}` : "";
-  dZones.textContent = data.delivery_zones ? `📍 ${data.delivery_zones}` : "";
-  dTime.textContent = data.delivery_time ? `⏱ ${data.delivery_time}` : "";
+  dFee.textContent = data.delivery_fee ? `Phí ship: ${data.delivery_fee}` : "";
+  dZones.textContent = data.delivery_zones ? `Khu vực: ${data.delivery_zones}` : "";
+  dTime.textContent = data.delivery_time ? `Thời gian: ${data.delivery_time}` : "";
 }
 
 document.getElementById("hero-video-edit").addEventListener("click", () => {
@@ -1886,15 +1888,15 @@ function renderAdminOrders() {
       <div class="mt-2 flex justify-between border-t border-dashed border-earth pt-2 text-sm font-medium text-ink">
         <span>Tổng</span><span>${formatPrice(o.total)}</span>
       </div>
-      <div class="mt-3 space-y-1 text-xs text-ash">
-        <p>👤 ${o.customer_name || "—"}${o.customer_phone ? ` · <a href="tel:${o.customer_phone}" class="text-ink hover:underline">${o.customer_phone}</a>` : ""}</p>
-        <p>📍 ${o.customer_address || "—"}</p>
-        <p>⏰ ${o.delivery_time || "Giao sớm nhất"}</p>
-        ${o.note ? `<p>📝 ${o.note}</p>` : ""}
+      <div class="mt-3 space-y-1.5 text-xs text-ash">
+        <p class="flex items-start gap-1.5"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="mt-0.5 shrink-0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>${o.customer_name || "—"}${o.customer_phone ? ` · <a href="tel:${o.customer_phone}" class="text-ink hover:underline">${o.customer_phone}</a>` : ""}</span></p>
+        <p class="flex items-start gap-1.5"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="mt-0.5 shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>${o.customer_address || "—"}</span></p>
+        <p class="flex items-start gap-1.5"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="mt-0.5 shrink-0"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>${o.delivery_time || "Giao sớm nhất"}</span></p>
+        ${o.note ? `<p class="flex items-start gap-1.5"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="mt-0.5 shrink-0"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span>${o.note}</span></p>` : ""}
       </div>
       <div class="mt-3 flex flex-wrap gap-2">
-        ${o.status === "paid" ? `<button data-order-delivered="${o.id}" class="bg-ink px-3 py-2 text-xs font-medium text-white hover:opacity-90">🚚 Đã giao</button>` : ""}
-        ${o.status === "paid" ? `<button data-order-cancel="${o.id}" class="border border-red-400 px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50">✕ Huỷ</button>` : ""}
+        ${o.status === "paid" ? `<button data-order-delivered="${o.id}" class="bg-ink px-3 py-2 text-xs font-medium text-white hover:opacity-90">Đã giao</button>` : ""}
+        ${o.status === "paid" ? `<button data-order-cancel="${o.id}" class="border border-red-400 px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50">Huỷ đơn</button>` : ""}
       </div>
     </div>`;
     })
