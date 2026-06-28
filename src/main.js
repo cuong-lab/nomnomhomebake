@@ -1414,6 +1414,19 @@ async function loadContactSettings() {
   }
   aboutImgEdit.classList.toggle("hidden", !isAdmin);
 
+  const customImg = document.getElementById("custom-image");
+  const customPlaceholder = document.getElementById("custom-image-placeholder");
+  const customImgEdit = document.getElementById("custom-image-edit");
+  if (data.custom_image_url) {
+    customImg.src = data.custom_image_url;
+    customImg.style.display = "block";
+    customPlaceholder.style.display = "none";
+  } else {
+    customImg.style.display = "none";
+    customPlaceholder.style.display = "flex";
+  }
+  customImgEdit.classList.toggle("hidden", !isAdmin);
+
   const zaloBtn = document.getElementById("btn-zalo");
   const messengerBtn = document.getElementById("btn-messenger");
 
@@ -1503,6 +1516,9 @@ document.getElementById("hero-side-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
 document.getElementById("about-image-edit").addEventListener("click", () => {
+  contactEditBtn.click();
+});
+document.getElementById("custom-image-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
 
@@ -1620,6 +1636,22 @@ contactForm.addEventListener("submit", async (e) => {
     about_image_url = aUrl.publicUrl;
   }
 
+  let custom_image_url = undefined;
+  const customFile = contactForm.elements.custom_image.files[0];
+  if (customFile) {
+    const cName = `custom-${Date.now()}.${customFile.name.split(".").pop()}`;
+    const { error: cErr } = await supabase.storage
+      .from("product-images")
+      .upload(cName, customFile);
+    if (cErr) {
+      contactError.textContent = "Lỗi upload ảnh Bánh đặt riêng: " + cErr.message;
+      contactError.classList.remove("hidden");
+      return;
+    }
+    const { data: cUrl } = supabase.storage.from("product-images").getPublicUrl(cName);
+    custom_image_url = cUrl.publicUrl;
+  }
+
   const row = {
     phone: form.get("phone") || null,
     zalo_url: form.get("zalo_url") || null,
@@ -1643,6 +1675,7 @@ contactForm.addEventListener("submit", async (e) => {
   if (hero_video_url) row.hero_video_url = hero_video_url;
   if (hero_side_image_url) row.hero_side_image_url = hero_side_image_url;
   if (about_image_url) row.about_image_url = about_image_url;
+  if (custom_image_url) row.custom_image_url = custom_image_url;
 
   const { error } = await supabase.from("site_settings").update(row).eq("id", 1);
 
@@ -2181,11 +2214,16 @@ if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 const revealObserver = new IntersectionObserver(
   (entries) => {
     entries.forEach((entry) => {
-      // vào tầm nhìn → hiện (animate); ra khỏi → ẩn lại để lần sau chạy lại
-      entry.target.classList.toggle("in-view", entry.isIntersecting);
+      // Hysteresis chống nháy: HIỆN khi vào ≥15%, chỉ ẨN lại khi ra HẲN (0%).
+      // Khoảng giữa (0–15%) giữ nguyên trạng thái → dừng ngay mép ngưỡng không bị bật/tắt liên tục.
+      if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
+        entry.target.classList.add("in-view");
+      } else if (entry.intersectionRatio === 0) {
+        entry.target.classList.remove("in-view");
+      }
     });
   },
-  { threshold: 0.15 }
+  { threshold: [0, 0.15] }
 );
 
 document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));
