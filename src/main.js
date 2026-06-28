@@ -397,67 +397,8 @@ let activePriceSort = "default";
 const categoryTabs = document.getElementById("category-tabs");
 const priceFilter = document.getElementById("price-filter");
 
-function buildCategoryTabs(products) {
-  const categories = [...new Set(products.map((p) => p.category).filter(Boolean))];
-  categoryTabs.innerHTML =
-    `<button data-cat="all" class="border border-ink bg-ink px-4 py-1.5 text-xs font-medium text-white transition-colors">Tất cả</button>` +
-    categories
-      .map((c) => `<button data-cat="${c}" class="border border-earth px-4 py-1.5 text-xs font-medium text-ink transition-colors hover:border-ink">${c}</button>`)
-      .join("");
-
-  categoryTabs.querySelectorAll("button").forEach((btn) =>
-    btn.addEventListener("click", () => {
-      activeCategory = btn.dataset.cat;
-      categoryTabs.querySelectorAll("button").forEach((b) => {
-        b.classList.toggle("bg-ink", b.dataset.cat === activeCategory);
-        b.classList.toggle("text-white", b.dataset.cat === activeCategory);
-        b.classList.toggle("border-ink", b.dataset.cat === activeCategory);
-        b.classList.toggle("text-ink", b.dataset.cat !== activeCategory);
-        b.classList.toggle("border-earth", b.dataset.cat !== activeCategory);
-      });
-      applyFilters();
-    })
-  );
-}
-
-priceFilter.addEventListener("change", () => {
-  activePriceSort = priceFilter.value;
-  applyFilters();
-});
-
-function applyFilters() {
-  let filtered = activeCategory === "all"
-    ? [...allProducts]
-    : allProducts.filter((p) => p.category === activeCategory);
-
-  if (activePriceSort === "low") {
-    filtered.sort((a, b) => (a.sale_price || a.price) - (b.sale_price || b.price));
-  } else if (activePriceSort === "high") {
-    filtered.sort((a, b) => (b.sale_price || b.price) - (a.sale_price || a.price));
-  }
-
-  renderProducts(filtered);
-}
-
-function renderProducts(products) {
-  const grid = document.getElementById("product-grid");
-
-  const addBtn = isAdmin
-    ? `<button id="add-product-btn" class="flex aspect-[4/5] items-center justify-center border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink transition-colors cursor-pointer">
-        <span class="text-center"><span class="block text-3xl leading-none">+</span><span class="mt-2 block text-sm">Thêm sản phẩm</span></span>
-      </button>`
-    : "";
-
-  if (!products.length && !isAdmin) {
-    grid.innerHTML = `<p class="col-span-full text-center text-sm text-ash py-12">Chưa có sản phẩm nào.</p>`;
-    return;
-  }
-
-  grid.innerHTML =
-    addBtn +
-    products
-      .map(
-        (p) => `
+function renderProductCard(p) {
+  return `
     <article class="group relative flex flex-col">
       <div data-detail="${p.id}" class="aspect-[4/5] overflow-hidden bg-earth/30 cursor-pointer relative">
         ${
@@ -493,29 +434,79 @@ function renderProducts(products) {
             </div>`
           : ""
       }
-    </article>
-  `
-      )
-      .join("");
+    </article>`;
+}
 
-  if (isAdmin) {
-    document.getElementById("add-product-btn")?.addEventListener("click", () => openProductForm());
+function renderProducts() {
+  const container = document.getElementById("product-sections");
+  const categories = [...new Set(allProducts.map((p) => p.category).filter(Boolean))];
+  const uncategorized = allProducts.filter((p) => !p.category);
 
-    grid.querySelectorAll("[data-edit]").forEach((btn) =>
-      btn.addEventListener("click", () => {
-        const product = products.find((p) => p.id === btn.dataset.edit);
-        if (product) openProductForm(product);
-      })
-    );
-
-    grid.querySelectorAll("[data-delete]").forEach((btn) =>
-      btn.addEventListener("click", () => deleteProduct(btn.dataset.delete))
-    );
+  if (!allProducts.length && !isAdmin) {
+    container.innerHTML = `<p class="text-center text-sm text-ash py-12">Chưa có sản phẩm nào.</p>`;
+    return;
   }
 
-  grid.querySelectorAll("[data-add-cart]").forEach((btn) =>
+  const addBtn = isAdmin
+    ? `<button class="add-product-btn flex aspect-[4/5] items-center justify-center border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink transition-colors cursor-pointer">
+        <span class="text-center"><span class="block text-3xl leading-none">+</span><span class="mt-2 block text-sm">Thêm sản phẩm</span></span>
+      </button>`
+    : "";
+
+  let html = "";
+
+  categories.forEach((cat) => {
+    const items = allProducts.filter((p) => p.category === cat);
+    html += `
+      <div class="category-section">
+        <h3 class="font-serif text-2xl text-ink md:text-3xl">${cat}</h3>
+        <hr class="mt-3 border-dashed border-earth" />
+        <div class="mt-6 grid gap-5 grid-cols-3 md:grid-cols-5">
+          ${items.map(renderProductCard).join("")}
+          ${addBtn}
+        </div>
+      </div>`;
+  });
+
+  if (uncategorized.length || isAdmin) {
+    if (uncategorized.length) {
+      html += `
+        <div class="category-section">
+          <h3 class="font-serif text-2xl text-ink md:text-3xl">Khác</h3>
+          <hr class="mt-3 border-dashed border-earth" />
+          <div class="mt-6 grid gap-5 grid-cols-3 md:grid-cols-5">
+            ${uncategorized.map(renderProductCard).join("")}
+            ${addBtn}
+          </div>
+        </div>`;
+    } else if (isAdmin && !categories.length) {
+      html += `
+        <div class="mt-6 grid gap-5 grid-cols-3 md:grid-cols-5">
+          ${addBtn}
+        </div>`;
+    }
+  }
+
+  container.innerHTML = html;
+
+  container.querySelectorAll(".add-product-btn").forEach((btn) =>
+    btn.addEventListener("click", () => openProductForm())
+  );
+
+  container.querySelectorAll("[data-edit]").forEach((btn) =>
     btn.addEventListener("click", () => {
-      const product = products.find((p) => p.id === btn.dataset.addCart);
+      const product = allProducts.find((p) => p.id === btn.dataset.edit);
+      if (product) openProductForm(product);
+    })
+  );
+
+  container.querySelectorAll("[data-delete]").forEach((btn) =>
+    btn.addEventListener("click", () => deleteProduct(btn.dataset.delete))
+  );
+
+  container.querySelectorAll("[data-add-cart]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const product = allProducts.find((p) => p.id === btn.dataset.addCart);
       if (product) {
         addToCart(product);
         btn.textContent = "Đã thêm ✓";
@@ -524,7 +515,7 @@ function renderProducts(products) {
     })
   );
 
-  grid.querySelectorAll("[data-detail]").forEach((el) =>
+  container.querySelectorAll("[data-detail]").forEach((el) =>
     el.addEventListener("click", () => {
       const product = allProducts.find((p) => p.id === el.dataset.detail);
       if (product) openDetailModal(product);
@@ -626,14 +617,13 @@ async function loadProducts() {
 
   if (error) {
     console.error("Lỗi tải sản phẩm:", error.message);
-    document.getElementById("product-grid").innerHTML =
-      `<p class="col-span-full text-center text-sm text-ash py-12">Không thể tải sản phẩm.</p>`;
+    document.getElementById("product-sections").innerHTML =
+      `<p class="text-center text-sm text-ash py-12">Không thể tải sản phẩm.</p>`;
     return;
   }
 
   allProducts = data;
-  buildCategoryTabs(data);
-  applyFilters();
+  renderProducts();
 }
 
 // ── Product Form ──
