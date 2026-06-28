@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
   const match = (content || "").match(/NN\d{8}/);
   if (!match) {
-    return res.status(200).json({ success: true, message: "No order code found" });
+    return res.status(200).json({ success: false, message: "No order code found", content });
   }
 
   const orderCode = match[0];
@@ -34,8 +34,12 @@ export default async function handler(req, res) {
     .eq("order_code", orderCode)
     .single();
 
-  if (fetchErr || !order) {
-    return res.status(200).json({ success: false, message: "Order not found" });
+  if (fetchErr) {
+    return res.status(200).json({ success: false, message: "DB error", error: fetchErr.message, orderCode });
+  }
+
+  if (!order) {
+    return res.status(200).json({ success: false, message: "Order not found", orderCode });
   }
 
   if (order.status !== "pending") {
