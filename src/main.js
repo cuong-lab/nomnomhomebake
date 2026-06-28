@@ -43,6 +43,19 @@ function addToCart(product) {
     });
   }
   saveCart();
+  shakeCart();
+}
+
+// lắc nhẹ icon giỏ hàng ~1s mỗi khi thêm món
+function shakeCart() {
+  ["cart-btn", "floating-cart"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove("cart-shake");
+    void el.offsetWidth; // reset animation để lắc lại được nếu bấm liên tục
+    el.classList.add("cart-shake");
+    setTimeout(() => el.classList.remove("cart-shake"), 1000);
+  });
 }
 
 // ── Cart Drawer ──

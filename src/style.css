@@ -28,11 +28,39 @@ html {
 }
 
 body {
-  background-color: var(--color-cream);
+  /* Theme giấy ấm: trắng ngà góc trên-trái → kem đào ấm dưới-phải, nếp gấp chéo nhẹ */
+  background-color: #faf2e8;
+  background-image: linear-gradient(
+    138deg,
+    #fdfaf5 0%,
+    #fbf5ec 34%,
+    #f6ead9 52%,
+    #efddc9 78%,
+    #ead3bd 100%
+  );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100vh;
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Lắc nhẹ icon giỏ hàng khi thêm món (~1s) */
+@keyframes cart-shake {
+  0%, 100% { transform: rotate(0deg); }
+  12% { transform: rotate(-13deg) scale(1.08); }
+  26% { transform: rotate(11deg) scale(1.08); }
+  40% { transform: rotate(-9deg); }
+  54% { transform: rotate(7deg); }
+  68% { transform: rotate(-5deg); }
+  82% { transform: rotate(3deg); }
+  92% { transform: rotate(-1deg); }
+}
+.cart-shake {
+  animation: cart-shake 1s var(--ease-soft);
+  transform-origin: center;
 }
 
 /* Micro-interaction: fade-in nhẹ khi tải trang */
