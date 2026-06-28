@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>nomnom — Bánh ngọt thủ công</title>
+    <meta
+      name="description"
+      content="nomnom — tiệm bánh ngọt thủ công. Tinh tế, tươi mới, làm mỗi ngày."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- ===== Header / Nav ===== -->
+    <header class="border-b border-dashed border-earth">
+      <nav
+        class="mx-auto flex max-w-6xl items-center justify-between px-5 py-1.5 md:px-6 md:py-2"
+      >
+        <span
+          id="logo"
+          class="relative z-10 cursor-pointer select-none font-serif text-2xl tracking-tight text-ink"
+          >nomnom</span
+        >
+        <ul
+          class="hidden items-center gap-10 text-base font-medium text-ink md:flex"
+        >
+          <li><a class="transition-colors hover:text-ash" href="#products">Bánh ngọt</a></li>
+          <li><a class="transition-colors hover:text-ash" href="#contact">Liên hệ</a></li>
+        </ul>
+        <div class="flex items-center gap-4">
+          <button id="cart-btn"
+            class="relative flex items-center gap-2 text-base font-medium text-ink transition-opacity hover:opacity-60"
+            aria-label="Giỏ hàng"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+            </svg>
+            <span id="cart-count" class="hidden sm:inline">Giỏ hàng (0)</span>
+            <span id="cart-count-mobile" class="flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[10px] text-white sm:hidden">0</span>
+          </button>
+          <button id="menu-toggle" class="text-ink md:hidden" aria-label="Menu">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+          </button>
+        </div>
+      </nav>
+      <!-- Mobile menu -->
+      <div id="mobile-menu" class="hidden border-t border-earth/40 md:hidden">
+        <ul class="flex flex-col gap-1 px-5 py-4 text-sm font-medium text-ink">
+          <li><a class="block py-2 transition-colors hover:text-ash" href="#products">Bánh ngọt</a></li>
+          <li><a class="block py-2 transition-colors hover:text-ash" href="#contact">Liên hệ</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <!-- ===== Banner Slideshow ===== -->
+    <section id="banner-section" class="relative w-full overflow-hidden bg-earth/20 border-b border-dashed border-earth hidden">
+      <div id="banner-slides" class="flex transition-transform duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)]">
+        <div class="flex h-[120px] w-full shrink-0 items-center justify-center md:h-[200px]">
+          <span class="text-sm italic text-ash">Banner chương trình tháng</span>
+        </div>
+      </div>
+      <div id="banner-dots" class="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 hidden"></div>
+      <button id="banner-edit-btn" class="absolute top-3 right-3 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors hidden">
+        Quản lý banner
+      </button>
+    </section>
+
+    <!-- ===== Banner Modal ===== -->
+    <div id="banner-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50">
+      <div class="w-full max-w-lg bg-cream p-6 mx-4 max-h-[85vh] overflow-y-auto md:mx-auto md:p-8">
+        <h2 class="font-serif text-2xl text-ink">Quản lý Banner</h2>
+        <div id="banner-list" class="mt-6 space-y-3"></div>
+        <label class="mt-6 block">
+          <span class="text-sm text-ash">Thêm banner mới</span>
+          <input type="file" id="banner-upload" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+        </label>
+        <div class="mt-6">
+          <button id="banner-close" class="text-sm text-ash hover:text-ink">Đóng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Hero ===== -->
+    <main>
+      <section class="mx-auto max-w-6xl px-6 py-10 md:py-14">
+        <div class="grid items-center gap-16 md:grid-cols-2">
+          <div class="animate-fade-up">
+            <p id="hero-subtitle" class="mb-5 text-xs font-medium uppercase tracking-[0.25em] text-ash">
+              Tiệm bánh thủ công
+            </p>
+            <h1 id="hero-title"
+              class="font-serif text-5xl leading-[1.05] text-ink md:text-6xl"
+            >
+              Ngọt ngào<br />trong từng lát cắt
+            </h1>
+            <p id="hero-description" class="mt-6 max-w-md text-base leading-relaxed text-ash">
+              Bánh làm mới mỗi ngày từ nguyên liệu chọn lọc. Đơn giản, tinh tế,
+              và tử tế với vị giác của bạn.
+            </p>
+            <div class="mt-9">
+              <a id="hero-cta"
+                href="#products"
+                class="inline-block bg-ink px-8 py-4 text-sm font-medium text-white transition-transform duration-300 hover:scale-[1.02]"
+              >
+                Khám phá menu
+              </a>
+            </div>
+          </div>
+
+          <!-- Hero Slideshow -->
+          <div class="animate-fade-up relative aspect-[4/5] overflow-hidden bg-earth/30" style="animation-delay: 0.15s" id="hero-slideshow">
+            <div id="hero-slides" class="flex h-full transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]">
+              <div class="flex h-full w-full shrink-0 items-center justify-center">
+                <span class="font-serif text-xl italic text-ash">Ảnh sản phẩm</span>
+              </div>
+            </div>
+            <button id="hero-prev" class="absolute left-3 top-1/2 -translate-y-1/2 bg-white/80 p-2 text-ink opacity-0 transition-opacity hover:bg-white hidden" aria-label="Ảnh trước">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <button id="hero-next" class="absolute right-3 top-1/2 -translate-y-1/2 bg-white/80 p-2 text-ink opacity-0 transition-opacity hover:bg-white hidden" aria-label="Ảnh sau">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div id="hero-dots" class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 hidden"></div>
+            <button id="hero-edit-btn" class="absolute top-3 right-3 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors hidden">
+              Quản lý ảnh
+            </button>
+          </div>
+        </div>
+      </section>
+      <hr class="mx-auto max-w-6xl border-dashed border-earth" />
+      <!-- ===== Product Grid ===== -->
+      <section id="products" class="mx-auto max-w-6xl px-6 py-10">
+        <h2 id="products-title" class="font-serif text-3xl text-ink md:text-4xl">Bánh ngọt</h2>
+        <p id="products-subtitle" class="mt-3 text-sm text-ash">Tươi mới mỗi ngày, giao tận tay bạn.</p>
+        <div class="mt-6 flex flex-wrap items-center gap-3">
+          <div id="category-tabs" class="flex flex-wrap gap-2">
+            <button data-cat="all" class="border border-ink bg-ink px-4 py-1.5 text-xs font-medium text-white transition-colors">Tất cả</button>
+          </div>
+          <select id="price-filter" class="ml-auto border border-earth/60 bg-white px-3 py-1.5 text-xs text-ink outline-none focus:border-ink">
+            <option value="default">Sắp xếp giá</option>
+            <option value="low">Giá thấp → cao</option>
+            <option value="high">Giá cao → thấp</option>
+          </select>
+        </div>
+        <div
+          id="product-grid"
+          class="mt-12 grid gap-5 grid-cols-3 md:grid-cols-5"
+        >
+          <p class="col-span-full text-center text-sm text-ash py-12">
+            Đang tải sản phẩm…
+          </p>
+        </div>
+      </section>
+      <hr class="mx-auto max-w-6xl border-dashed border-earth" />
+      <!-- ===== Reviews ===== -->
+      <section id="reviews" class="mx-auto max-w-6xl px-6 py-10">
+        <h2 id="review-title" class="font-serif text-3xl text-ink md:text-4xl">Khách hàng nói gì</h2>
+        <p id="review-subtitle" class="mt-3 text-sm text-ash">Đánh giá từ những người đã thưởng thức.</p>
+        <div id="review-list" class="mt-10 flex gap-5 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide"></div>
+        <div id="review-form-wrap" class="mt-10 border-t border-dashed border-earth pt-8">
+          <h3 class="font-serif text-xl text-ink">Để lại đánh giá</h3>
+          <form id="review-form" class="mt-4 max-w-lg space-y-3">
+            <input
+              type="text" name="name" placeholder="Tên của bạn" required
+              class="w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+            />
+            <div class="flex gap-2" id="star-picker">
+              <button type="button" data-star="1" class="text-2xl text-earth/50 hover:text-[#f39c12] transition-colors">★</button>
+              <button type="button" data-star="2" class="text-2xl text-earth/50 hover:text-[#f39c12] transition-colors">★</button>
+              <button type="button" data-star="3" class="text-2xl text-earth/50 hover:text-[#f39c12] transition-colors">★</button>
+              <button type="button" data-star="4" class="text-2xl text-earth/50 hover:text-[#f39c12] transition-colors">★</button>
+              <button type="button" data-star="5" class="text-2xl text-earth/50 hover:text-[#f39c12] transition-colors">★</button>
+            </div>
+            <input type="hidden" name="rating" value="5" />
+            <textarea
+              name="comment" placeholder="Chia sẻ trải nghiệm của bạn..." rows="3" required
+              class="w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink resize-none"
+            ></textarea>
+            <label class="block">
+              <span class="text-sm text-ash">Đính kèm ảnh (tuỳ chọn)</span>
+              <input type="file" name="image" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+            </label>
+            <p id="review-error" class="text-xs text-red-600 hidden"></p>
+            <button type="submit" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90">
+              Gửi đánh giá
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <!-- ===== Admin: Nút đơn hàng (chỉ admin) ===== -->
+    <button id="admin-orders-btn" class="hidden fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-4 z-40 flex items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-medium text-white shadow-lg active:scale-95 transition-transform md:bottom-6 md:left-6">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h6"/></svg>
+      Đơn hàng
+      <span id="admin-orders-badge" class="hidden ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#e74c3c] px-1.5 text-[10px]">0</span>
+    </button>
+
+    <!-- ===== Admin: Drawer đơn hàng ===== -->
+    <div id="orders-overlay" class="fixed inset-0 z-50 bg-ink/50 hidden"></div>
+    <div id="orders-drawer" class="fixed top-0 left-0 z-50 h-full w-full max-w-md bg-cream shadow-2xl -translate-x-full transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col">
+      <div class="flex items-center justify-between border-b border-dashed border-earth px-6 py-4">
+        <h2 class="font-serif text-xl text-ink">Đơn hàng</h2>
+        <button id="orders-close" class="text-ash hover:text-ink transition-colors">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="orders-tabs" class="flex gap-2 border-b border-dashed border-earth px-6 py-3 text-xs">
+        <button data-otab="active" class="border border-ink bg-ink px-3 py-1.5 font-medium text-white">Cần xử lý</button>
+        <button data-otab="delivered" class="border border-earth px-3 py-1.5 font-medium text-ink hover:border-ink">Đã giao</button>
+        <button data-otab="cancelled" class="border border-earth px-3 py-1.5 font-medium text-ink hover:border-ink">Đã huỷ</button>
+        <button data-otab="all" class="border border-earth px-3 py-1.5 font-medium text-ink hover:border-ink">Tất cả</button>
+      </div>
+      <div id="orders-list" class="flex-1 overflow-y-auto px-6 py-4 space-y-4"></div>
+    </div>
+
+    <!-- ===== Product Detail Modal ===== -->
+    <div id="detail-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50">
+      <div class="w-full max-w-2xl bg-cream mx-4 max-h-[90vh] overflow-y-auto md:mx-auto">
+        <div class="relative">
+          <div id="detail-carousel" class="relative aspect-square overflow-hidden bg-earth/30">
+            <div id="detail-track" class="flex h-full transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"></div>
+            <button id="detail-prev" class="absolute left-3 top-1/2 -translate-y-1/2 hidden bg-white/80 p-2 text-ink hover:bg-white transition-colors" aria-label="Ảnh trước">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <button id="detail-next" class="absolute right-3 top-1/2 -translate-y-1/2 hidden bg-white/80 p-2 text-ink hover:bg-white transition-colors" aria-label="Ảnh sau">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div id="detail-dots" class="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2"></div>
+          </div>
+          <button id="detail-close" class="absolute top-3 right-3 bg-white/80 p-2 text-ink hover:bg-white transition-colors">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="px-6 py-5">
+          <span id="detail-category" class="text-xs font-medium uppercase tracking-wider text-ash"></span>
+          <h2 id="detail-name" class="mt-1 font-serif text-2xl text-ink"></h2>
+          <p id="detail-description" class="mt-3 text-sm leading-relaxed text-ash"></p>
+          <div class="mt-4 flex items-center justify-between">
+            <p id="detail-price" class="text-lg font-medium text-ink"></p>
+            <button id="detail-add-cart" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90 active:scale-95 transition-all">
+              + Giỏ hàng
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Cart Drawer ===== -->
+    <div id="cart-overlay" class="fixed inset-0 z-50 bg-ink/50 hidden"></div>
+    <div id="cart-drawer" class="fixed top-0 right-0 z-50 h-full w-full max-w-md bg-cream shadow-2xl translate-x-full transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col">
+      <div class="flex items-center justify-between border-b border-dashed border-earth px-6 py-4">
+        <h2 class="font-serif text-xl text-ink">Giỏ hàng</h2>
+        <button id="cart-close" class="text-ash hover:text-ink transition-colors">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="cart-items" class="flex-1 overflow-y-auto px-6 py-4"></div>
+      <div id="cart-footer" class="border-t border-dashed border-earth px-6 py-4 hidden">
+        <div class="flex items-center justify-between text-ink">
+          <span class="font-medium">Tổng cộng</span>
+          <span id="cart-total" class="font-serif text-xl"></span>
+        </div>
+        <button id="cart-checkout-step" class="mt-4 w-full bg-ink py-4 text-center text-sm font-medium text-white hover:opacity-90 transition-opacity">
+          Tiếp tục
+        </button>
+      </div>
+      <!-- Customer Info -->
+      <div id="cart-customer" class="border-t border-dashed border-earth px-6 py-5 hidden">
+        <p class="font-serif text-lg text-ink">Thông tin nhận hàng</p>
+        <div class="mt-4 space-y-3">
+          <input id="cust-name" type="text" placeholder="Họ tên" required class="w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink" />
+          <input id="cust-phone" type="tel" placeholder="Số điện thoại" required class="w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink" />
+          <input id="cust-address" type="text" placeholder="Địa chỉ giao hàng" required class="w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink" />
+          <div>
+            <span class="text-sm text-ash">Thời gian nhận (để trống = giao sớm nhất)</span>
+            <div class="mt-1 flex gap-3">
+              <input id="cust-date" type="date" class="w-1/2 border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink" />
+              <input id="cust-time" type="time" class="w-1/2 border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink" />
+            </div>
+          </div>
+          <textarea id="cust-note" placeholder="Ghi chú (tuỳ chọn)" rows="2" class="w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink resize-none"></textarea>
+        </div>
+        <div id="delivery-info" class="mt-4 border border-earth/40 p-3 text-xs text-ash space-y-1 hidden">
+          <p id="delivery-fee" class="font-medium text-ink"></p>
+          <p id="delivery-zones"></p>
+          <p id="delivery-time"></p>
+        </div>
+        <p id="cust-error" class="mt-2 text-xs text-red-600 hidden"></p>
+        <button id="cart-checkout" class="mt-4 w-full bg-ink py-4 text-center text-sm font-medium text-white hover:opacity-90 transition-opacity">
+          Thanh toán
+        </button>
+        <button id="cust-back" class="mt-3 w-full text-center text-sm text-ash hover:text-ink transition-colors">← Quay lại giỏ hàng</button>
+      </div>
+      <!-- QR Payment -->
+      <div id="cart-qr" class="border-t border-dashed border-earth px-6 py-6 hidden text-center">
+        <p class="font-serif text-lg text-ink">Quét mã để thanh toán</p>
+        <img id="qr-image" src="" alt="QR thanh toán" class="mx-auto mt-4 h-56 w-56" />
+        <p class="mt-3 text-sm text-ash">
+          <span id="qr-bank-name"></span><br />
+          STK: <span id="qr-account" class="font-medium text-ink"></span><br />
+          Chủ TK: <span id="qr-holder" class="font-medium text-ink"></span>
+        </p>
+        <p class="mt-2 text-sm text-ink font-medium">Số tiền: <span id="qr-amount"></span></p>
+        <p class="mt-1 text-xs text-ash">Nội dung: <span id="qr-content" class="text-ink"></span></p>
+        <div class="mt-5 flex items-center justify-center gap-2 text-sm text-ash">
+          <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-[#f39c12]"></span>
+          Đang chờ thanh toán...
+        </div>
+        <p class="mt-2 text-xs text-ash/60">Trang sẽ tự cập nhật khi nhận được tiền</p>
+        <a id="qr-zalo-help" href="#" target="_blank" class="mt-4 inline-flex items-center gap-1.5 text-sm text-[#0068ff] hover:underline">
+          <svg width="16" height="16" viewBox="0 0 48 48" fill="currentColor"><path d="M24 4C12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20S35.05 4 24 4zm8.95 27.47c0 1.1-.9 2-2 2H17.05c-1.1 0-2-.9-2-2v-1.4l8.8-10.14h-7.47c-.55 0-1-.45-1-1s.45-1 1-1h12.55c1.1 0 2 .9 2 2v1.4L22.13 30.47h8.82c.55 0 1 .45 1 1v.01z"/></svg>
+          Gặp sự cố? Nhắn Zalo cho shop
+        </a>
+        <button id="qr-back" class="mt-3 text-sm text-ash hover:text-ink transition-colors">← Quay lại giỏ hàng</button>
+      </div>
+      <!-- Order Success -->
+      <div id="cart-success" class="px-6 py-12 hidden text-center flex-1 flex flex-col items-center justify-center">
+        <div class="text-5xl">✓</div>
+        <p class="mt-4 font-serif text-xl text-ink">Thanh toán thành công!</p>
+        <p class="mt-2 text-sm text-ash">Mã đơn: <span id="success-order-code" class="font-medium text-ink"></span></p>
+        <p class="mt-1 text-sm text-ash">nomnom đang chuẩn bị đơn cho bạn.</p>
+        <a id="success-zalo" href="#" target="_blank" class="mt-6 inline-flex items-center gap-2 bg-[#0068ff] px-6 py-3 text-sm font-medium text-white hover:opacity-90 transition-opacity rounded-full">
+          <svg width="18" height="18" viewBox="0 0 48 48" fill="currentColor"><path d="M24 4C12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20S35.05 4 24 4zm8.95 27.47c0 1.1-.9 2-2 2H17.05c-1.1 0-2-.9-2-2v-1.4l8.8-10.14h-7.47c-.55 0-1-.45-1-1s.45-1 1-1h12.55c1.1 0 2 .9 2 2v1.4L22.13 30.47h8.82c.55 0 1 .45 1 1v.01z"/></svg>
+          Nhắn tin Zalo cho shop
+        </a>
+        <button id="success-close" class="mt-4 text-sm text-ash hover:text-ink transition-colors">Đóng</button>
+      </div>
+    </div>
+
+    <!-- ===== Login Modal ===== -->
+    <div id="login-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50">
+      <form id="login-form" class="w-full max-w-sm bg-cream p-6 mx-4 md:mx-auto md:p-8">
+        <h2 class="font-serif text-2xl text-ink">Đăng nhập Admin</h2>
+        <input
+          type="email" name="email" placeholder="Email" required
+          class="mt-6 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="password" name="password" placeholder="Mật khẩu" required
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <p id="login-error" class="mt-2 text-xs text-red-600 hidden"></p>
+        <div class="mt-6 flex items-center gap-3">
+          <button type="submit" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90">
+            Đăng nhập
+          </button>
+          <button type="button" id="login-cancel" class="text-sm text-ash hover:text-ink">
+            Hủy
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ===== Product Form Modal ===== -->
+    <div id="product-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50">
+      <form id="product-form" class="w-full max-w-lg bg-cream p-6 mx-4 max-h-[85vh] overflow-y-auto md:mx-auto md:p-8">
+        <h2 id="product-form-title" class="font-serif text-2xl text-ink">Thêm sản phẩm</h2>
+        <input type="hidden" name="id" />
+        <input
+          type="text" name="name" placeholder="Tên bánh" required
+          class="mt-6 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <textarea
+          name="description" placeholder="Mô tả" rows="3"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink resize-none"
+        ></textarea>
+        <div class="mt-3 flex gap-3">
+          <input
+            type="number" name="price" placeholder="Giá gốc (VNĐ)" required min="0"
+            class="w-1/2 border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+          />
+          <input
+            type="number" name="sale_price" placeholder="Giá KM (tuỳ chọn)" min="0"
+            class="w-1/2 border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+          />
+        </div>
+        <div class="mt-3 flex gap-3">
+          <input
+            type="text" name="category" placeholder="Phân loại (VD: Bánh ngọt)"
+            class="flex-1 border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+          />
+          <select name="badge" class="border border-earth/60 bg-white px-3 py-3 text-sm text-ink outline-none focus:border-ink">
+            <option value="">Không badge</option>
+            <option value="bestseller">Bán chạy</option>
+            <option value="new">Mới</option>
+            <option value="soldout">Hết hàng</option>
+          </select>
+        </div>
+        <label class="mt-3 block">
+          <span class="text-sm text-ash">Ảnh chính</span>
+          <input type="file" name="image" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+        </label>
+        <label class="mt-3 block">
+          <span class="text-sm text-ash">Ảnh phụ 2 (tuỳ chọn)</span>
+          <input type="file" name="image2" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+        </label>
+        <label class="mt-3 block">
+          <span class="text-sm text-ash">Ảnh phụ 3 (tuỳ chọn)</span>
+          <input type="file" name="image3" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+        </label>
+        <p id="product-error" class="mt-2 text-xs text-red-600 hidden"></p>
+        <div class="mt-6 flex items-center gap-3">
+          <button type="submit" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90">
+            Lưu
+          </button>
+          <button type="button" id="product-cancel" class="text-sm text-ash hover:text-ink">
+            Hủy
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ===== Hero Slides Modal ===== -->
+    <div id="slides-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50">
+      <div class="w-full max-w-lg bg-cream p-6 mx-4 max-h-[85vh] overflow-y-auto md:mx-auto md:p-8">
+        <h2 class="font-serif text-2xl text-ink">Quản lý ảnh Hero</h2>
+        <div id="slides-list" class="mt-6 space-y-3"></div>
+        <label class="mt-6 block">
+          <span class="text-sm text-ash">Thêm ảnh mới</span>
+          <input type="file" id="slide-upload" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+        </label>
+        <div class="mt-6">
+          <button id="slides-close" class="text-sm text-ash hover:text-ink">Đóng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Floating Contact Buttons ===== -->
+    <div id="contact-buttons" class="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-4 z-40 flex flex-col gap-2.5 md:bottom-6 md:right-6 md:gap-3">
+      <a id="btn-zalo" href="" class="flex h-11 w-11 items-center justify-center rounded-full bg-[#0068ff] text-white shadow-lg active:scale-95 transition-transform md:h-12 md:w-12 md:hover:scale-110" aria-label="Zalo" target="_blank">
+        <svg width="22" height="22" viewBox="0 0 48 48" fill="currentColor"><path d="M24 4C12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20S35.05 4 24 4zm8.95 27.47c0 1.1-.9 2-2 2H17.05c-1.1 0-2-.9-2-2v-1.4l8.8-10.14h-7.47c-.55 0-1-.45-1-1s.45-1 1-1h12.55c1.1 0 2 .9 2 2v1.4L22.13 30.47h8.82c.55 0 1 .45 1 1v.01z"/></svg>
+      </a>
+      <a id="btn-messenger" href="" class="flex h-11 w-11 items-center justify-center rounded-full bg-[#0084ff] text-white shadow-lg active:scale-95 transition-transform md:h-12 md:w-12 md:hover:scale-110" aria-label="Messenger" target="_blank">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.36 2 2 6.13 2 11.7c0 2.91 1.2 5.42 3.17 7.2V22l3.03-1.67c.81.22 1.67.34 2.56.34h.24c5.64 0 10-4.13 10-9.7S17.64 2 12 2zm1.07 12.33l-2.54-2.73L5.62 14.33l5.39-5.73 2.6 2.73 4.84-2.73-5.38 5.73z"/></svg>
+      </a>
+      <button id="btn-contact-edit" class="hidden h-8 w-8 items-center justify-center rounded-full bg-white text-ink shadow-lg text-xs font-medium hover:bg-earth/30 self-center" aria-label="Sửa liên hệ">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+    </div>
+
+    <!-- ===== Contact Settings Modal ===== -->
+    <div id="contact-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50">
+      <form id="contact-form" class="w-full max-w-sm bg-cream p-6 mx-4 max-h-[85vh] overflow-y-auto md:mx-auto md:p-8">
+        <h2 class="font-serif text-2xl text-ink">Cài đặt website</h2>
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Logo</p>
+        <label class="mt-2 block">
+          <span class="text-sm text-ash">Upload logo</span>
+          <input type="file" name="logo_image" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+        </label>
+        <div id="current-logo-preview" class="mt-2 hidden">
+          <img id="logo-preview-img" src="" alt="Logo hiện tại" class="h-10 w-auto" />
+        </div>
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Liên hệ</p>
+        <input
+          type="text" name="phone" placeholder="Số điện thoại"
+          class="mt-2 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="url" name="zalo_url" placeholder="Link Zalo OA (https://zalo.me/...)"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="text" name="address_text" placeholder="Địa chỉ (hiện ở footer)"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="url" name="messenger_url" placeholder="Link Messenger (https://m.me/...)"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Mạng xã hội (hiện ở footer)</p>
+        <input
+          type="url" name="facebook_url" placeholder="Link Facebook"
+          class="mt-2 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="url" name="instagram_url" placeholder="Link Instagram"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="url" name="threads_url" placeholder="Link Threads"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Giao hàng</p>
+        <input
+          type="text" name="delivery_fee" placeholder="Phí ship (VD: Miễn phí nội thành)"
+          class="mt-2 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="text" name="delivery_zones" placeholder="Khu vực (VD: Nội thành Hà Nội)"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="text" name="delivery_time" placeholder="Thời gian (VD: Giao trong 1-2 giờ)"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Thanh toán</p>
+        <select name="bank_id" class="mt-2 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink">
+          <option value="">Chọn ngân hàng</option>
+          <option value="ICB">VietinBank</option>
+          <option value="VCB">Vietcombank</option>
+          <option value="BIDV">BIDV</option>
+          <option value="TCB">Techcombank</option>
+          <option value="MB">MB Bank</option>
+          <option value="ACB">ACB</option>
+          <option value="VPB">VPBank</option>
+          <option value="TPB">TPBank</option>
+          <option value="STB">Sacombank</option>
+          <option value="SHB">SHB</option>
+          <option value="MSB">MSB</option>
+          <option value="HDB">HDBank</option>
+          <option value="OCB">OCB</option>
+          <option value="NAB">Nam A Bank</option>
+          <option value="EIB">Eximbank</option>
+        </select>
+        <input
+          type="text" name="bank_account" placeholder="Số tài khoản"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="text" name="bank_name" placeholder="Tên chủ tài khoản"
+          class="mt-3 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <p id="contact-error" class="mt-2 text-xs text-red-600 hidden"></p>
+        <div class="mt-6 flex items-center gap-3">
+          <button type="submit" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90">Lưu</button>
+          <button type="button" id="contact-cancel" class="text-sm text-ash hover:text-ink">Hủy</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="save-toast" class="save-toast">Đã lưu</div>
+
+    <!-- ===== Footer ===== -->
+    <footer id="contact" class="border-t border-dashed border-earth">
+      <div class="mx-auto max-w-6xl px-6 py-10 md:py-12">
+        <div class="flex flex-col items-center gap-8 text-center md:flex-row md:items-center md:justify-between md:text-left">
+          <div>
+            <span id="footer-logo" class="font-serif text-lg text-ink">nomnom</span>
+            <button id="admin-logout-btn" class="mt-3 hidden text-xs text-ash hover:text-ink transition-colors block">Đăng xuất admin</button>
+          </div>
+
+          <!-- Social (giữa, to) -->
+          <div id="footer-socials" class="flex items-center gap-4">
+            <a id="social-facebook" href="" target="_blank" rel="noopener" class="hidden h-12 w-12 items-center justify-center rounded-full bg-earth/20 text-ink hover:bg-earth/50 transition-colors" aria-label="Facebook">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.78-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12z"/></svg>
+            </a>
+            <a id="social-instagram" href="" target="_blank" rel="noopener" class="hidden h-12 w-12 items-center justify-center rounded-full bg-earth/20 text-ink hover:bg-earth/50 transition-colors" aria-label="Instagram">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+            </a>
+            <a id="social-threads" href="" target="_blank" rel="noopener" class="hidden h-12 w-12 items-center justify-center rounded-full bg-earth/20 text-ink hover:bg-earth/50 transition-colors" aria-label="Threads">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M17.3 11.2c-.1 0-.2-.1-.3-.1-.2-3-1.8-4.7-4.5-4.7-1.6 0-2.9.7-3.8 1.9l1.5 1c.6-.9 1.5-1.1 2.3-1.1 1 0 1.7.3 2.2.9.3.4.5.9.6 1.6-.8-.1-1.6-.2-2.5-.1-2.5.1-4.1 1.6-4 3.6.1 1 .6 1.9 1.4 2.4.7.5 1.6.7 2.6.6 1.3-.1 2.3-.6 3-1.5.5-.7.9-1.5 1-2.6.7.4 1.2 1 1.5 1.7.5 1.2.5 3.1-1 4.6-1.3 1.3-2.9 1.9-5 1.9-2.3 0-4-.7-5.2-2.2C5.9 17.1 5.3 15 5.3 12s.6-5.1 1.8-6.5C8.3 4 10 3.3 12.3 3.3c2.3 0 4.1.7 5.3 2.2.6.7 1 1.6 1.3 2.7l1.7-.5c-.3-1.4-.9-2.6-1.7-3.5C18.6 2.2 16.3 1.3 13.4 1.3h-.1c-2.9 0-5.1.9-6.7 2.7C5.2 5.5 4.4 8 4.4 11.9v.1c0 3.9.8 6.4 2.2 8 1.6 1.8 3.8 2.7 6.7 2.7h.1c2.5 0 4.3-.7 5.8-2.1 1.9-1.9 1.9-4.3 1.2-5.8-.6-1.3-1.7-2.3-3.1-2.6zm-4.5 5.1c-1.1.1-2.2-.4-2.3-1.4-.1-.8.5-1.6 2.3-1.7h.6c.6 0 1.2 0 1.7.1-.2 2.1-1.2 2.8-2.3 2.9z"/></svg>
+            </a>
+          </div>
+
+          <div class="text-sm text-ash space-y-1.5 md:text-right">
+            <p class="font-medium text-ink">Liên hệ</p>
+            <p id="footer-phone"></p>
+            <p id="footer-address"></p>
+          </div>
+        </div>
+        <div class="mt-8 border-t border-dashed border-earth pt-6 text-center text-sm text-ash">
+          <span>© <span data-year></span> <span class="logo-name">nomnom</span>. Làm bằng cả tấm lòng.</span>
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
