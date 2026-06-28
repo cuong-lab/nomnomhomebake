@@ -789,7 +789,7 @@ async function loadHeroSlides() {
   }
 
   heroSlides.innerHTML = slides
-    .map((s) => `<div class="h-full w-full shrink-0"><img src="${s.image_url}" alt="" class="h-full w-full object-cover" /></div>`)
+    .map((s) => `<div class="h-full w-full shrink-0"><img src="${s.image_url}" alt="" class="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.2]" /></div>`)
     .join("");
 
   if (slides.length > 1) {
