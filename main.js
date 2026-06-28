@@ -448,18 +448,16 @@ function renderProducts(products) {
       <div class="mt-4">
         <h3 data-detail="${p.id}" class="font-serif text-lg text-ink cursor-pointer hover:text-ash transition-colors">${p.name}</h3>
         ${p.description ? `<p class="mt-1 text-sm text-ash line-clamp-2">${p.description}</p>` : ""}
-        <div class="mt-2 flex items-center justify-between">
-          <p class="text-sm font-medium text-ink">
+        <p class="mt-2 text-sm font-medium text-ink">
             ${p.sale_price
               ? `<span class="text-ash line-through">${formatPrice(p.price)}</span> <span class="text-red-600">${formatPrice(p.sale_price)}</span>`
               : formatPrice(p.price)
             }
-          </p>
-          ${p.badge === "soldout"
-            ? `<span class="text-xs text-ash">Hết hàng</span>`
-            : `<button data-add-cart="${p.id}" class="bg-ink px-2 py-1.5 text-[10px] sm:px-4 sm:py-2 sm:text-xs font-medium text-white hover:opacity-90 active:scale-95 transition-all">+ Giỏ hàng</button>`
-          }
-        </div>
+        </p>
+        ${p.badge === "soldout"
+          ? `<span class="mt-2 block text-xs text-ash">Hết hàng</span>`
+          : `<button data-add-cart="${p.id}" class="mt-2 w-full bg-ink py-2 text-[11px] sm:text-xs font-medium text-white hover:opacity-90 active:scale-95 transition-all">+ Giỏ hàng</button>`
+        }
       </div>
       ${
         isAdmin
