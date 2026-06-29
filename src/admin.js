@@ -57,6 +57,7 @@ function todayRange() {
 }
 
 function showToast(message) {
+  if (!toast) return;
   toast.textContent = message;
   toast.classList.add("show");
   window.setTimeout(() => toast.classList.remove("show"), 1800);
@@ -64,47 +65,63 @@ function showToast(message) {
 
 function setAuthView(session) {
   const isAuthed = !!session;
-  login.classList.toggle("hidden", isAuthed);
-  login.classList.toggle("flex", !isAuthed);
-  app.classList.toggle("hidden", !isAuthed);
+  if (login) {
+    login.classList.toggle("hidden", isAuthed);
+    login.classList.toggle("flex", !isAuthed);
+  }
+  if (app) {
+    app.classList.toggle("hidden", !isAuthed);
+  }
   if (!isAuthed) return;
+  
   const email = session.user?.email || "Admin";
-  document.getElementById("admin-email").textContent = email;
-  document.getElementById("admin-avatar").textContent = email.charAt(0).toUpperCase();
+  const emailEl = document.getElementById("admin-email");
+  const avatarEl = document.getElementById("admin-avatar");
+  
+  if (emailEl) emailEl.textContent = email;
+  if (avatarEl) avatarEl.textContent = email.charAt(0).toUpperCase();
 }
 
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  loginError.classList.add("hidden");
-  const form = new FormData(loginForm);
-  const { error } = await supabase.auth.signInWithPassword({
-    email: form.get("email"),
-    password: form.get("password"),
+if (loginForm) {
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (loginError) loginError.classList.add("hidden");
+    const form = new FormData(loginForm);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: form.get("email"),
+      password: form.get("password"),
+    });
+
+    if (error) {
+      if (loginError) {
+        loginError.textContent = "Email hoặc mật khẩu không đúng.";
+        loginError.classList.remove("hidden");
+      }
+      return;
+    }
+    loginForm.reset();
   });
+}
 
-  if (error) {
-    loginError.textContent = "Email hoặc mật khẩu không đúng.";
-    loginError.classList.remove("hidden");
-    return;
-  }
-
-  loginForm.reset();
-});
-
-document.getElementById("admin-signout").addEventListener("click", async () => {
+// Cổng sự kiện an toàn cho nút Đăng xuất + Điều hướng về trang khách hàng
+document.getElementById("admin-signout")?.addEventListener("click", async () => {
   await supabase.auth.signOut();
+  showToast("Đang đăng xuất...");
+  window.location.href = "/";
 });
 
-document.getElementById("admin-refresh").addEventListener("click", () => loadBackoffice());
+// Cổng sự kiện an toàn cho nút Làm mới dữ liệu
+document.getElementById("admin-refresh")?.addEventListener("click", () => loadBackoffice());
 
-document.getElementById("admin-menu-toggle").addEventListener("click", () => {
-  sidebar.classList.remove("-translate-x-full");
-  sidebarOverlay.classList.remove("hidden");
+// Cổng sự kiện an toàn bật/tắt menu sidebar điện thoại
+document.getElementById("admin-menu-toggle")?.addEventListener("click", () => {
+  if (sidebar) sidebar.classList.remove("-translate-x-full");
+  if (sidebarOverlay) sidebarOverlay.classList.remove("hidden");
 });
 
-sidebarOverlay.addEventListener("click", () => {
-  sidebar.classList.add("-translate-x-full");
-  sidebarOverlay.classList.add("hidden");
+sidebarOverlay?.addEventListener("click", () => {
+  if (sidebar) sidebar.classList.add("-translate-x-full");
+  if (sidebarOverlay) sidebarOverlay.classList.add("hidden");
 });
 
 document.querySelectorAll("[data-route], [data-route-link]").forEach((item) => {
@@ -118,7 +135,8 @@ function navigate(route) {
   if (!ROUTES[route]) route = "overview";
   activeRoute = route;
   window.history.replaceState(null, "", `#${route}`);
-  pageTitle.textContent = ROUTES[route];
+  if (pageTitle) pageTitle.textContent = ROUTES[route];
+  
   document.querySelectorAll(".admin-view").forEach((view) => {
     view.classList.toggle("hidden", view.id !== `view-${route}`);
   });
@@ -126,8 +144,8 @@ function navigate(route) {
     item.classList.toggle("is-active", item.dataset.route === route);
   });
 
-  sidebar.classList.add("-translate-x-full");
-  sidebarOverlay.classList.add("hidden");
+  if (sidebar) sidebar.classList.add("-translate-x-full");
+  if (sidebarOverlay) sidebarOverlay.classList.add("hidden");
   renderActiveView();
 }
 
@@ -138,7 +156,6 @@ async function loadBackoffice() {
       supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
     ]);
     
-  // LOG DỮ LIỆU ĐỂ BẠN NHẤN F12 KIỂM TRA LỖI NÈ
   console.log("=== DỮ LIỆU ĐƠN HÀNG LẤY TỪ SUPABASE ===");
   console.log("Lỗi (nếu có):", orderError);
   console.log("Dữ liệu (nếu có):", orderData);
@@ -209,38 +226,54 @@ function renderMetrics() {
   const revenueToday = paidToday.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const navBadge = document.getElementById("nav-orders-count");
 
-  document.getElementById("metric-revenue-today").textContent = formatCurrency(revenueToday);
-  document.getElementById("metric-active-orders").textContent = activeOrders.length;
-  document.getElementById("metric-customers").textContent = customers.length;
-  document.getElementById("metric-customers-note").textContent = `${new Set(orders.map((order) => order.customer_phone).filter(Boolean)).size} số điện thoại có đơn`;
+  const revenueTodayEl = document.getElementById("metric-revenue-today");
+  const activeOrdersEl = document.getElementById("metric-active-orders");
+  const customersEl = document.getElementById("metric-customers");
+  const customersNoteEl = document.getElementById("metric-customers-note");
 
-  navBadge.textContent = activeOrders.length;
-  navBadge.classList.toggle("hidden", activeOrders.length === 0);
+  if (revenueTodayEl) revenueTodayEl.textContent = formatCurrency(revenueToday);
+  if (activeOrdersEl) activeOrdersEl.textContent = activeOrders.length;
+  if (customersEl) customersEl.textContent = customers.length;
+  if (customersNoteEl) customersNoteEl.textContent = `${new Set(orders.map((order) => order.customer_phone).filter(Boolean)).size} số điện thoại có đơn`;
+
+  if (navBadge) {
+    navBadge.textContent = activeOrders.length;
+    navBadge.classList.toggle("hidden", activeOrders.length === 0);
+  }
+
+  const visitorsTodayEl = document.getElementById("metric-visitors-today");
+  const trafficNoteEl = document.getElementById("metric-traffic-note");
 
   if (trafficReady) {
     const stats = trafficStats();
-    document.getElementById("metric-visitors-today").textContent = stats.uniqueVisitors;
-    document.getElementById("metric-traffic-note").textContent = `${stats.pageViews} page views`;
+    if (visitorsTodayEl) visitorsTodayEl.textContent = stats.uniqueVisitors;
+    if (trafficNoteEl) trafficNoteEl.textContent = `${stats.pageViews} page views`;
   } else {
-    document.getElementById("metric-visitors-today").textContent = "--";
-    document.getElementById("metric-traffic-note").textContent = "Chưa bật tracking";
+    if (visitorsTodayEl) visitorsTodayEl.textContent = "--";
+    if (trafficNoteEl) trafficNoteEl.textContent = "Chưa bật tracking";
   }
 }
 
 function renderOverview() {
   const active = orders.filter((order) => order.status === "paid" || order.status === "pending").slice(0, 6);
-  document.getElementById("overview-orders").innerHTML = renderOrderTable(active, { compact: true });
+  const overviewOrdersEl = document.getElementById("overview-orders");
+  if (overviewOrdersEl) overviewOrdersEl.innerHTML = renderOrderTable(active, { compact: true });
+  
   const today = ordersToday();
   const stats = trafficReady ? trafficStats() : null;
   const paidCount = today.filter(paidLike).length;
   const conversion =
     stats && stats.uniqueVisitors > 0 ? `${Math.round((paidCount / stats.uniqueVisitors) * 100)}%` : "--";
-  document.getElementById("overview-pulse").innerHTML = `
-    ${renderPulseRow("Đơn mới hôm nay", today.length)}
-    ${renderPulseRow("Đơn đã thanh toán", paidCount)}
-    ${renderPulseRow("Khách truy cập", stats ? stats.uniqueVisitors : "Chưa có bảng")}
-    ${renderPulseRow("Tỷ lệ chuyển đổi", conversion)}
-  `;
+  
+  const overviewPulseEl = document.getElementById("overview-pulse");
+  if (overviewPulseEl) {
+    overviewPulseEl.innerHTML = `
+      ${renderPulseRow("Đơn mới hôm nay", today.length)}
+      ${renderPulseRow("Đơn đã thanh toán", paidCount)}
+      ${renderPulseRow("Khách truy cập", stats ? stats.uniqueVisitors : "Chưa có bảng")}
+      ${renderPulseRow("Tỷ lệ chuyển đổi", conversion)}
+    `;
+  }
 }
 
 function renderPulseRow(label, value) {
@@ -252,7 +285,6 @@ function renderPulseRow(label, value) {
   `;
 }
 
-// Hàm lấy ra danh sách đơn hàng đã được lọc (dùng chung cho render và xuất Excel)
 function getFilteredOrders() {
   const search = document.getElementById("orders-search")?.value.trim().toLowerCase() || "";
   const status = document.getElementById("orders-status-filter")?.value || "active";
@@ -289,7 +321,8 @@ function getFilteredOrders() {
 
 function renderOrders() {
   const list = getFilteredOrders();
-  document.getElementById("orders-table").innerHTML = renderOrderTable(list);
+  const ordersTableEl = document.getElementById("orders-table");
+  if (ordersTableEl) ordersTableEl.innerHTML = renderOrderTable(list);
 }
 
 document.getElementById("orders-search")?.addEventListener("input", renderOrders);
@@ -297,7 +330,6 @@ document.getElementById("orders-status-filter")?.addEventListener("change", rend
 document.getElementById("orders-date-start")?.addEventListener("change", renderOrders);
 document.getElementById("orders-date-end")?.addEventListener("change", renderOrders);
 
-// Nút xuất Excel (CSV)
 document.getElementById("orders-export")?.addEventListener("click", () => {
   const list = getFilteredOrders();
   if (!list.length) {
@@ -305,15 +337,11 @@ document.getElementById("orders-export")?.addEventListener("click", () => {
     return;
   }
 
-  // Tạo tiêu đề cột
   const headers = ["Mã đơn", "Ngày tạo", "Khách hàng", "SĐT", "Địa chỉ", "Món bánh", "Giờ giao", "Tổng tiền", "Trạng thái"];
-  
-  // Ánh xạ dữ liệu
   const rows = list.map(order => {
     const items = Array.isArray(order.items) ? order.items.map(i => `${i.name} x${i.qty}`).join("; ") : "";
     const statusLabel = STATUS[order.status] ? STATUS[order.status].label : order.status;
     
-    // Xử lý các chuỗi để tránh bị lỗi cột khi xuất CSV
     return [
       order.order_code || "",
       order.created_at ? formatDateTime(order.created_at) : "",
@@ -327,7 +355,6 @@ document.getElementById("orders-export")?.addEventListener("click", () => {
     ].map(v => `"${v}"`).join(",");
   });
 
-  // Hỗ trợ tiếng Việt UTF-8 (BOM)
   const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -403,7 +430,7 @@ function renderOrderTable(list, options = {}) {
   `;
 }
 
-document.getElementById("orders-table").addEventListener("click", async (event) => {
+document.getElementById("orders-table")?.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-order-status]");
   if (!button) return;
   const [id, status] = button.dataset.orderStatus.split(":");
@@ -449,64 +476,72 @@ function renderCustomers() {
     );
   }
 
+  const customersTableEl = document.getElementById("customers-table");
   if (!list.length) {
-    document.getElementById("customers-table").innerHTML = `<div class="admin-empty">Chưa có khách hàng phù hợp.</div>`;
+    if (customersTableEl) customersTableEl.innerHTML = `<div class="admin-empty">Chưa có khách hàng phù hợp.</div>`;
     return;
   }
 
-  document.getElementById("customers-table").innerHTML = `
-    <table class="admin-table">
-      <thead>
-        <tr>
-          <th>Khách</th>
-          <th>Số điện thoại</th>
-          <th>Địa chỉ</th>
-          <th>Số đơn</th>
-          <th>Tổng chi tiêu</th>
-          <th>Lần cuối</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${list
-          .map(
-            (customer) => `
-              <tr>
-                <td>
-                  <span class="font-semibold text-ink">${customer.name || "Khách nomnom"}</span>
-                  <span class="mt-1 block text-xs text-ash">Voucher đã dùng: ${customer.vouchers_used || 0}</span>
-                </td>
-                <td>${customer.phone || "--"}</td>
-                <td><span class="line-clamp-2">${customer.address || "--"}</span></td>
-                <td class="font-semibold text-ink">${customer.sales.orders}</td>
-                <td class="font-semibold text-ink">${formatCurrency(customer.sales.spend)}</td>
-                <td>${customer.sales.lastOrder ? formatDateTime(customer.sales.lastOrder) : "--"}</td>
-              </tr>
-            `
-          )
-          .join("")}
-      </tbody>
-    </table>
-  `;
+  if (customersTableEl) {
+    customersTableEl.innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Khách</th>
+            <th>Số điện thoại</th>
+            <th>Địa chỉ</th>
+            <th>Số đơn</th>
+            <th>Tổng chi tiêu</th>
+            <th>Lần cuối</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list
+            .map(
+              (customer) => `
+                <tr>
+                  <td>
+                    <span class="font-semibold text-ink">${customer.name || "Khách nomnom"}</span>
+                    <span class="mt-1 block text-xs text-ash">Voucher đã dùng: ${customer.vouchers_used || 0}</span>
+                  </td>
+                  <td>${customer.phone || "--"}</td>
+                  <td><span class="line-clamp-2">${customer.address || "--"}</span></td>
+                  <td class="font-semibold text-ink">${customer.sales.orders}</td>
+                  <td class="font-semibold text-ink">${formatCurrency(customer.sales.spend)}</td>
+                  <td>${customer.sales.lastOrder ? formatDateTime(customer.sales.lastOrder) : "--"}</td>
+                </tr>
+              `
+            )
+            .join("")}
+        </tbody>
+      </table>
+    `;
+  }
 }
 
 document.getElementById("customers-search")?.addEventListener("input", renderCustomers);
 
 function renderTraffic() {
   const state = document.getElementById("traffic-state");
+  const trafficUniqueEl = document.getElementById("traffic-unique");
+  const trafficPageviewsEl = document.getElementById("traffic-pageviews");
+  const trafficConversionEl = document.getElementById("traffic-conversion");
 
   if (!trafficReady) {
-    document.getElementById("traffic-unique").textContent = "--";
-    document.getElementById("traffic-pageviews").textContent = "--";
-    document.getElementById("traffic-conversion").textContent = "--";
-    state.innerHTML = `
-      <div class="admin-empty text-left">
-        <p class="font-semibold text-ink">Chưa có bảng analytics_events hoặc chưa cấp quyền đọc.</p>
-        <p class="mt-2 text-sm leading-relaxed text-ash">
-          Khi bật tracking, storefront sẽ ghi page_view vào Supabase với visitor_id, session_id, path và created_at.
-          Admin shell này đã sẵn sàng để đọc và tính unique visitors, page views và conversion hôm nay.
-        </p>
-      </div>
-    `;
+    if (trafficUniqueEl) trafficUniqueEl.textContent = "--";
+    if (trafficPageviewsEl) trafficPageviewsEl.textContent = "--";
+    if (trafficConversionEl) trafficConversionEl.textContent = "--";
+    if (state) {
+      state.innerHTML = `
+        <div class="admin-empty text-left">
+          <p class="font-semibold text-ink">Chưa có bảng analytics_events hoặc chưa cấp quyền đọc.</p>
+          <p class="mt-2 text-sm leading-relaxed text-ash">
+            Khi bật tracking, storefront sẽ ghi page_view vào Supabase với visitor_id, session_id, path và created_at.
+            Admin shell này đã sẵn sàng để đọc và tính unique visitors, page views và conversion hôm nay.
+          </p>
+        </div>
+      `;
+    }
     return;
   }
 
@@ -515,9 +550,9 @@ function renderTraffic() {
   const conversion =
     stats.uniqueVisitors > 0 ? `${Math.round((paidToday / stats.uniqueVisitors) * 100)}%` : "0%";
 
-  document.getElementById("traffic-unique").textContent = stats.uniqueVisitors;
-  document.getElementById("traffic-pageviews").textContent = stats.pageViews;
-  document.getElementById("traffic-conversion").textContent = conversion;
+  if (trafficUniqueEl) trafficUniqueEl.textContent = stats.uniqueVisitors;
+  if (trafficPageviewsEl) trafficPageviewsEl.textContent = stats.pageViews;
+  if (trafficConversionEl) trafficConversionEl.textContent = conversion;
 
   const topPaths = trafficEvents.reduce((acc, event) => {
     const path = event.path || "/";
@@ -525,22 +560,24 @@ function renderTraffic() {
     return acc;
   }, new Map());
 
-  state.innerHTML = `
-    <div class="overflow-x-auto">
-      <table class="admin-table">
-        <thead>
-          <tr><th>Đường dẫn</th><th>Lượt xem</th></tr>
-        </thead>
-        <tbody>
-          ${[...topPaths.entries()]
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 8)
-            .map(([path, count]) => `<tr><td>${path}</td><td class="font-semibold text-ink">${count}</td></tr>`)
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
+  if (state) {
+    state.innerHTML = `
+      <div class="overflow-x-auto">
+        <table class="admin-table">
+          <thead>
+            <tr><th>Đường dẫn</th><th>Lượt xem</th></tr>
+          </thead>
+          <tbody>
+            ${[...topPaths.entries()]
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 8)
+              .map(([path, count]) => `<tr><td>${path}</td><td class="font-semibold text-ink">${count}</td></tr>`)
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
 }
 
 supabase.auth.onAuthStateChange(async (_event, session) => {
