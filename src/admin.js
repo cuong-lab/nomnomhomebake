@@ -340,15 +340,15 @@ document.getElementById("orders-table").addEventListener("click", async (event) 
   const button = event.target.closest("[data-order-status]");
   if (!button) return;
   const [id, status] = button.dataset.orderStatus.split(":");
-  if (status === "cancelled" && !window.confirm("Huy don nay?")) return;
+  if (status === "cancelled" && !window.confirm("Hủy đơn này?")) return;
 
   const { error } = await supabase.from("orders").update({ status }).eq("id", id);
   if (error) {
-    showToast(`Loi cap nhat: ${error.message}`);
+    showToast(`Lỗi cập nhật: ${error.message}`);
     return;
   }
 
-  showToast("Da cap nhat don hang");
+  showToast("Đã cập nhật đơn hàng");
   await loadBackoffice();
 });
 
