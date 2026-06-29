@@ -137,6 +137,12 @@ async function loadBackoffice() {
       supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
       supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
     ]);
+    
+  // LOG DỮ LIỆU ĐỂ BẠN NHẤN F12 KIỂM TRA LỖI NÈ
+  console.log("=== DỮ LIỆU ĐƠN HÀNG LẤY TỪ SUPABASE ===");
+  console.log("Lỗi (nếu có):", orderError);
+  console.log("Dữ liệu (nếu có):", orderData);
+  
   if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
   if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
 
@@ -199,7 +205,7 @@ function trafficStats() {
 function renderMetrics() {
   const todayOrders = ordersToday();
   const paidToday = todayOrders.filter(paidLike);
-  const activeOrders = orders.filter((order) => order.status === "paid");
+  const activeOrders = orders.filter((order) => order.status === "paid" || order.status === "pending");
   const revenueToday = paidToday.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const navBadge = document.getElementById("nav-orders-count");
 
@@ -222,7 +228,7 @@ function renderMetrics() {
 }
 
 function renderOverview() {
-  const active = orders.filter((order) => order.status === "paid").slice(0, 6);
+  const active = orders.filter((order) => order.status === "paid" || order.status === "pending").slice(0, 6);
   document.getElementById("overview-orders").innerHTML = renderOrderTable(active, { compact: true });
   const today = ordersToday();
   const stats = trafficReady ? trafficStats() : null;
@@ -246,12 +252,18 @@ function renderPulseRow(label, value) {
   `;
 }
 
-function renderOrders() {
-  const search = document.getElementById("orders-search").value.trim().toLowerCase();
-  const status = document.getElementById("orders-status-filter").value;
+// Hàm lấy ra danh sách đơn hàng đã được lọc (dùng chung cho render và xuất Excel)
+function getFilteredOrders() {
+  const search = document.getElementById("orders-search")?.value.trim().toLowerCase() || "";
+  const status = document.getElementById("orders-status-filter")?.value || "active";
+  const dateStart = document.getElementById("orders-date-start")?.value;
+  const dateEnd = document.getElementById("orders-date-end")?.value;
+
   let list = [...orders];
-  if (status === "active") list = list.filter((order) => order.status === "paid");
+
+  if (status === "active") list = list.filter((order) => order.status === "paid" || order.status === "pending");
   else if (status !== "all") list = list.filter((order) => order.status === status);
+
   if (search) {
     list = list.filter((order) =>
       [order.order_code, order.customer_name, order.customer_phone, order.customer_address]
@@ -260,11 +272,73 @@ function renderOrders() {
     );
   }
 
+  if (dateStart) {
+    const start = new Date(dateStart);
+    start.setHours(0, 0, 0, 0);
+    list = list.filter((order) => new Date(order.created_at) >= start);
+  }
+  
+  if (dateEnd) {
+    const end = new Date(dateEnd);
+    end.setHours(23, 59, 59, 999);
+    list = list.filter((order) => new Date(order.created_at) <= end);
+  }
+
+  return list;
+}
+
+function renderOrders() {
+  const list = getFilteredOrders();
   document.getElementById("orders-table").innerHTML = renderOrderTable(list);
 }
 
-document.getElementById("orders-search").addEventListener("input", renderOrders);
-document.getElementById("orders-status-filter").addEventListener("change", renderOrders);
+document.getElementById("orders-search")?.addEventListener("input", renderOrders);
+document.getElementById("orders-status-filter")?.addEventListener("change", renderOrders);
+document.getElementById("orders-date-start")?.addEventListener("change", renderOrders);
+document.getElementById("orders-date-end")?.addEventListener("change", renderOrders);
+
+// Nút xuất Excel (CSV)
+document.getElementById("orders-export")?.addEventListener("click", () => {
+  const list = getFilteredOrders();
+  if (!list.length) {
+    showToast("Không có dữ liệu để xuất");
+    return;
+  }
+
+  // Tạo tiêu đề cột
+  const headers = ["Mã đơn", "Ngày tạo", "Khách hàng", "SĐT", "Địa chỉ", "Món bánh", "Giờ giao", "Tổng tiền", "Trạng thái"];
+  
+  // Ánh xạ dữ liệu
+  const rows = list.map(order => {
+    const items = Array.isArray(order.items) ? order.items.map(i => `${i.name} x${i.qty}`).join("; ") : "";
+    const statusLabel = STATUS[order.status] ? STATUS[order.status].label : order.status;
+    
+    // Xử lý các chuỗi để tránh bị lỗi cột khi xuất CSV
+    return [
+      order.order_code || "",
+      order.created_at ? formatDateTime(order.created_at) : "",
+      order.customer_name || "",
+      order.customer_phone || "",
+      order.customer_address ? String(order.customer_address).replace(/"/g, '""') : "",
+      items,
+      order.delivery_time || "Giao Sớm Nhất",
+      order.total || 0,
+      statusLabel
+    ].map(v => `"${v}"`).join(",");
+  });
+
+  // Hỗ trợ tiếng Việt UTF-8 (BOM)
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `DonHang_nomnom_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+});
 
 function renderOrderTable(list, options = {}) {
   if (!list.length) {
@@ -290,20 +364,17 @@ function renderOrderTable(list, options = {}) {
             const status = STATUS[order.status] || { label: order.status || "--", tone: "ash" };
             const items = Array.isArray(order.items) ? order.items : [];
             return `
-  
-            <tr>
+              <tr>
                 <td>
                   <span class="font-semibold text-ink">${order.order_code || "--"}</span>
                   <span class="mt-1 block text-xs text-ash">${formatDateTime(order.created_at)}</span>
                 </td>
-            
-    <td>
+                <td>
                   <span class="font-medium text-ink">${order.customer_name || "--"}</span>
                   <span class="mt-1 block text-xs text-ash">${order.customer_phone || ""}</span>
                 </td>
                 <td>
-                  
-<span class="line-clamp-2 text-sm text-ink">${items.map((item) => `${item.name} x${item.qty}`).join(", ") || "--"}</span>
+                  <span class="line-clamp-2 text-sm text-ink">${items.map((item) => `${item.name} x${item.qty}`).join(", ") || "--"}</span>
                 </td>
                 <td>
                   <span class="text-sm text-ink">${order.delivery_time || "Giao Sớm Nhất"}</span>
@@ -313,9 +384,11 @@ function renderOrderTable(list, options = {}) {
                 <td><span class="admin-status admin-status-${status.tone}">${status.label}</span></td>
                 ${
                   options.compact
-          ? ""
+                    ? ""
                     : `<td>
                         <div class="flex justify-end gap-2">
+                          ${order.status === "pending" ? `<button class="admin-row-button" data-order-status="${order.id}:paid">Xác nhận tiền về</button>` : ""}
+                          ${order.status === "pending" ? `<button class="admin-row-button is-danger" data-order-status="${order.id}:cancelled">Hủy</button>` : ""}
                           ${order.status === "paid" ? `<button class="admin-row-button" data-order-status="${order.id}:delivered">Đã giao</button>` : ""}
                           ${order.status === "paid" ? `<button class="admin-row-button is-danger" data-order-status="${order.id}:cancelled">Hủy</button>` : ""}
                         </div>
@@ -323,7 +396,7 @@ function renderOrderTable(list, options = {}) {
                 }
               </tr>
             `;
-})
+          })
           .join("")}
       </tbody>
     </table>
@@ -342,7 +415,7 @@ document.getElementById("orders-table").addEventListener("click", async (event) 
     return;
   }
 
-  showToast("Đã cập nhật đơn hàng");
+  showToast("Đã cập nhật trạng thái đơn");
   await loadBackoffice();
 });
 
@@ -362,7 +435,7 @@ function customerStatsByPhone() {
 }
 
 function renderCustomers() {
-  const search = document.getElementById("customers-search").value.trim().toLowerCase();
+  const search = document.getElementById("customers-search")?.value.trim().toLowerCase() || "";
   const stats = customerStatsByPhone();
   let list = customers.map((customer) => ({
     ...customer,
@@ -416,7 +489,7 @@ function renderCustomers() {
   `;
 }
 
-document.getElementById("customers-search").addEventListener("input", renderCustomers);
+document.getElementById("customers-search")?.addEventListener("input", renderCustomers);
 
 function renderTraffic() {
   const state = document.getElementById("traffic-state");
