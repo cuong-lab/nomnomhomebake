@@ -18,17 +18,17 @@ let trafficReady = false;
 let activeRoute = "overview";
 
 const ROUTES = {
-  overview: "Tong quan ban hang",
-  orders: "Don hang",
-  customers: "Khach hang",
+  overview: "Tổng quan bán hàng",
+  orders: "Đơn Hàng",
+  customers: "Khách hàng",
   traffic: "Traffic",
 };
 
 const STATUS = {
-  pending: { label: "Cho thanh toan", tone: "amber" },
-  paid: { label: "Da thanh toan", tone: "green" },
-  delivered: { label: "Da giao", tone: "ash" },
-  cancelled: { label: "Da huy", tone: "red" },
+  pending: { label: "Chờ thanh toán", tone: "amber" },
+  paid: { label: "Đã thanh toán", tone: "green" },
+  delivered: { label: "Đã giao", tone: "ash" },
+  cancelled: { label: "Đã hủy", tone: "red" },
 };
 
 const formatCurrency = (value) =>
@@ -84,7 +84,7 @@ loginForm.addEventListener("submit", async (event) => {
   });
 
   if (error) {
-    loginError.textContent = "Email hoac mat khau khong dung.";
+    loginError.textContent = "Email hoặc mật khẩu không đúng.";
     loginError.classList.remove("hidden");
     return;
   }
@@ -211,7 +211,7 @@ function renderMetrics() {
   document.getElementById("metric-revenue-today").textContent = formatCurrency(revenueToday);
   document.getElementById("metric-active-orders").textContent = activeOrders.length;
   document.getElementById("metric-customers").textContent = customers.length;
-  document.getElementById("metric-customers-note").textContent = `${new Set(orders.map((order) => order.customer_phone).filter(Boolean)).size} so dien thoai co don`;
+  document.getElementById("metric-customers-note").textContent = `${new Set(orders.map((order) => order.customer_phone).filter(Boolean)).size} số điện thoại có đơn`;
 
   navBadge.textContent = activeOrders.length;
   navBadge.classList.toggle("hidden", activeOrders.length === 0);
@@ -222,7 +222,7 @@ function renderMetrics() {
     document.getElementById("metric-traffic-note").textContent = `${stats.pageViews} page views`;
   } else {
     document.getElementById("metric-visitors-today").textContent = "--";
-    document.getElementById("metric-traffic-note").textContent = "Chua bat tracking";
+    document.getElementById("metric-traffic-note").textContent = "Chưa bật tracking";
   }
 }
 
@@ -237,10 +237,10 @@ function renderOverview() {
     stats && stats.uniqueVisitors > 0 ? `${Math.round((paidCount / stats.uniqueVisitors) * 100)}%` : "--";
 
   document.getElementById("overview-pulse").innerHTML = `
-    ${renderPulseRow("Don moi hom nay", today.length)}
-    ${renderPulseRow("Don da thanh toan", paidCount)}
-    ${renderPulseRow("Khach truy cap", stats ? stats.uniqueVisitors : "Chua co bang")}
-    ${renderPulseRow("Ty le chuyen doi", conversion)}
+    ${renderPulseRow("Đơn mới hôm nay", today.length)}
+    ${renderPulseRow("Đơn đã thanh toán", paidCount)}
+    ${renderPulseRow("Khách truy cập", stats ? stats.uniqueVisitors : "Chưa có bảng")}
+    ${renderPulseRow("Tỷ lệ chuyển đổi", conversion)}
   `;
 }
 
@@ -277,19 +277,19 @@ document.getElementById("orders-status-filter").addEventListener("change", rende
 
 function renderOrderTable(list, options = {}) {
   if (!list.length) {
-    return `<div class="admin-empty">Chua co don phu hop.</div>`;
+    return `<div class="admin-empty">Chưa có đơn phù hợp.</div>`;
   }
 
   return `
     <table class="admin-table">
       <thead>
         <tr>
-          <th>Don</th>
-          <th>Khach</th>
-          <th>Mon banh</th>
-          <th>Giao hang</th>
-          <th>Tong</th>
-          <th>Trang thai</th>
+          <th>Đơn</th>
+          <th>Khách</th>
+          <th>Món bánh</th>
+          <th>Giao hàng</th>
+          <th>Tổng</th>
+          <th>Trạng thái</th>
           ${options.compact ? "" : "<th></th>"}
         </tr>
       </thead>
@@ -312,7 +312,7 @@ function renderOrderTable(list, options = {}) {
                   <span class="line-clamp-2 text-sm text-ink">${items.map((item) => `${item.name} x${item.qty}`).join(", ") || "--"}</span>
                 </td>
                 <td>
-                  <span class="text-sm text-ink">${order.delivery_time || "Giao som nhat"}</span>
+                  <span class="text-sm text-ink">${order.delivery_time || "Giao Sớm Nhất"}</span>
                   <span class="mt-1 block max-w-[14rem] truncate text-xs text-ash">${order.customer_address || ""}</span>
                 </td>
                 <td class="font-semibold text-ink">${formatCurrency(order.total)}</td>
@@ -322,8 +322,8 @@ function renderOrderTable(list, options = {}) {
                     ? ""
                     : `<td>
                         <div class="flex justify-end gap-2">
-                          ${order.status === "paid" ? `<button class="admin-row-button" data-order-status="${order.id}:delivered">Da giao</button>` : ""}
-                          ${order.status === "paid" ? `<button class="admin-row-button is-danger" data-order-status="${order.id}:cancelled">Huy</button>` : ""}
+                          ${order.status === "paid" ? `<button class="admin-row-button" data-order-status="${order.id}:delivered">Đã giao</button>` : ""}
+                          ${order.status === "paid" ? `<button class="admin-row-button is-danger" data-order-status="${order.id}:cancelled">Hủy</button>` : ""}
                         </div>
                       </td>`
                 }
@@ -384,7 +384,7 @@ function renderCustomers() {
   }
 
   if (!list.length) {
-    document.getElementById("customers-table").innerHTML = `<div class="admin-empty">Chua co khach hang phu hop.</div>`;
+    document.getElementById("customers-table").innerHTML = `<div class="admin-empty">Chưa có khách hàng phù hợp.</div>`;
     return;
   }
 
@@ -392,12 +392,12 @@ function renderCustomers() {
     <table class="admin-table">
       <thead>
         <tr>
-          <th>Khach</th>
-          <th>So dien thoai</th>
-          <th>Dia chi</th>
-          <th>So don</th>
-          <th>Tong chi tieu</th>
-          <th>Lan cuoi</th>
+          <th>Khách</th>
+          <th>Số điện thoại</th>
+          <th>Địa chỉ</th>
+          <th>Số đơn</th>
+          <th>Tổng chi tiêu</th>
+          <th>Lần cuối</th>
         </tr>
       </thead>
       <tbody>
@@ -434,10 +434,10 @@ function renderTraffic() {
     document.getElementById("traffic-conversion").textContent = "--";
     state.innerHTML = `
       <div class="admin-empty text-left">
-        <p class="font-semibold text-ink">Chua co bang analytics_events hoac chua cap quyen doc.</p>
+        <p class="font-semibold text-ink">Chưa có bảng analytics_events hoặc chưa cấp quyền đọc.</p>
         <p class="mt-2 text-sm leading-relaxed text-ash">
-          Khi bat tracking, storefront se ghi page_view vao Supabase voi visitor_id, session_id, path va created_at.
-          Admin shell nay da san san de doc va tinh unique visitors, page views va conversion hom nay.
+          Khi bật tracking, storefront sẽ ghi page_view vào Supabase với visitor_id, session_id, path và created_at.
+          Admin shell này đã sẵn sàng để đọc và tính unique visitors, page views và conversion hôm nay.
         </p>
       </div>
     `;
@@ -463,7 +463,7 @@ function renderTraffic() {
     <div class="overflow-x-auto">
       <table class="admin-table">
         <thead>
-          <tr><th>Duong dan</th><th>Luot xem</th></tr>
+          <tr><th>Đường dẫn</th><th>Lượt xem</th></tr>
         </thead>
         <tbody>
           ${[...topPaths.entries()]
