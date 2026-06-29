@@ -506,6 +506,8 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 const adminLogoutBtn = document.getElementById("admin-logout-btn");
+const adminNavItem = document.getElementById("admin-nav-item");
+const adminMobileNavItem = document.getElementById("admin-mobile-nav-item");
 
 adminLogoutBtn.addEventListener("click", () => {
   supabase.auth.signOut();
@@ -514,6 +516,8 @@ adminLogoutBtn.addEventListener("click", () => {
 supabase.auth.onAuthStateChange((_event, session) => {
   isAdmin = !!session;
   adminLogoutBtn.classList.toggle("hidden", !isAdmin);
+  adminNavItem?.classList.toggle("hidden", !isAdmin);
+  adminMobileNavItem?.classList.toggle("hidden", !isAdmin);
   adminOrdersBtn.classList.toggle("hidden", !isAdmin);
   if (isAdmin) {
     startAdminOrdersPolling();
