@@ -68,7 +68,6 @@ function setAuthView(session) {
   login.classList.toggle("flex", !isAuthed);
   app.classList.toggle("hidden", !isAuthed);
   if (!isAuthed) return;
-
   const email = session.user?.email || "Admin";
   document.getElementById("admin-email").textContent = email;
   document.getElementById("admin-avatar").textContent = email.charAt(0).toUpperCase();
@@ -120,11 +119,9 @@ function navigate(route) {
   activeRoute = route;
   window.history.replaceState(null, "", `#${route}`);
   pageTitle.textContent = ROUTES[route];
-
   document.querySelectorAll(".admin-view").forEach((view) => {
     view.classList.toggle("hidden", view.id !== `view-${route}`);
   });
-
   document.querySelectorAll("[data-route]").forEach((item) => {
     item.classList.toggle("is-active", item.dataset.route === route);
   });
@@ -140,9 +137,8 @@ async function loadBackoffice() {
       supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
       supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
     ]);
-
-  if (orderError) showToast(`Loi don hang: ${orderError.message}`);
-  if (customerError) showToast(`Loi khach hang: ${customerError.message}`);
+  if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
+  if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
 
   orders = orderData || [];
   customers = customerData || [];
@@ -159,7 +155,6 @@ async function loadTraffic() {
     .lt("created_at", end.toISOString())
     .order("created_at", { ascending: false })
     .limit(1000);
-
   trafficReady = !error;
   trafficEvents = data || [];
 }
@@ -229,13 +224,11 @@ function renderMetrics() {
 function renderOverview() {
   const active = orders.filter((order) => order.status === "paid").slice(0, 6);
   document.getElementById("overview-orders").innerHTML = renderOrderTable(active, { compact: true });
-
   const today = ordersToday();
   const stats = trafficReady ? trafficStats() : null;
   const paidCount = today.filter(paidLike).length;
   const conversion =
     stats && stats.uniqueVisitors > 0 ? `${Math.round((paidCount / stats.uniqueVisitors) * 100)}%` : "--";
-
   document.getElementById("overview-pulse").innerHTML = `
     ${renderPulseRow("Đơn mới hôm nay", today.length)}
     ${renderPulseRow("Đơn đã thanh toán", paidCount)}
@@ -257,10 +250,8 @@ function renderOrders() {
   const search = document.getElementById("orders-search").value.trim().toLowerCase();
   const status = document.getElementById("orders-status-filter").value;
   let list = [...orders];
-
   if (status === "active") list = list.filter((order) => order.status === "paid");
   else if (status !== "all") list = list.filter((order) => order.status === status);
-
   if (search) {
     list = list.filter((order) =>
       [order.order_code, order.customer_name, order.customer_phone, order.customer_address]
@@ -299,17 +290,20 @@ function renderOrderTable(list, options = {}) {
             const status = STATUS[order.status] || { label: order.status || "--", tone: "ash" };
             const items = Array.isArray(order.items) ? order.items : [];
             return `
-              <tr>
+  
+            <tr>
                 <td>
                   <span class="font-semibold text-ink">${order.order_code || "--"}</span>
                   <span class="mt-1 block text-xs text-ash">${formatDateTime(order.created_at)}</span>
                 </td>
-                <td>
+            
+    <td>
                   <span class="font-medium text-ink">${order.customer_name || "--"}</span>
                   <span class="mt-1 block text-xs text-ash">${order.customer_phone || ""}</span>
                 </td>
                 <td>
-                  <span class="line-clamp-2 text-sm text-ink">${items.map((item) => `${item.name} x${item.qty}`).join(", ") || "--"}</span>
+                  
+<span class="line-clamp-2 text-sm text-ink">${items.map((item) => `${item.name} x${item.qty}`).join(", ") || "--"}</span>
                 </td>
                 <td>
                   <span class="text-sm text-ink">${order.delivery_time || "Giao Sớm Nhất"}</span>
@@ -319,7 +313,7 @@ function renderOrderTable(list, options = {}) {
                 <td><span class="admin-status admin-status-${status.tone}">${status.label}</span></td>
                 ${
                   options.compact
-                    ? ""
+          ? ""
                     : `<td>
                         <div class="flex justify-end gap-2">
                           ${order.status === "paid" ? `<button class="admin-row-button" data-order-status="${order.id}:delivered">Đã giao</button>` : ""}
@@ -329,7 +323,7 @@ function renderOrderTable(list, options = {}) {
                 }
               </tr>
             `;
-          })
+})
           .join("")}
       </tbody>
     </table>
@@ -374,7 +368,6 @@ function renderCustomers() {
     ...customer,
     sales: stats.get(customer.phone) || { orders: 0, spend: 0, lastOrder: null },
   }));
-
   if (search) {
     list = list.filter((customer) =>
       [customer.name, customer.phone, customer.address]
@@ -406,8 +399,8 @@ function renderCustomers() {
             (customer) => `
               <tr>
                 <td>
-                  <span class="font-semibold text-ink">${customer.name || "Khach nomnom"}</span>
-                  <span class="mt-1 block text-xs text-ash">Voucher da dung: ${customer.vouchers_used || 0}</span>
+                  <span class="font-semibold text-ink">${customer.name || "Khách nomnom"}</span>
+                  <span class="mt-1 block text-xs text-ash">Voucher đã dùng: ${customer.vouchers_used || 0}</span>
                 </td>
                 <td>${customer.phone || "--"}</td>
                 <td><span class="line-clamp-2">${customer.address || "--"}</span></td>
