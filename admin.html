@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>nomnom admin - Van hanh ban hang</title>
+    <meta
+      name="description"
+      content="Khu van hanh ban hang noi bo cua nomnom."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="admin-body">
+    <div id="admin-login" class="hidden min-h-screen items-center justify-center px-5">
+      <form id="admin-login-form" class="w-full max-w-sm border border-earth/60 bg-cream/90 p-6 shadow-[0_24px_70px_-42px_rgba(10,10,10,0.55)] md:p-8">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-ash">nomnom backoffice</p>
+        <h1 class="mt-3 font-serif text-3xl text-ink">Dang nhap admin</h1>
+        <p class="mt-2 text-sm leading-relaxed text-ash">
+          Khu van hanh rieng cho don hang, khach hang va luu luong truy cap.
+        </p>
+        <input
+          type="email"
+          name="email"
+          placeholder="Email"
+          required
+          class="mt-6 w-full border border-earth/70 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <input
+          type="password"
+          name="password"
+          placeholder="Mat khau"
+          required
+          class="mt-3 w-full border border-earth/70 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+        />
+        <p id="admin-login-error" class="mt-3 hidden text-xs text-red-600"></p>
+        <button type="submit" class="mt-6 w-full bg-ink px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90">
+          Vao backoffice
+        </button>
+        <a href="/" class="mt-4 inline-block text-sm text-ash transition-colors hover:text-ink">Ve website</a>
+      </form>
+    </div>
+
+    <div id="admin-app" class="hidden min-h-screen">
+      <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-40 flex w-[18.5rem] -translate-x-full flex-col border-r border-earth/70 bg-[#fbf3ea]/95 transition-transform duration-300 lg:translate-x-0">
+        <div class="border-b border-dashed border-earth px-6 py-5">
+          <a href="/" class="font-serif text-2xl text-ink">nomnom</a>
+          <p class="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-ash">Backoffice</p>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto px-4 py-5">
+          <p class="px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-ash">Ban hang</p>
+          <div class="mt-3 space-y-1">
+            <button class="admin-nav-item is-active" data-route="overview" type="button">
+              <span class="admin-nav-icon">01</span>
+              Tong quan
+            </button>
+            <button class="admin-nav-item" data-route="orders" type="button">
+              <span class="admin-nav-icon">02</span>
+              Don hang
+              <span id="nav-orders-count" class="ml-auto hidden rounded-full bg-[#7a0c1f] px-2 py-0.5 text-[10px] text-white">0</span>
+            </button>
+            <button class="admin-nav-item" data-route="customers" type="button">
+              <span class="admin-nav-icon">03</span>
+              Khach hang
+            </button>
+            <button class="admin-nav-item" data-route="traffic" type="button">
+              <span class="admin-nav-icon">04</span>
+              Traffic
+            </button>
+          </div>
+
+          <div class="mt-8 rounded-lg border border-dashed border-earth/80 bg-white/45 p-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-ash">Nguon du lieu</p>
+            <p class="mt-2 text-sm leading-relaxed text-ink">
+              Don hang tu <span class="font-semibold">orders</span>, khach hang tu <span class="font-semibold">customers</span>, traffic tu <span class="font-semibold">analytics_events</span>.
+            </p>
+          </div>
+        </nav>
+
+        <div class="border-t border-dashed border-earth px-4 py-4">
+          <a href="/" class="admin-secondary-link">Mo website</a>
+          <button id="admin-signout" type="button" class="admin-secondary-link mt-2 w-full text-left">Dang xuat</button>
+        </div>
+      </aside>
+
+      <div id="admin-sidebar-overlay" class="fixed inset-0 z-30 hidden bg-ink/40 lg:hidden"></div>
+
+      <div class="min-h-screen lg:pl-[18.5rem]">
+        <header class="sticky top-0 z-20 border-b border-earth/60 bg-[#fdfaf5]/90 backdrop-blur">
+          <div class="flex min-h-[4.75rem] items-center justify-between gap-4 px-4 py-3 md:px-7">
+            <div class="flex items-center gap-3">
+              <button id="admin-menu-toggle" type="button" class="flex h-10 w-10 items-center justify-center border border-earth/70 bg-white text-ink lg:hidden" aria-label="Mo menu">
+                <span class="block h-0.5 w-5 bg-current before:block before:h-0.5 before:w-5 before:-translate-y-1.5 before:bg-current after:block after:h-0.5 after:w-5 after:translate-y-1 after:bg-current"></span>
+              </button>
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-[#7a0c1f] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white">Live</span>
+                  <span class="text-sm font-medium text-ash">nomnom sales operations</span>
+                </div>
+                <h1 id="admin-page-title" class="mt-1 font-serif text-2xl text-ink md:text-3xl">Tong quan ban hang</h1>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <button id="admin-refresh" type="button" class="hidden border border-earth/70 bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-ink md:inline-flex">
+                Lam moi
+              </button>
+              <div class="hidden text-right sm:block">
+                <p id="admin-email" class="text-sm font-semibold text-ink">Admin</p>
+                <p class="text-xs text-ash">Administrator</p>
+              </div>
+              <div id="admin-avatar" class="flex h-11 w-11 items-center justify-center rounded-full bg-ink font-serif text-lg text-white">A</div>
+            </div>
+          </div>
+        </header>
+
+        <main class="px-4 py-6 md:px-7 md:py-8">
+          <section id="view-overview" class="admin-view">
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <article class="admin-stat-card">
+                <p class="admin-stat-label">Doanh thu hom nay</p>
+                <p id="metric-revenue-today" class="admin-stat-value">0 d</p>
+                <p id="metric-revenue-note" class="admin-stat-note">Don da thanh toan va da giao</p>
+              </article>
+              <article class="admin-stat-card is-warm">
+                <p class="admin-stat-label">Don can xu ly</p>
+                <p id="metric-active-orders" class="admin-stat-value">0</p>
+                <p class="admin-stat-note">Trang thai da thanh toan</p>
+              </article>
+              <article class="admin-stat-card is-green">
+                <p class="admin-stat-label">Khach truy cap</p>
+                <p id="metric-visitors-today" class="admin-stat-value">--</p>
+                <p id="metric-traffic-note" class="admin-stat-note">Can bang analytics_events</p>
+              </article>
+              <article class="admin-stat-card">
+                <p class="admin-stat-label">Khach hang</p>
+                <p id="metric-customers" class="admin-stat-value">0</p>
+                <p id="metric-customers-note" class="admin-stat-note">Ho so da luu</p>
+              </article>
+            </div>
+
+            <div class="mt-6 grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+              <section class="admin-panel">
+                <div class="admin-panel-head">
+                  <div>
+                    <h2 class="admin-panel-title">Don moi can xu ly</h2>
+                    <p class="admin-panel-subtitle">Uu tien don da thanh toan, dang cho co chu chot giao.</p>
+                  </div>
+                  <button class="admin-light-button" data-route-link="orders" type="button">Xem don</button>
+                </div>
+                <div id="overview-orders" class="mt-4 overflow-x-auto"></div>
+              </section>
+
+              <section class="admin-panel">
+                <div class="admin-panel-head">
+                  <div>
+                    <h2 class="admin-panel-title">Nhip ban trong ngay</h2>
+                    <p class="admin-panel-subtitle">Tom tat tu order, customer va traffic.</p>
+                  </div>
+                </div>
+                <div id="overview-pulse" class="mt-5 space-y-3"></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="view-orders" class="admin-view hidden">
+            <div class="admin-toolbar">
+              <div class="relative flex-1">
+                <input id="orders-search" type="search" placeholder="Tim ma don, ten, so dien thoai..." class="admin-search-input" />
+              </div>
+              <select id="orders-status-filter" class="admin-select">
+                <option value="active">Can xu ly</option>
+                <option value="paid">Da thanh toan</option>
+                <option value="delivered">Da giao</option>
+                <option value="cancelled">Da huy</option>
+                <option value="all">Tat ca</option>
+              </select>
+            </div>
+            <section class="admin-panel mt-4">
+              <div class="admin-panel-head">
+                <div>
+                  <h2 class="admin-panel-title">Don hang</h2>
+                  <p class="admin-panel-subtitle">Doc nhanh mon, khach, gio giao va trang thai.</p>
+                </div>
+              </div>
+              <div id="orders-table" class="mt-4 overflow-x-auto"></div>
+            </section>
+          </section>
+
+          <section id="view-customers" class="admin-view hidden">
+            <div class="admin-toolbar">
+              <input id="customers-search" type="search" placeholder="Tim ten, so dien thoai, dia chi..." class="admin-search-input" />
+            </div>
+            <section class="admin-panel mt-4">
+              <div class="admin-panel-head">
+                <div>
+                  <h2 class="admin-panel-title">Khach hang</h2>
+                  <p class="admin-panel-subtitle">Ho so khach, so don va gia tri mua hang tinh tu orders.</p>
+                </div>
+              </div>
+              <div id="customers-table" class="mt-4 overflow-x-auto"></div>
+            </section>
+          </section>
+
+          <section id="view-traffic" class="admin-view hidden">
+            <div class="grid gap-4 md:grid-cols-3">
+              <article class="admin-stat-card is-green">
+                <p class="admin-stat-label">Unique visitors</p>
+                <p id="traffic-unique" class="admin-stat-value">--</p>
+                <p class="admin-stat-note">Theo visitor_id</p>
+              </article>
+              <article class="admin-stat-card">
+                <p class="admin-stat-label">Page views</p>
+                <p id="traffic-pageviews" class="admin-stat-value">--</p>
+                <p class="admin-stat-note">Luot xem trang</p>
+              </article>
+              <article class="admin-stat-card is-warm">
+                <p class="admin-stat-label">Conversion</p>
+                <p id="traffic-conversion" class="admin-stat-value">--</p>
+                <p class="admin-stat-note">Don thanh toan / visitor</p>
+              </article>
+            </div>
+
+            <section class="admin-panel mt-6">
+              <div class="admin-panel-head">
+                <div>
+                  <h2 class="admin-panel-title">Traffic hom nay</h2>
+                  <p class="admin-panel-subtitle">Shell da san san cho tracking. Neu bang chua co, man nay se hien trang thai cho.</p>
+                </div>
+              </div>
+              <div id="traffic-state" class="mt-5"></div>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="admin-toast" class="toast"></div>
+    <script type="module" src="/src/admin.js"></script>
+  </body>
+</html>
