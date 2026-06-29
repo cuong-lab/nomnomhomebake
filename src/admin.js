@@ -103,17 +103,29 @@ if (loginForm) {
   });
 }
 
-// CƠ CHẾ ĐĂNG XUẤT AN TOÀN TUYỆT ĐỐI - KHÔNG DÙNG AWAIT ĐỂ TRÁNH TREO TRANG
+// CƠ CHẾ ĐĂNG XUẤT TẬN GỐC - XÓA TRONG MÁY TRƯỚC, CHUYỂN TRANG SAU
 document.getElementById("admin-signout")?.addEventListener("click", () => {
   showToast("Đang đăng xuất...");
   
-  // Gọi lệnh xóa session ngầm, không đợi nó phản hồi
-  supabase.auth.signOut().catch((e) => console.error("Lỗi auth:", e));
-  
-  // Ép trình duyệt chuyển hướng thẳng về trang chủ sau 350ms cố định
+  try {
+    // 1. Ép trình duyệt xóa sạch bách mọi token lưu trong bộ nhớ máy ngay lập tức
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("sb-") || key.includes("auth-token")) {
+        localStorage.removeItem(key);
+      }
+    });
+    sessionStorage.clear();
+    
+    // 2. Gọi lệnh thông báo lên server Supabase ngầm
+    supabase.auth.signOut().catch(() => {});
+  } catch (e) {
+    console.error("Lỗi xóa bộ nhớ đệm:", e);
+  }
+
+  // 3. Chờ 400ms để hiệu ứng Toast hiển thị mượt rồi đẩy thẳng về trang chủ khách hàng công khai
   window.setTimeout(() => {
     window.location.href = "/";
-  }, 350);
+  }, 400);
 });
 
 document.getElementById("admin-refresh")?.addEventListener("click", () => loadBackoffice());
@@ -154,7 +166,6 @@ function navigate(route) {
 }
 
 async function loadBackoffice() {
-  // KIỂM TRA BẮT LỖI BIẾN MÔI TRƯỜNG NGAY LẬP TỨC
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     console.error("❌ LỖI CHÍNH: Vercel chưa đọc được Biến môi trường! Bạn thiếu VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY.");
     showToast("Lỗi: Thiếu cấu hình API Supabase trên Vercel!");
@@ -227,8 +238,6 @@ function ordersToday() {
     return created >= start && created < end;
   });
 }
-
-// ... (Giữ nguyên các hàm bổ trợ tính toán bên dưới)
 
 function trafficStats() {
   const visitors = new Set(trafficEvents.map((event) => event.visitor_id).filter(Boolean));
