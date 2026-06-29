@@ -103,23 +103,21 @@ if (loginForm) {
   });
 }
 
-// Cổng sự kiện an toàn cho nút Đăng xuất + Luôn luôn ép điều hướng về trang frontend khách hàng
-document.getElementById("admin-signout")?.addEventListener("click", async () => {
-  try {
-    showToast("Đang đăng xuất...");
-    await supabase.auth.signOut();
-  } catch (err) {
-    console.error("Lỗi signout ngầm:", err);
-  } finally {
-    // Bất kể Supabase có lỗi hay không, lệnh này luôn được chạy để chuyển hướng về trang chủ công khai
+// CƠ CHẾ ĐĂNG XUẤT AN TOÀN TUYỆT ĐỐI - KHÔNG DÙNG AWAIT ĐỂ TRÁNH TREO TRANG
+document.getElementById("admin-signout")?.addEventListener("click", () => {
+  showToast("Đang đăng xuất...");
+  
+  // Gọi lệnh xóa session ngầm, không đợi nó phản hồi
+  supabase.auth.signOut().catch((e) => console.error("Lỗi auth:", e));
+  
+  // Ép trình duyệt chuyển hướng thẳng về trang chủ sau 350ms cố định
+  window.setTimeout(() => {
     window.location.href = "/";
-  }
+  }, 350);
 });
 
-// Cổng sự kiện an toàn cho nút Làm mới dữ liệu
 document.getElementById("admin-refresh")?.addEventListener("click", () => loadBackoffice());
 
-// Cổng sự kiện an toàn bật/tắt menu sidebar điện thoại
 document.getElementById("admin-menu-toggle")?.addEventListener("click", () => {
   if (sidebar) sidebar.classList.remove("-translate-x-full");
   if (sidebarOverlay) sidebarOverlay.classList.remove("hidden");
@@ -156,36 +154,51 @@ function navigate(route) {
 }
 
 async function loadBackoffice() {
-  const [{ data: orderData, error: orderError }, { data: customerData, error: customerError }] =
-    await Promise.all([
-      supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
-      supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
-    ]);
-    
-  console.log("=== DỮ LIỆU ĐƠN HÀNG LẤY TỪ SUPABASE ===");
-  console.log("Lỗi (nếu có):", orderError);
-  console.log("Dữ liệu (nếu có):", orderData);
-  
-  if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
-  if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
+  // KIỂM TRA BẮT LỖI BIẾN MÔI TRƯỜNG NGAY LẬP TỨC
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    console.error("❌ LỖI CHÍNH: Vercel chưa đọc được Biến môi trường! Bạn thiếu VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY.");
+    showToast("Lỗi: Thiếu cấu hình API Supabase trên Vercel!");
+    return;
+  }
 
-  orders = orderData || [];
-  customers = customerData || [];
-  await loadTraffic();
-  renderAll();
+  try {
+    const [{ data: orderData, error: orderError }, { data: customerData, error: customerError }] =
+      await Promise.all([
+        supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
+        supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
+      ]);
+      
+    console.log("=== DỮ LIỆU ĐƠN HÀNG LẤY TỪ SUPABASE ===");
+    console.log("Lỗi hệ thống:", orderError);
+    console.log("Mảng dữ liệu:", orderData);
+    
+    if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
+    if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
+
+    orders = orderData || [];
+    customers = customerData || [];
+    await loadTraffic();
+    renderAll();
+  } catch (catchErr) {
+    console.error("Lỗi kết nối nghiêm trọng:", catchErr);
+  }
 }
 
 async function loadTraffic() {
-  const { start, end } = todayRange();
-  const { data, error = null } = await supabase
-    .from("analytics_events")
-    .select("*")
-    .gte("created_at", start.toISOString())
-    .lt("created_at", end.toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1000);
-  trafficReady = !error;
-  trafficEvents = data || [];
+  try {
+    const { start, end } = todayRange();
+    const { data, error = null } = await supabase
+      .from("analytics_events")
+      .select("*")
+      .gte("created_at", start.toISOString())
+      .lt("created_at", end.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    trafficReady = !error;
+    trafficEvents = data || [];
+  } catch (e) {
+    trafficReady = false;
+  }
 }
 
 function renderAll() {
@@ -214,6 +227,8 @@ function ordersToday() {
     return created >= start && created < end;
   });
 }
+
+// ... (Giữ nguyên các hàm bổ trợ tính toán bên dưới)
 
 function trafficStats() {
   const visitors = new Set(trafficEvents.map((event) => event.visitor_id).filter(Boolean));
