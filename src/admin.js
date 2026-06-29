@@ -103,11 +103,17 @@ if (loginForm) {
   });
 }
 
-// Cổng sự kiện an toàn cho nút Đăng xuất + Điều hướng về trang khách hàng
+// Cổng sự kiện an toàn cho nút Đăng xuất + Luôn luôn ép điều hướng về trang frontend khách hàng
 document.getElementById("admin-signout")?.addEventListener("click", async () => {
-  await supabase.auth.signOut();
-  showToast("Đang đăng xuất...");
-  window.location.href = "/";
+  try {
+    showToast("Đang đăng xuất...");
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.error("Lỗi signout ngầm:", err);
+  } finally {
+    // Bất kể Supabase có lỗi hay không, lệnh này luôn được chạy để chuyển hướng về trang chủ công khai
+    window.location.href = "/";
+  }
 });
 
 // Cổng sự kiện an toàn cho nút Làm mới dữ liệu
@@ -171,7 +177,7 @@ async function loadBackoffice() {
 
 async function loadTraffic() {
   const { start, end } = todayRange();
-  const { data, error } = await supabase
+  const { data, error = null } = await supabase
     .from("analytics_events")
     .select("*")
     .gte("created_at", start.toISOString())
