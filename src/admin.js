@@ -1,6 +1,8 @@
 import "./style.css";
 import "./admin.css";
 import { supabase } from "./supabase.js";
+import { formatCurrency, formatDateTime, escapeHtml } from "./shared/format.js";
+import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
 
 const app = document.getElementById("admin-app");
 const login = document.getElementById("admin-login");
@@ -16,37 +18,19 @@ let customers = [];
 let trafficEvents = [];
 let trafficReady = false;
 let activeRoute = "overview";
+let realtimeChannel = null;
+let chatConversations = []; // [{ conversationId, customerName, lastMessage, lastTime, unread }]
+let activeConversationId = null;
 
 const ROUTES = {
   overview: "Tổng quan bán hàng",
   orders: "Đơn Hàng",
   customers: "Khách hàng",
   traffic: "Traffic",
+  messages: "Tin nhắn",
 };
 
-const STATUS = {
-  pending: { label: "Chờ thanh toán", tone: "amber" },
-  paid: { label: "Đã thanh toán", tone: "green" },
-  delivered: { label: "Đã giao", tone: "ash" },
-  cancelled: { label: "Đã hủy", tone: "red" },
-};
-
-const formatCurrency = (value) =>
-  new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-
-const formatDateTime = (value) =>
-  value
-    ? new Intl.DateTimeFormat("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        day: "2-digit",
-        month: "2-digit",
-      }).format(new Date(value))
-    : "--";
+const STATUS = ORDER_STATUS;
 
 function todayRange() {
   const start = new Date();
@@ -223,6 +207,7 @@ function renderActiveView() {
   if (activeRoute === "orders") renderOrders();
   if (activeRoute === "customers") renderCustomers();
   if (activeRoute === "traffic") renderTraffic();
+  if (activeRoute === "messages") renderConversations();
 }
 
 function paidLike(order) {
@@ -367,7 +352,7 @@ document.getElementById("orders-export")?.addEventListener("click", () => {
 
   const headers = ["Mã đơn", "Ngày tạo", "Khách hàng", "SĐT", "Địa chỉ", "Món bánh", "Giờ giao", "Tổng tiền", "Trạng thái"];
   const rows = list.map(order => {
-    const items = Array.isArray(order.items) ? order.items.map(i => `${i.name} x${i.qty}`).join("; ") : "";
+    const items = Array.isArray(order.items) ? order.items.map(i => `${i.name} x${i.qty}${i.note ? ` (${i.note})` : ""}`).join("; ") : "";
     const statusLabel = STATUS[order.status] ? STATUS[order.status].label : order.status;
     
     return [
@@ -429,7 +414,7 @@ function renderOrderTable(list, options = {}) {
                   <span class="mt-1 block text-xs text-ash">${order.customer_phone || ""}</span>
                 </td>
                 <td>
-                  <span class="line-clamp-2 text-sm text-ink">${items.map((item) => `${item.name} x${item.qty}`).join(", ") || "--"}</span>
+                  <span class="line-clamp-2 text-sm text-ink">${items.map((item) => `${item.name} x${item.qty}${item.note ? ` (${item.note})` : ""}`).join(", ") || "--"}</span>
                 </td>
                 <td>
                   <span class="text-sm text-ink">${order.delivery_time || "Giao Sớm Nhất"}</span>
@@ -464,7 +449,7 @@ document.getElementById("orders-table")?.addEventListener("click", async (event)
   const [id, status] = button.dataset.orderStatus.split(":");
   if (status === "cancelled" && !window.confirm("Hủy đơn này?")) return;
 
-  const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+  const { error } = await updateOrderStatus(id, status);
   if (error) {
     showToast(`Lỗi cập nhật: ${error.message}`);
     return;
@@ -608,6 +593,248 @@ function renderTraffic() {
   }
 }
 
+function startRealtime() {
+  stopRealtime();
+  realtimeChannel = supabase
+    .channel("admin-orders-changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+      if (payload.eventType === "INSERT") notifyNewOrder(payload.new);
+      loadBackoffice();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => loadBackoffice())
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => handleIncomingChat(payload.new))
+    .subscribe();
+  loadConversations();
+}
+
+// ── Thông báo trình duyệt khi có đơn mới (cần tab admin còn mở) ──
+// Bản nhẹ tạm thời dùng Notification API trực tiếp, chưa cần Service Worker/VAPID.
+// Khi nào deploy thành app thật (cài lên iOS) thì nâng cấp lên Web Push để nhận được
+// cả khi đóng hẳn trình duyệt.
+
+function updateNotifyButton() {
+  const btn = document.getElementById("admin-enable-notify");
+  if (!btn) return;
+  if (!("Notification" in window) || Notification.permission === "granted") {
+    btn.classList.add("hidden");
+    return;
+  }
+  btn.classList.remove("hidden");
+  if (Notification.permission === "denied") {
+    btn.textContent = "🔕 Trình duyệt đang chặn thông báo";
+    btn.disabled = true;
+  } else {
+    btn.textContent = "🔔 Bật thông báo đơn mới";
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("admin-enable-notify")?.addEventListener("click", () => {
+  if (!("Notification" in window)) return;
+  Notification.requestPermission().then(updateNotifyButton);
+});
+
+function notifyNewOrder(order) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const n = new Notification("🛎️ Đơn hàng mới — nomnom", {
+      body: `${order.order_code} · ${formatCurrency(order.total)}`,
+      tag: order.order_code,
+    });
+    n.onclick = () => {
+      window.focus();
+      navigate("orders");
+      n.close();
+    };
+  } catch (e) {
+    // một số trình duyệt di động không hỗ trợ new Notification() ngoài Service Worker — bỏ qua
+  }
+}
+
+function stopRealtime() {
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+}
+
+// ── Tin nhắn (chat trực tiếp với khách) ──
+
+function updateMessagesBadge() {
+  const total = chatConversations.reduce((sum, c) => sum + c.unread, 0);
+  const badge = document.getElementById("nav-messages-count");
+  if (!badge) return;
+  badge.textContent = total;
+  badge.classList.toggle("hidden", total === 0);
+}
+
+async function loadConversations() {
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) return;
+
+  const map = new Map();
+  (data || []).forEach((m) => {
+    let conv = map.get(m.conversation_id);
+    if (!conv) {
+      conv = {
+        conversationId: m.conversation_id,
+        customerName: m.sender === "customer" ? m.customer_name : null,
+        lastMessage: m.message,
+        lastTime: m.created_at,
+        unread: 0,
+      };
+      map.set(m.conversation_id, conv);
+    } else if (!conv.customerName && m.sender === "customer") {
+      conv.customerName = m.customer_name;
+    }
+    if (m.sender === "customer" && !m.read_by_admin) conv.unread++;
+  });
+
+  chatConversations = [...map.values()].sort((a, b) => new Date(b.lastTime) - new Date(a.lastTime));
+  updateMessagesBadge();
+  if (activeRoute === "messages") renderConversations();
+}
+
+function renderConversations() {
+  const box = document.getElementById("chat-conversations");
+  if (!box) return;
+  if (!chatConversations.length) {
+    box.innerHTML = `<div class="admin-empty">Chưa có tin nhắn nào.</div>`;
+    return;
+  }
+  box.innerHTML = chatConversations
+    .map(
+      (c) => `
+      <button type="button" data-conversation="${c.conversationId}"
+        class="block w-full border px-3 py-2.5 text-left transition-colors ${c.conversationId === activeConversationId ? "border-ink bg-earth/10" : "border-earth/40 bg-white hover:border-ink"}">
+        <div class="flex items-center justify-between gap-2">
+          <span class="truncate text-sm font-semibold text-ink">${escapeHtml(c.customerName || c.conversationId)}</span>
+          ${c.unread > 0 ? `<span class="shrink-0 rounded-full bg-[#7a0c1f] px-1.5 py-0.5 text-[10px] font-medium text-white">${c.unread}</span>` : ""}
+        </div>
+        <p class="mt-1 truncate text-xs text-ash">${escapeHtml(c.lastMessage || "")}</p>
+        <p class="mt-0.5 text-[10px] text-ash/70">${formatDateTime(c.lastTime)}</p>
+      </button>
+    `
+    )
+    .join("");
+
+  box.querySelectorAll("[data-conversation]").forEach((btn) =>
+    btn.addEventListener("click", () => openThread(btn.dataset.conversation))
+  );
+}
+
+async function openThread(conversationId) {
+  activeConversationId = conversationId;
+  renderConversations();
+
+  const titleEl = document.getElementById("chat-thread-title");
+  const conv = chatConversations.find((c) => c.conversationId === conversationId);
+  if (titleEl) titleEl.textContent = (conv && conv.customerName) || conversationId;
+
+  const threadBox = document.getElementById("chat-thread-messages");
+  threadBox.innerHTML = `<p class="py-6 text-center text-xs text-ash">Đang tải...</p>`;
+  document.getElementById("chat-reply-form").classList.remove("hidden");
+  document.getElementById("chat-reply-form").classList.add("flex");
+
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true })
+    .limit(300);
+
+  if (error) {
+    threadBox.innerHTML = `<p class="py-6 text-center text-xs text-red-600">Lỗi: ${error.message}</p>`;
+    return;
+  }
+
+  renderThread(data || []);
+
+  // Đánh dấu đã đọc các tin chưa đọc của khách trong hội thoại này
+  await supabase
+    .from("chat_messages")
+    .update({ read_by_admin: true })
+    .eq("conversation_id", conversationId)
+    .eq("sender", "customer")
+    .eq("read_by_admin", false);
+
+  if (conv) conv.unread = 0;
+  updateMessagesBadge();
+  renderConversations();
+}
+
+function chatBubbleHtml(message, mine) {
+  return `
+    <div class="flex ${mine ? "justify-end" : "justify-start"}">
+      <div class="max-w-[75%] rounded-2xl px-3 py-2 ${mine ? "bg-ink text-white" : "border border-earth/40 bg-white text-ink"}">
+        <p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(message.message)}</p>
+        <p class="mt-1 text-[10px] ${mine ? "text-white/60" : "text-ash"}">${formatDateTime(message.created_at)}</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderThread(messages) {
+  const threadBox = document.getElementById("chat-thread-messages");
+  if (!messages.length) {
+    threadBox.innerHTML = `<p class="py-6 text-center text-xs text-ash">Chưa có tin nhắn.</p>`;
+    return;
+  }
+  threadBox.innerHTML = messages.map((m) => chatBubbleHtml(m, m.sender === "shop")).join("");
+  threadBox.scrollTop = threadBox.scrollHeight;
+}
+
+function appendThreadMessage(message) {
+  const threadBox = document.getElementById("chat-thread-messages");
+  if (!threadBox) return;
+  threadBox.insertAdjacentHTML("beforeend", chatBubbleHtml(message, message.sender === "shop"));
+  threadBox.scrollTop = threadBox.scrollHeight;
+}
+
+document.getElementById("chat-reply-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!activeConversationId) return;
+  const input = document.getElementById("chat-reply-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  const { error } = await supabase.from("chat_messages").insert({
+    conversation_id: activeConversationId,
+    customer_name: "nomnom",
+    sender: "shop",
+    message: text,
+  });
+  if (error) showToast(`Lỗi gửi tin nhắn: ${error.message}`);
+});
+
+function handleIncomingChat(message) {
+  let conv = chatConversations.find((c) => c.conversationId === message.conversation_id);
+  if (!conv) {
+    conv = { conversationId: message.conversation_id, customerName: null, lastMessage: "", lastTime: message.created_at, unread: 0 };
+    chatConversations.unshift(conv);
+  }
+  if (message.sender === "customer") conv.customerName = message.customer_name;
+  conv.lastMessage = message.message;
+  conv.lastTime = message.created_at;
+
+  if (activeConversationId === message.conversation_id) {
+    appendThreadMessage(message);
+    if (message.sender === "customer") {
+      supabase.from("chat_messages").update({ read_by_admin: true }).eq("id", message.id).then(() => {});
+    }
+  } else if (message.sender === "customer") {
+    conv.unread++;
+  }
+
+  chatConversations.sort((a, b) => new Date(b.lastTime) - new Date(a.lastTime));
+  updateMessagesBadge();
+  if (activeRoute === "messages") renderConversations();
+}
+
 // Chỉ đăng ký 1 listener duy nhất — onAuthStateChange tự bắn ngay 1 lần với phiên
 // hiện tại lúc khởi tạo (INITIAL_SESSION) nên không cần gọi thêm getSession() riêng.
 // Gọi cả 2 cùng lúc từng khiến loadBackoffice() chạy chồng 2 lần ngay khi vừa load
@@ -617,5 +844,9 @@ supabase.auth.onAuthStateChange(async (_event, session) => {
   if (session) {
     await loadBackoffice();
     navigate(window.location.hash.replace("#", "") || "overview");
+    startRealtime();
+    updateNotifyButton();
+  } else {
+    stopRealtime();
   }
 });
