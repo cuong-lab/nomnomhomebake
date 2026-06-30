@@ -74,6 +74,11 @@
               <span class="admin-nav-icon">04</span>
               Traffic
             </button>
+            <button class="admin-nav-item" data-route="messages" type="button">
+              <span class="admin-nav-icon">05</span>
+              Tin nhắn
+              <span id="nav-messages-count" class="ml-auto hidden rounded-full bg-[#7a0c1f] px-2 py-0.5 text-[10px] text-white">0</span>
+            </button>
           </div>
 
           <div class="mt-8 rounded-lg border border-dashed border-earth/80 bg-white/45 p-4">
@@ -108,6 +113,9 @@
               </div>
             </div>
             <div class="flex items-center gap-3">
+              <button id="admin-enable-notify" type="button" class="hidden border border-[#7a0c1f] bg-white px-3 py-2 text-xs font-semibold text-[#7a0c1f] transition-colors hover:bg-[#7a0c1f]/5 sm:text-sm">
+                🔔 Bật thông báo đơn mới
+              </button>
               <button id="admin-refresh" type="button" class="hidden border border-earth/70 bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-ink md:inline-flex">
                 Làm mới
               </button>
@@ -254,6 +262,34 @@
               </div>
               <div id="traffic-state" class="mt-5"></div>
             </section>
+          </section>
+
+          <section id="view-messages" class="admin-view hidden">
+            <div class="grid gap-6 lg:grid-cols-[360px_1fr]">
+              <section class="admin-panel">
+                <div class="admin-panel-head">
+                  <div>
+                    <h2 class="admin-panel-title">Hội thoại</h2>
+                    <p class="admin-panel-subtitle">Tin nhắn từ khách trên website.</p>
+                  </div>
+                </div>
+                <div id="chat-conversations" class="mt-4 max-h-[65vh] space-y-2 overflow-y-auto"></div>
+              </section>
+
+              <section class="admin-panel flex flex-col">
+                <div class="admin-panel-head">
+                  <div>
+                    <h2 id="chat-thread-title" class="admin-panel-title">Chọn 1 hội thoại</h2>
+                    <p class="admin-panel-subtitle">Trả lời tin nhắn của khách tại đây.</p>
+                  </div>
+                </div>
+                <div id="chat-thread-messages" class="mt-4 flex-1 space-y-2 overflow-y-auto" style="max-height:55vh; min-height:200px;"></div>
+                <form id="chat-reply-form" class="mt-4 hidden items-center gap-2">
+                  <input id="chat-reply-input" type="text" placeholder="Nhập tin nhắn trả lời..." class="admin-search-input flex-1" autocomplete="off" />
+                  <button type="submit" class="bg-ink px-4 py-2 text-sm font-semibold text-white hover:opacity-90">Gửi</button>
+                </form>
+              </section>
+            </div>
           </section>
         </main>
       </div>
