@@ -96,6 +96,7 @@ document.getElementById("admin-signout")?.addEventListener("click", () => {
         localStorage.removeItem(key);
       }
     });
+    localStorage.removeItem(CACHE_KEY); // xoá cache đơn/khách để máy chung không lộ dữ liệu cũ
     sessionStorage.clear();
     supabase.auth.signOut().catch(() => {});
   } catch (e) {
@@ -143,54 +144,76 @@ function navigate(route) {
   renderActiveView();
 }
 
+const CACHE_KEY = "nomnom_admin_cache";
+
+// Hiện ngay dữ liệu của lần xem gần nhất (lưu trong máy) để khỏi phải chờ mạng.
+// Sau đó loadBackoffice() vẫn tải bản mới ở nền rồi tự cập nhật đè lên.
+function hydrateFromCache() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if (cached && Array.isArray(cached.orders)) {
+      orders = cached.orders;
+      customers = cached.customers || [];
+      return true;
+    }
+  } catch (e) {
+    // cache hỏng thì bỏ qua, tải mới như bình thường
+  }
+  return false;
+}
+
+function saveCache() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ orders, customers }));
+  } catch (e) {
+    // hết dung lượng localStorage thì bỏ qua, không ảnh hưởng chức năng
+  }
+}
+
 async function loadBackoffice() {
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     console.error("❌ LỖI: Thiếu cấu hình VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.");
     return;
   }
 
-  const timeoutAfter = (ms) =>
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Supabase không phản hồi sau ${ms / 1000} giây`)), ms)
-    );
+  // Nếu chưa có gì để hiện (kể cả cache rỗng), báo cho cô chủ biết là đang tải.
+  if (!orders.length) {
+    const ordersTableEl = document.getElementById("orders-table");
+    if (ordersTableEl) {
+      ordersTableEl.innerHTML = `<div class="admin-empty">nomnom đang tải dữ liệu, đừng vội nhé, không nhanh hơn được đâu 🧁</div>`;
+    }
+  }
 
   try {
-    const [{ data: orderData, error: orderError }, { data: customerData, error: customerError }] =
-      await Promise.race([
-        Promise.all([
-          supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
-          supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
-        ]),
-        timeoutAfter(8000),
-      ]);
+    const { start, end } = todayRange();
+    const [
+      { data: orderData, error: orderError },
+      { data: customerData, error: customerError },
+      { data: trafficData, error: trafficError },
+    ] = await Promise.all([
+      supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
+      supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
+      supabase
+        .from("analytics_events")
+        .select("*")
+        .gte("created_at", start.toISOString())
+        .lt("created_at", end.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1000),
+    ]);
 
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
     if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
 
     orders = orderData || [];
     customers = customerData || [];
-    await loadTraffic();
+    trafficReady = !trafficError;
+    trafficEvents = trafficData || [];
+    saveCache();
     renderAll();
   } catch (catchErr) {
     console.error("Lỗi kết nối:", catchErr);
     showToast(catchErr?.message || "Lỗi kết nối tới Supabase");
-  }
-}
-
-async function loadTraffic() {
-  try {
-    const { start, end } = todayRange();
-    const { data, error = null } = await supabase
-      .from("analytics_events")
-      .select("*")
-      .gte("created_at", start.toISOString())
-      .lt("created_at", end.toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1000);
-    trafficReady = !error;
-    trafficEvents = data || [];
-  } catch (e) {
-    trafficReady = false;
   }
 }
 
@@ -660,6 +683,13 @@ function stopRealtime() {
 
 // ── Tin nhắn (chat trực tiếp với khách) ──
 
+const CHAT_CUSTOMER_AVATAR_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>`;
+
+let threadChannel = null;
+let threadIdleTimer = null;
+let threadTypingHideTimer = null;
+let threadTypingSendThrottle = null;
+
 function updateMessagesBadge() {
   const total = chatConversations.reduce((sum, c) => sum + c.unread, 0);
   const badge = document.getElementById("nav-messages-count");
@@ -740,6 +770,8 @@ async function openThread(conversationId) {
   document.getElementById("chat-reply-form").classList.remove("hidden");
   document.getElementById("chat-reply-form").classList.add("flex");
 
+  startThreadTypingChannel(conversationId);
+
   const { data, error } = await supabase
     .from("chat_messages")
     .select("*")
@@ -767,33 +799,97 @@ async function openThread(conversationId) {
   renderConversations();
 }
 
+// Kênh riêng cho từng hội thoại, chỉ dùng để gửi/nhận tín hiệu "đang gõ" (broadcast,
+// không lưu DB) — kênh chung admin-orders-changes chỉ nhận tin nhắn đã lưu, không đủ
+// cho việc này vì broadcast cần cả 2 bên cùng đăng ký đúng tên kênh "chat-<id>".
+function startThreadTypingChannel(conversationId) {
+  if (threadChannel) {
+    supabase.removeChannel(threadChannel);
+    threadChannel = null;
+  }
+  threadChannel = supabase
+    .channel(`chat-${conversationId}`)
+    .on("broadcast", { event: "typing" }, (payload) => {
+      if (payload.payload?.sender === "customer" && activeConversationId === conversationId) {
+        showCustomerTypingIndicator();
+      }
+    })
+    .subscribe();
+}
+
 function chatBubbleHtml(message, mine) {
   return `
     <div class="flex ${mine ? "justify-end" : "justify-start"}">
       <div class="max-w-[75%] rounded-2xl px-3 py-2 ${mine ? "bg-ink text-white" : "border border-earth/40 bg-white text-ink"}">
         <p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(message.message)}</p>
-        <p class="mt-1 text-[10px] ${mine ? "text-white/60" : "text-ash"}">${formatDateTime(message.created_at)}</p>
       </div>
     </div>
   `;
+}
+
+function setThreadStatusRow(html) {
+  const row = document.getElementById("chat-thread-status-row");
+  if (row) row.innerHTML = html;
+  const threadBox = document.getElementById("chat-thread-messages");
+  if (threadBox) threadBox.scrollTop = threadBox.scrollHeight;
+}
+
+function scheduleThreadIdleTimestamp(lastMessage) {
+  clearTimeout(threadIdleTimer);
+  setThreadStatusRow("");
+  if (!lastMessage) return;
+  threadIdleTimer = setTimeout(() => {
+    setThreadStatusRow(`<p class="px-1 pt-1 text-center text-[10px] text-ash">${formatDateTime(lastMessage.created_at)}</p>`);
+  }, 15000);
+}
+
+function showCustomerTypingIndicator() {
+  clearTimeout(threadIdleTimer);
+  clearTimeout(threadTypingHideTimer);
+  setThreadStatusRow(`
+    <div class="flex items-end justify-start gap-2">
+      <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-earth/40 text-ash">${CHAT_CUSTOMER_AVATAR_SVG}</div>
+      <div class="flex items-center gap-1 rounded-2xl border border-earth/40 bg-white px-3 py-2.5">
+        <span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span>
+      </div>
+    </div>
+  `);
+  threadTypingHideTimer = setTimeout(() => {
+    const threadMessages = document.getElementById("chat-thread-messages");
+    scheduleThreadIdleTimestamp(threadMessages?._lastMessage);
+  }, 3000);
 }
 
 function renderThread(messages) {
   const threadBox = document.getElementById("chat-thread-messages");
   if (!messages.length) {
     threadBox.innerHTML = `<p class="py-6 text-center text-xs text-ash">Chưa có tin nhắn.</p>`;
-    return;
+  } else {
+    threadBox.innerHTML = messages.map((m) => chatBubbleHtml(m, m.sender === "shop")).join("");
   }
-  threadBox.innerHTML = messages.map((m) => chatBubbleHtml(m, m.sender === "shop")).join("");
+  threadBox.insertAdjacentHTML("beforeend", `<div id="chat-thread-status-row" class="mt-1"></div>`);
+  threadBox._lastMessage = messages[messages.length - 1];
   threadBox.scrollTop = threadBox.scrollHeight;
+  scheduleThreadIdleTimestamp(threadBox._lastMessage);
 }
 
 function appendThreadMessage(message) {
   const threadBox = document.getElementById("chat-thread-messages");
   if (!threadBox) return;
+  const statusRow = document.getElementById("chat-thread-status-row");
+  if (statusRow) statusRow.remove();
   threadBox.insertAdjacentHTML("beforeend", chatBubbleHtml(message, message.sender === "shop"));
+  threadBox.insertAdjacentHTML("beforeend", `<div id="chat-thread-status-row" class="mt-1"></div>`);
+  threadBox._lastMessage = message;
   threadBox.scrollTop = threadBox.scrollHeight;
+  scheduleThreadIdleTimestamp(message);
 }
+
+document.getElementById("chat-reply-input")?.addEventListener("input", () => {
+  if (!threadChannel || threadTypingSendThrottle) return;
+  threadChannel.send({ type: "broadcast", event: "typing", payload: { sender: "shop" } });
+  threadTypingSendThrottle = setTimeout(() => { threadTypingSendThrottle = null; }, 2000);
+});
 
 document.getElementById("chat-reply-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -842,10 +938,14 @@ function handleIncomingChat(message) {
 supabase.auth.onAuthStateChange(async (_event, session) => {
   setAuthView(session);
   if (session) {
-    await loadBackoffice();
+    // Hiện ngay dữ liệu cũ trong máy (nếu có) để không phải nhìn màn hình chờ,
+    // rồi mới tải bản mới ở nền và tự cập nhật đè lên.
+    const hasCache = hydrateFromCache();
     navigate(window.location.hash.replace("#", "") || "overview");
+    if (hasCache) renderAll();
     startRealtime();
     updateNotifyButton();
+    await loadBackoffice();
   } else {
     stopRealtime();
   }

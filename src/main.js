@@ -233,6 +233,7 @@ function renderCart() {
 }
 
 let bankSettings = {};
+let chatAutoReply = "";
 
 const cartCustomer = document.getElementById("cart-customer");
 const custError = document.getElementById("cust-error");
@@ -1553,6 +1554,7 @@ async function loadContactSettings() {
     bank_name: data.bank_name || "",
     zalo_url: data.zalo_url || "",
   };
+  chatAutoReply = data.chat_auto_reply || "";
 
   rewardConfig = {
     cycle: parseInt(data.reward_cycle_orders) || 10,
@@ -1602,6 +1604,7 @@ contactEditBtn.addEventListener("click", async () => {
     contactForm.elements.bank_id.value = data.bank_id || "";
     contactForm.elements.bank_account.value = data.bank_account || "";
     contactForm.elements.bank_name.value = data.bank_name || "";
+    contactForm.elements.chat_auto_reply.value = data.chat_auto_reply || "";
     contactForm.elements.reward_cycle_orders.value = data.reward_cycle_orders || "";
     contactForm.elements.reward_percent.value = data.reward_percent || "";
     const preview = document.getElementById("current-logo-preview");
@@ -1730,6 +1733,7 @@ contactForm.addEventListener("submit", async (e) => {
     bank_id: form.get("bank_id") || null,
     bank_account: form.get("bank_account") || null,
     bank_name: form.get("bank_name") || null,
+    chat_auto_reply: form.get("chat_auto_reply") || null,
     reward_cycle_orders: form.get("reward_cycle_orders") ? parseInt(form.get("reward_cycle_orders")) : null,
     reward_percent: form.get("reward_percent") ? parseInt(form.get("reward_percent")) : null,
   };
@@ -2454,6 +2458,9 @@ const chatInput = document.getElementById("chat-input");
 let chatChannel = null;
 let chatMessageCache = [];
 let chatUnreadCount = 0;
+let chatIdleTimer = null;
+let chatTypingHideTimer = null;
+let chatTypingSendThrottle = null;
 
 function getChatConversationId() {
   if (currentCustomer) return currentCustomer.phone;
@@ -2476,26 +2483,59 @@ function updateChatBadge() {
   badge.classList.toggle("hidden", chatUnreadCount === 0);
 }
 
+const CHAT_SHOP_AVATAR_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>`;
+
 function renderChatMessages(messages) {
   if (!messages.length) {
     chatMessagesBox.innerHTML = `<p class="py-6 text-center text-xs text-ash">Nhắn gì đó cho nomnom nhé!</p>`;
-    return;
-  }
-  chatMessagesBox.innerHTML = messages
-    .map((m) => {
-      const mine = m.sender === "customer";
-      const time = new Date(m.created_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-      return `
-        <div class="flex ${mine ? "justify-end" : "justify-start"}">
-          <div class="max-w-[80%] rounded-2xl px-3 py-2 ${mine ? "bg-ink text-white" : "border border-earth/40 bg-white text-ink"}">
-            <p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(m.message)}</p>
-            <p class="mt-1 text-[10px] ${mine ? "text-white/60" : "text-ash"}">${time}</p>
+  } else {
+    chatMessagesBox.innerHTML = messages
+      .map((m) => {
+        const mine = m.sender === "customer";
+        return `
+          <div class="flex ${mine ? "justify-end" : "justify-start"}">
+            <div class="max-w-[80%] rounded-2xl px-3 py-2 ${mine ? "bg-ink text-white" : "border border-earth/40 bg-white text-ink"}">
+              <p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(m.message)}</p>
+            </div>
           </div>
-        </div>
-      `;
-    })
-    .join("");
+        `;
+      })
+      .join("");
+  }
+  chatMessagesBox.insertAdjacentHTML("beforeend", `<div id="chat-status-row" class="mt-1"></div>`);
   chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight;
+  scheduleChatIdleTimestamp(messages[messages.length - 1]);
+}
+
+function setChatStatusRow(html) {
+  const row = document.getElementById("chat-status-row");
+  if (row) row.innerHTML = html;
+  chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight;
+}
+
+function scheduleChatIdleTimestamp(lastMessage) {
+  clearTimeout(chatIdleTimer);
+  setChatStatusRow("");
+  if (!lastMessage) return;
+  chatIdleTimer = setTimeout(() => {
+    setChatStatusRow(`<p class="px-1 pt-1 text-center text-[10px] text-ash">${formatDateTime(lastMessage.created_at)}</p>`);
+  }, 15000);
+}
+
+function showShopTypingIndicator() {
+  clearTimeout(chatIdleTimer);
+  clearTimeout(chatTypingHideTimer);
+  setChatStatusRow(`
+    <div class="flex items-end justify-start gap-2">
+      <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-earth/40 text-ash">${CHAT_SHOP_AVATAR_SVG}</div>
+      <div class="flex items-center gap-1 rounded-2xl border border-earth/40 bg-white px-3 py-2.5">
+        <span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span>
+      </div>
+    </div>
+  `);
+  chatTypingHideTimer = setTimeout(() => {
+    scheduleChatIdleTimestamp(chatMessageCache[chatMessageCache.length - 1]);
+  }, 3000);
 }
 
 async function loadChatHistory() {
@@ -2540,6 +2580,11 @@ function restartChatWatcher() {
         }
       }
     )
+    .on("broadcast", { event: "typing" }, (payload) => {
+      if (payload.payload?.sender === "shop" && !chatPanel.classList.contains("hidden")) {
+        showShopTypingIndicator();
+      }
+    })
     .subscribe();
 
   if (!chatPanel.classList.contains("hidden")) loadChatHistory();
@@ -2561,18 +2606,40 @@ function closeChat() {
 chatFab.addEventListener("click", openChat);
 document.getElementById("chat-close").addEventListener("click", closeChat);
 
+chatInput.addEventListener("input", () => {
+  if (!chatChannel || chatTypingSendThrottle) return;
+  chatChannel.send({ type: "broadcast", event: "typing", payload: { sender: "customer" } });
+  chatTypingSendThrottle = setTimeout(() => { chatTypingSendThrottle = null; }, 2000);
+});
+
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
   if (!text) return;
   chatInput.value = "";
+  const isFirstMessage = chatMessageCache.length === 0;
+  const conversationId = getChatConversationId();
+
   const { error } = await supabase.from("chat_messages").insert({
-    conversation_id: getChatConversationId(),
+    conversation_id: conversationId,
     customer_name: getChatDisplayName(),
     sender: "customer",
     message: text,
   });
-  if (error) alert("Lỗi gửi tin nhắn: " + error.message);
+  if (error) {
+    alert("Lỗi gửi tin nhắn: " + error.message);
+    return;
+  }
+
+  // Tin nhắn lần đầu của khách trong hội thoại này — tự gửi câu trả lời đã cấu hình (nếu có)
+  if (isFirstMessage && chatAutoReply) {
+    await supabase.from("chat_messages").insert({
+      conversation_id: conversationId,
+      customer_name: "nomnom",
+      sender: "shop",
+      message: chatAutoReply,
+    });
+  }
 });
 
 // ── Reveal on scroll (fade + slide) — lặp lại mỗi lần vào tầm nhìn ──
