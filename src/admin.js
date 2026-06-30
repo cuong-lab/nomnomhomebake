@@ -161,18 +161,27 @@ function navigate(route) {
 
 async function loadBackoffice() {
   // DEBUG TẠM THỜI — sẽ xoá sau khi tìm ra lỗi
-  alert("DEBUG: bắt đầu loadBackoffice()");
+  const urlDebug = import.meta.env.VITE_SUPABASE_URL || "(rỗng)";
+  alert("DEBUG: bắt đầu loadBackoffice()\nVITE_SUPABASE_URL = " + urlDebug);
 
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     alert("DEBUG: THIẾU cấu hình VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.");
     return;
   }
 
+  const timeoutAfter = (ms) =>
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`TIMEOUT sau ${ms / 1000} giây — Supabase không phản hồi`)), ms)
+    );
+
   try {
     const [{ data: orderData, error: orderError }, { data: customerData, error: customerError }] =
-      await Promise.all([
-        supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
-        supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
+      await Promise.race([
+        Promise.all([
+          supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
+          supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
+        ]),
+        timeoutAfter(8000),
       ]);
 
     alert(
