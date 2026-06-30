@@ -171,11 +171,23 @@ function saveCache() {
   }
 }
 
+let isLoadingBackoffice = false;
+
 async function loadBackoffice() {
+  // Khoá chống gọi chồng: nếu đang có 1 lần loadBackoffice() chạy dở thì bỏ qua lần
+  // gọi mới — gọi Supabase chồng lên nhau ngay lúc phiên đăng nhập đang xử lý từng
+  // gây treo (deadlock) bên trong thư viện Supabase, bất kể nguyên nhân gọi chồng là gì
+  // (auth tự bắn lại, realtime kích hoạt khi đang tải, bấm Làm mới nhiều lần...).
+  if (isLoadingBackoffice) {
+    alert("DEBUG: loadBackoffice() đang được gọi CHỒNG — bỏ qua lần gọi này");
+    return;
+  }
+  isLoadingBackoffice = true;
   alert("DEBUG 1: loadBackoffice() bắt đầu chạy");
 
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     alert("DEBUG: THIẾU VITE_SUPABASE_URL/ANON_KEY");
+    isLoadingBackoffice = false;
     return;
   }
 
@@ -244,6 +256,8 @@ async function loadBackoffice() {
     alert("DEBUG: bị lỗi (catch) — " + (catchErr?.message || String(catchErr)));
     console.error("Lỗi kết nối:", catchErr);
     showToast(catchErr?.message || "Lỗi kết nối tới Supabase");
+  } finally {
+    isLoadingBackoffice = false;
   }
 }
 
