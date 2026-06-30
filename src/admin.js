@@ -160,8 +160,11 @@ function navigate(route) {
 }
 
 async function loadBackoffice() {
+  // DEBUG TẠM THỜI — sẽ xoá sau khi tìm ra lỗi
+  alert("DEBUG: bắt đầu loadBackoffice()");
+
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-    console.error("❌ LỖI: Thiếu cấu hình VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.");
+    alert("DEBUG: THIẾU cấu hình VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.");
     return;
   }
 
@@ -171,10 +174,15 @@ async function loadBackoffice() {
         supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
         supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
       ]);
-      
-    console.log("=== DỮ LIỆU ĐƠN HÀNG LẤY TỪ SUPABASE ===");
-    console.log("Mảng dữ liệu:", orderData);
-    
+
+    alert(
+      "DEBUG kết quả:\n" +
+      "Số đơn lấy được: " + (orderData ? orderData.length : "null") + "\n" +
+      "Lỗi đơn hàng: " + (orderError ? orderError.message : "không có") + "\n" +
+      "Số khách lấy được: " + (customerData ? customerData.length : "null") + "\n" +
+      "Lỗi khách hàng: " + (customerError ? customerError.message : "không có")
+    );
+
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
     if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
 
@@ -183,7 +191,7 @@ async function loadBackoffice() {
     await loadTraffic();
     renderAll();
   } catch (catchErr) {
-    console.error("Lỗi kết nối:", catchErr);
+    alert("DEBUG: bị lỗi (catch) — " + (catchErr && catchErr.message ? catchErr.message : String(catchErr)));
   }
 }
 
@@ -309,7 +317,7 @@ function renderPulseRow(label, value) {
 
 function getFilteredOrders() {
   const search = document.getElementById("orders-search")?.value.trim().toLowerCase() || "";
-  const status = document.getElementById("orders-status-filter")?.value || "active";
+  const status = document.getElementById("orders-status-filter")?.value || "all";
   const dateStart = document.getElementById("orders-date-start")?.value;
   const dateEnd = document.getElementById("orders-date-end")?.value;
 
