@@ -172,8 +172,10 @@ function saveCache() {
 }
 
 async function loadBackoffice() {
+  alert("DEBUG 1: loadBackoffice() bắt đầu chạy");
+
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-    console.error("❌ LỖI: Thiếu cấu hình VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.");
+    alert("DEBUG: THIẾU VITE_SUPABASE_URL/ANON_KEY");
     return;
   }
 
@@ -185,23 +187,39 @@ async function loadBackoffice() {
     }
   }
 
+  const timeoutAfter = (ms) =>
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`TIMEOUT sau ${ms / 1000}s`)), ms));
+
   try {
+    alert("DEBUG 2: chuẩn bị gọi Promise.all (orders/customers/traffic)");
     const { start, end } = todayRange();
     const [
       { data: orderData, error: orderError },
       { data: customerData, error: customerError },
       { data: trafficData, error: trafficError },
-    ] = await Promise.all([
-      supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
-      supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
-      supabase
-        .from("analytics_events")
-        .select("*")
-        .gte("created_at", start.toISOString())
-        .lt("created_at", end.toISOString())
-        .order("created_at", { ascending: false })
-        .limit(1000),
+    ] = await Promise.race([
+      Promise.all([
+        supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
+        supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
+        supabase
+          .from("analytics_events")
+          .select("*")
+          .gte("created_at", start.toISOString())
+          .lt("created_at", end.toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1000),
+      ]),
+      timeoutAfter(10000),
     ]);
+
+    alert(
+      "DEBUG 3: Promise.all xong!\n" +
+      "Số đơn: " + (orderData ? orderData.length : "null") + "\n" +
+      "Lỗi đơn: " + (orderError ? orderError.message : "không có") + "\n" +
+      "Số khách: " + (customerData ? customerData.length : "null") + "\n" +
+      "Lỗi khách: " + (customerError ? customerError.message : "không có") + "\n" +
+      "Lỗi traffic: " + (trafficError ? trafficError.message : "không có")
+    );
 
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
     if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
@@ -223,6 +241,7 @@ async function loadBackoffice() {
     saveCache();
     renderAll();
   } catch (catchErr) {
+    alert("DEBUG: bị lỗi (catch) — " + (catchErr?.message || String(catchErr)));
     console.error("Lỗi kết nối:", catchErr);
     showToast(catchErr?.message || "Lỗi kết nối tới Supabase");
   }
