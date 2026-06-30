@@ -160,18 +160,14 @@ function navigate(route) {
 }
 
 async function loadBackoffice() {
-  // DEBUG TẠM THỜI — sẽ xoá sau khi tìm ra lỗi
-  const urlDebug = import.meta.env.VITE_SUPABASE_URL || "(rỗng)";
-  alert("DEBUG: bắt đầu loadBackoffice()\nVITE_SUPABASE_URL = " + urlDebug);
-
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-    alert("DEBUG: THIẾU cấu hình VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.");
+    console.error("❌ LỖI: Thiếu cấu hình VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.");
     return;
   }
 
   const timeoutAfter = (ms) =>
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`TIMEOUT sau ${ms / 1000} giây — Supabase không phản hồi`)), ms)
+      setTimeout(() => reject(new Error(`Supabase không phản hồi sau ${ms / 1000} giây`)), ms)
     );
 
   try {
@@ -184,14 +180,6 @@ async function loadBackoffice() {
         timeoutAfter(8000),
       ]);
 
-    alert(
-      "DEBUG kết quả:\n" +
-      "Số đơn lấy được: " + (orderData ? orderData.length : "null") + "\n" +
-      "Lỗi đơn hàng: " + (orderError ? orderError.message : "không có") + "\n" +
-      "Số khách lấy được: " + (customerData ? customerData.length : "null") + "\n" +
-      "Lỗi khách hàng: " + (customerError ? customerError.message : "không có")
-    );
-
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
     if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
 
@@ -200,7 +188,8 @@ async function loadBackoffice() {
     await loadTraffic();
     renderAll();
   } catch (catchErr) {
-    alert("DEBUG: bị lỗi (catch) — " + (catchErr && catchErr.message ? catchErr.message : String(catchErr)));
+    console.error("Lỗi kết nối:", catchErr);
+    showToast(catchErr?.message || "Lỗi kết nối tới Supabase");
   }
 }
 
@@ -619,17 +608,14 @@ function renderTraffic() {
   }
 }
 
+// Chỉ đăng ký 1 listener duy nhất — onAuthStateChange tự bắn ngay 1 lần với phiên
+// hiện tại lúc khởi tạo (INITIAL_SESSION) nên không cần gọi thêm getSession() riêng.
+// Gọi cả 2 cùng lúc từng khiến loadBackoffice() chạy chồng 2 lần ngay khi vừa load
+// trang, gây treo (deadlock) bên trong thư viện Supabase khi giải quyết phiên đăng nhập.
 supabase.auth.onAuthStateChange(async (_event, session) => {
   setAuthView(session);
   if (session) {
     await loadBackoffice();
     navigate(window.location.hash.replace("#", "") || "overview");
-  }
-});
-
-supabase.auth.getSession().then(({ data }) => {
-  setAuthView(data.session);
-  if (data.session) {
-    loadBackoffice().then(() => navigate(window.location.hash.replace("#", "") || "overview"));
   }
 });
