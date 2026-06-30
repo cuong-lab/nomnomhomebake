@@ -1,8 +1,9 @@
 import "./style.css";
 import "./admin.css";
 import { supabase } from "./supabase.js";
-import { formatCurrency, formatDateTime, escapeHtml } from "./shared/format.js";
+import { formatCurrency, formatDateTime, escapeHtml, timeAgo } from "./shared/format.js";
 import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
+import { joinPresence, startHeartbeatLoop, fetchAllLastSeen } from "./shared/presence.js";
 
 const app = document.getElementById("admin-app");
 const login = document.getElementById("admin-login");
@@ -22,6 +23,10 @@ let realtimeChannel = null;
 let chatRealtimeChannel = null;
 let chatConversations = []; // [{ conversationId, customerName, lastMessage, lastTime, unread }]
 let activeConversationId = null;
+let adminPresenceChannel = null;
+let adminPresenceHeartbeatTimer = null;
+let onlineConversationIds = new Set();
+let lastSeenMap = new Map();
 
 const ROUTES = {
   overview: "Tổng quan bán hàng",
@@ -178,15 +183,11 @@ async function loadBackoffice() {
   // gọi mới — gọi Supabase chồng lên nhau ngay lúc phiên đăng nhập đang xử lý từng
   // gây treo (deadlock) bên trong thư viện Supabase, bất kể nguyên nhân gọi chồng là gì
   // (auth tự bắn lại, realtime kích hoạt khi đang tải, bấm Làm mới nhiều lần...).
-  if (isLoadingBackoffice) {
-    alert("DEBUG: loadBackoffice() đang được gọi CHỒNG — bỏ qua lần gọi này");
-    return;
-  }
+  if (isLoadingBackoffice) return;
   isLoadingBackoffice = true;
-  alert("DEBUG 1: loadBackoffice() bắt đầu chạy");
 
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-    alert("DEBUG: THIẾU VITE_SUPABASE_URL/ANON_KEY");
+    console.error("❌ LỖI: Thiếu cấu hình VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.");
     isLoadingBackoffice = false;
     return;
   }
@@ -203,7 +204,6 @@ async function loadBackoffice() {
     new Promise((_, reject) => setTimeout(() => reject(new Error(`TIMEOUT sau ${ms / 1000}s`)), ms));
 
   try {
-    alert("DEBUG 2: chuẩn bị gọi Promise.all (orders/customers/traffic)");
     const { start, end } = todayRange();
     const [
       { data: orderData, error: orderError },
@@ -223,15 +223,6 @@ async function loadBackoffice() {
       ]),
       timeoutAfter(10000),
     ]);
-
-    alert(
-      "DEBUG 3: Promise.all xong!\n" +
-      "Số đơn: " + (orderData ? orderData.length : "null") + "\n" +
-      "Lỗi đơn: " + (orderError ? orderError.message : "không có") + "\n" +
-      "Số khách: " + (customerData ? customerData.length : "null") + "\n" +
-      "Lỗi khách: " + (customerError ? customerError.message : "không có") + "\n" +
-      "Lỗi traffic: " + (trafficError ? trafficError.message : "không có")
-    );
 
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
     if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
@@ -253,7 +244,6 @@ async function loadBackoffice() {
     saveCache();
     renderAll();
   } catch (catchErr) {
-    alert("DEBUG: bị lỗi (catch) — " + (catchErr?.message || String(catchErr)));
     console.error("Lỗi kết nối:", catchErr);
     showToast(catchErr?.message || "Lỗi kết nối tới Supabase");
   } finally {
@@ -679,6 +669,38 @@ function startRealtime() {
     .subscribe();
 
   loadConversations();
+  startPresence();
+}
+
+// ── Trạng thái online/offline của khách (Supabase Realtime Presence) — shop tự
+// track dưới key "shop", mọi key khác trong kênh chính là conversation_id của
+// khách đang mở web. Không cần bảng riêng cho phần "đang online".
+
+function startPresence() {
+  stopPresence();
+  adminPresenceChannel = joinPresence("shop", (state) => {
+    onlineConversationIds = new Set(Object.keys(state).filter((key) => key !== "shop"));
+    if (activeRoute !== "messages") return;
+    renderConversations();
+    const subtitleEl = document.getElementById("chat-thread-subtitle");
+    if (subtitleEl && activeConversationId) {
+      const online = onlineConversationIds.has(activeConversationId);
+      subtitleEl.textContent = onlineStatusText(activeConversationId) || "Khách chưa từng online";
+      subtitleEl.className = online ? "text-sm font-medium text-[#34C759]" : "admin-panel-subtitle";
+    }
+  });
+  adminPresenceHeartbeatTimer = startHeartbeatLoop(() => "shop");
+}
+
+function stopPresence() {
+  if (adminPresenceChannel) {
+    supabase.removeChannel(adminPresenceChannel);
+    adminPresenceChannel = null;
+  }
+  if (adminPresenceHeartbeatTimer) {
+    clearInterval(adminPresenceHeartbeatTimer);
+    adminPresenceHeartbeatTimer = null;
+  }
 }
 
 // ── Thông báo trình duyệt khi có đơn mới (cần tab admin còn mở) ──
@@ -734,6 +756,7 @@ function stopRealtime() {
     supabase.removeChannel(chatRealtimeChannel);
     chatRealtimeChannel = null;
   }
+  stopPresence();
 }
 
 // ── Tin nhắn (chat trực tiếp với khách) ──
@@ -788,6 +811,34 @@ async function loadConversations() {
   chatConversations = [...map.values()].sort((a, b) => new Date(b.lastTime) - new Date(a.lastTime));
   updateMessagesBadge();
   if (activeRoute === "messages") renderConversations();
+
+  lastSeenMap = await fetchAllLastSeen();
+  if (activeRoute === "messages") renderConversations();
+}
+
+const AVATAR_COLORS = ["#7a0c1f", "#0068ff", "#34C759", "#f39c12", "#8e44ad", "#16a085", "#e74c3c", "#2c3e50"];
+
+function avatarColor(name) {
+  const str = name || "?";
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function avatarHtml(name, online) {
+  const letter = (name || "?").charAt(0).toUpperCase();
+  return `
+    <span class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white" style="background:${avatarColor(name)}">
+      ${escapeHtml(letter)}
+      <span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${online ? "bg-[#34C759]" : "bg-ash"}"></span>
+    </span>
+  `;
+}
+
+function onlineStatusText(conversationId) {
+  if (onlineConversationIds.has(conversationId)) return "Đang online";
+  const lastSeen = lastSeenMap.get(conversationId);
+  return lastSeen ? timeAgo(lastSeen) : "";
 }
 
 function renderConversations() {
@@ -798,19 +849,24 @@ function renderConversations() {
     return;
   }
   box.innerHTML = chatConversations
-    .map(
-      (c) => `
+    .map((c) => {
+      const online = onlineConversationIds.has(c.conversationId);
+      const statusText = onlineStatusText(c.conversationId);
+      return `
       <button type="button" data-conversation="${c.conversationId}"
-        class="block w-full border px-3 py-2.5 text-left transition-colors ${c.conversationId === activeConversationId ? "border-ink bg-earth/10" : "border-earth/40 bg-white hover:border-ink"}">
-        <div class="flex items-center justify-between gap-2">
-          <span class="truncate text-sm font-semibold text-ink">${escapeHtml(c.customerName || c.conversationId)}</span>
-          ${c.unread > 0 ? `<span class="shrink-0 rounded-full bg-[#7a0c1f] px-1.5 py-0.5 text-[10px] font-medium text-white">${c.unread}</span>` : ""}
+        class="flex w-full items-start gap-3 border px-3 py-2.5 text-left transition-colors ${c.conversationId === activeConversationId ? "border-ink bg-earth/10" : "border-earth/40 bg-white hover:border-ink"}">
+        ${avatarHtml(c.customerName || c.conversationId, online)}
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center justify-between gap-2">
+            <span class="truncate text-sm font-semibold text-ink">${escapeHtml(c.customerName || c.conversationId)}</span>
+            ${c.unread > 0 ? `<span class="shrink-0 rounded-full bg-[#7a0c1f] px-1.5 py-0.5 text-[10px] font-medium text-white">${c.unread}</span>` : ""}
+          </div>
+          <p class="mt-1 truncate text-xs text-ash">${escapeHtml(c.lastMessage || "")}</p>
+          <p class="mt-0.5 text-[10px] ${online ? "font-medium text-[#34C759]" : "text-ash/70"}">${statusText || formatDateTime(c.lastTime)}</p>
         </div>
-        <p class="mt-1 truncate text-xs text-ash">${escapeHtml(c.lastMessage || "")}</p>
-        <p class="mt-0.5 text-[10px] text-ash/70">${formatDateTime(c.lastTime)}</p>
       </button>
-    `
-    )
+    `;
+    })
     .join("");
 
   box.querySelectorAll("[data-conversation]").forEach((btn) =>
@@ -823,8 +879,14 @@ async function openThread(conversationId) {
   renderConversations();
 
   const titleEl = document.getElementById("chat-thread-title");
+  const subtitleEl = document.getElementById("chat-thread-subtitle");
   const conv = chatConversations.find((c) => c.conversationId === conversationId);
   if (titleEl) titleEl.textContent = (conv && conv.customerName) || conversationId;
+  if (subtitleEl) {
+    const online = onlineConversationIds.has(conversationId);
+    subtitleEl.textContent = onlineStatusText(conversationId) || "Khách chưa từng online";
+    subtitleEl.className = online ? "text-sm font-medium text-[#34C759]" : "admin-panel-subtitle";
+  }
 
   const threadBox = document.getElementById("chat-thread-messages");
   threadBox.innerHTML = `<p class="py-6 text-center text-xs text-ash">Đang tải...</p>`;
