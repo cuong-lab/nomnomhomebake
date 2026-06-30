@@ -19,6 +19,7 @@ let trafficEvents = [];
 let trafficReady = false;
 let activeRoute = "overview";
 let realtimeChannel = null;
+let chatRealtimeChannel = null;
 let chatConversations = []; // [{ conversationId, customerName, lastMessage, lastTime, unread }]
 let activeConversationId = null;
 
@@ -204,6 +205,16 @@ async function loadBackoffice() {
 
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
     if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
+
+    // Nếu đọc bảng orders bị lỗi (thường là RLS chặn quyền), hiện rõ ngay trong khung
+    // đơn hàng thay vì để "Chưa có đơn phù hợp" gây hiểu nhầm là không có đơn nào.
+    if (orderError) {
+      const ordersTableEl = document.getElementById("orders-table");
+      if (ordersTableEl) {
+        ordersTableEl.innerHTML = `<div class="admin-empty" style="color:#b91c1c">Lỗi đọc đơn hàng: ${escapeHtml(orderError.message)}<br><span style="font-size:12px">Thường do RLS của bảng orders chưa cho phép đọc. Kiểm tra policy SELECT trên Supabase.</span></div>`;
+      }
+      return; // giữ nguyên dữ liệu cache cũ (nếu có), không ghi đè bằng mảng rỗng
+    }
 
     orders = orderData || [];
     customers = customerData || [];
@@ -625,8 +636,15 @@ function startRealtime() {
       loadBackoffice();
     })
     .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => loadBackoffice())
+    .subscribe();
+
+  // Kênh riêng cho tin nhắn — tách khỏi kênh đơn hàng để realtime của chat ổn định,
+  // không phụ thuộc vào việc gộp nhiều bảng trong cùng 1 kênh.
+  chatRealtimeChannel = supabase
+    .channel("admin-chat-changes")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => handleIncomingChat(payload.new))
     .subscribe();
+
   loadConversations();
 }
 
@@ -679,6 +697,10 @@ function stopRealtime() {
     supabase.removeChannel(realtimeChannel);
     realtimeChannel = null;
   }
+  if (chatRealtimeChannel) {
+    supabase.removeChannel(chatRealtimeChannel);
+    chatRealtimeChannel = null;
+  }
 }
 
 // ── Tin nhắn (chat trực tiếp với khách) ──
@@ -704,7 +726,13 @@ async function loadConversations() {
     .select("*")
     .order("created_at", { ascending: false })
     .limit(500);
-  if (error) return;
+  if (error) {
+    // Trước đây nuốt lỗi im lặng nên Tin nhắn cứ trống mà không rõ lý do.
+    showToast(`Lỗi tải tin nhắn: ${error.message}`);
+    const box = document.getElementById("chat-conversations");
+    if (box) box.innerHTML = `<div class="admin-empty">Lỗi tải tin nhắn: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
 
   const map = new Map();
   (data || []).forEach((m) => {
@@ -938,14 +966,16 @@ function handleIncomingChat(message) {
 supabase.auth.onAuthStateChange(async (_event, session) => {
   setAuthView(session);
   if (session) {
-    // Hiện ngay dữ liệu cũ trong máy (nếu có) để không phải nhìn màn hình chờ,
-    // rồi mới tải bản mới ở nền và tự cập nhật đè lên.
+    // Hiện ngay dữ liệu cũ trong máy (nếu có) để không phải nhìn màn hình chờ.
+    // QUAN TRỌNG: phải đợi loadBackoffice() xong HẲN rồi mới gọi startRealtime()
+    // (nó tự gọi thêm loadConversations() + mở 2 kênh realtime) — gọi chồng nhiều
+    // lệnh Supabase cùng lúc ngay lúc vừa đăng nhập từng gây treo (deadlock).
     const hasCache = hydrateFromCache();
     navigate(window.location.hash.replace("#", "") || "overview");
     if (hasCache) renderAll();
+    await loadBackoffice();
     startRealtime();
     updateNotifyButton();
-    await loadBackoffice();
   } else {
     stopRealtime();
   }
