@@ -388,7 +388,10 @@
     <!-- ===== Khung Chat ===== -->
     <div id="chat-panel" class="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-4 z-50 hidden h-[70vh] max-h-[560px] w-[92vw] max-w-sm flex-col overflow-hidden rounded-2xl border border-earth/40 bg-cream shadow-2xl md:right-6">
       <div class="flex items-center justify-between border-b border-dashed border-earth bg-white/70 px-4 py-3">
-        <p class="font-serif text-lg text-ink">Chat với nomnom</p>
+        <div>
+          <p class="font-serif text-lg text-ink">Chat với nomnom</p>
+          <p id="chat-shop-status" class="text-xs text-ash">Đang kết nối...</p>
+        </div>
         <button id="chat-close" class="text-ash hover:text-ink transition-colors" aria-label="Đóng chat">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
