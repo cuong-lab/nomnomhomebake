@@ -22,3 +22,14 @@ export function escapeHtml(str) {
   div.textContent = str || "";
   return div.innerHTML;
 }
+
+export function timeAgo(value) {
+  const diffMs = Date.now() - new Date(value).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "vừa mới offline";
+  if (mins < 60) return `offline ${mins} phút trước`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `offline ${hours} giờ trước`;
+  const days = Math.floor(hours / 24);
+  return `offline ${days} ngày trước`;
+}
