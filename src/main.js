@@ -1,7 +1,9 @@
 import "./style.css";
 import { supabase } from "./supabase.js";
-import { formatCurrency, formatDateTime, escapeHtml } from "./shared/format.js";
+import { formatCurrency, formatDateTime, escapeHtml, timeAgo } from "./shared/format.js";
 import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
+import { joinPresence, startHeartbeatLoop, fetchLastSeen, fetchAllLastSeen } from "./shared/presence.js";
+import { avatarHtml, chatBubbleHtml } from "./shared/chatUi.js";
 
 const yearEl = document.querySelector("[data-year]");
 if (yearEl) yearEl.textContent = new Date().getFullYear();
@@ -585,6 +587,7 @@ supabase.auth.onAuthStateChange((_event, session) => {
     closeOrdersDrawer();
     adminOrdersBadge.classList.add("hidden");
   }
+  setChatAdminMode(isAdmin);
   loadProducts();
   loadHeroSlides();
   loadBanners();
@@ -2368,6 +2371,7 @@ customerLoginForm.addEventListener("submit", async (e) => {
   openCustomerModal();
   await syncCartWithAccount(customer);
   restartChatWatcher();
+  startPresence();
 });
 
 document.getElementById("customer-save").addEventListener("click", async () => {
@@ -2394,6 +2398,7 @@ document.getElementById("customer-logout").addEventListener("click", () => {
   updateAccountLabel();
   closeCustomerModal();
   restartChatWatcher();
+  startPresence();
 });
 
 // ── Ảnh đại diện: bấm chọn / kéo-thả để upload ──
@@ -2593,6 +2598,7 @@ function restartChatWatcher() {
 function openChat() {
   chatPanel.classList.remove("hidden");
   chatPanel.classList.add("flex");
+  if (isAdmin) return; // dữ liệu bảng tin nhắn admin đã tự cập nhật realtime sẵn, không cần tải lại
   chatUnreadCount = 0;
   updateChatBadge();
   loadChatHistory();
@@ -2641,6 +2647,327 @@ chatForm.addEventListener("submit", async (e) => {
     });
   }
 });
+
+// ── Trạng thái online/offline của shop (Supabase Realtime Presence — không tốn DB
+// cho phần "đang online", chỉ ghi nhẹ heartbeat để biết "lần cuối hoạt động" khi
+// shop đã offline) ──
+
+let presenceChannel = null;
+let presenceHeartbeatTimer = null;
+
+async function updateShopStatusUI(state) {
+  const statusEl = document.getElementById("chat-shop-status");
+  if (!statusEl) return;
+  const shopOnline = !!(state["shop"] && state["shop"].length);
+  if (shopOnline) {
+    statusEl.textContent = "● nomnom đang online";
+    statusEl.className = "text-xs text-[#34C759]";
+    return;
+  }
+  const lastSeen = await fetchLastSeen("shop");
+  statusEl.textContent = lastSeen ? timeAgo(lastSeen) : "Chưa từng online";
+  statusEl.className = "text-xs text-ash";
+}
+
+function startPresence() {
+  if (presenceChannel) {
+    supabase.removeChannel(presenceChannel);
+    presenceChannel = null;
+  }
+  if (presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
+
+  presenceChannel = joinPresence(getChatConversationId(), updateShopStatusUI);
+  presenceHeartbeatTimer = startHeartbeatLoop(getChatConversationId);
+}
+
+startPresence();
+
+// ── Bảng quản lý tin nhắn nổi (khi cô chủ đăng nhập admin trên trang chính) ──
+// Cùng 1 khung chat nổi: khách thường thấy "Chat với nomnom" (1-1 với shop), cô chủ
+// đăng nhập admin thì tự chuyển thành bảng kiểu Messenger — danh sách hội thoại bên
+// trái, nội dung bên phải (mobile: list trước, bấm vào mới sang nội dung, có nút back).
+
+const ADMIN_CHAT_CACHE_KEY = "nomnom_storefront_chat_cache";
+
+let adminChatConversations = [];
+let adminChatActiveId = null;
+let adminChatOnlineIds = new Set();
+let adminChatLastSeenMap = new Map();
+let adminChatRealtimeChannel = null;
+let adminChatPresenceChannel = null;
+let adminChatPresenceHeartbeat = null;
+
+const chatPanelTitleEl = document.getElementById("chat-panel-title");
+const chatCustomerViewEl = document.getElementById("chat-customer-view");
+const chatAdminViewEl = document.getElementById("chat-admin-view");
+const chatAdminListPaneEl = document.getElementById("chat-admin-list-pane");
+const chatAdminThreadPaneEl = document.getElementById("chat-admin-thread-pane");
+const chatAdminConversationsEl = document.getElementById("chat-admin-conversations");
+const chatAdminThreadTitleEl = document.getElementById("chat-admin-thread-title");
+const chatAdminThreadSubtitleEl = document.getElementById("chat-admin-thread-subtitle");
+const chatAdminThreadMessagesEl = document.getElementById("chat-admin-thread-messages");
+const chatAdminReplyForm = document.getElementById("chat-admin-reply-form");
+const chatAdminReplyInput = document.getElementById("chat-admin-reply-input");
+
+function setChatAdminMode(adminMode) {
+  if (adminMode) {
+    chatPanelTitleEl.textContent = "Tin nhắn khách hàng";
+    chatCustomerViewEl.classList.add("hidden");
+    chatAdminViewEl.classList.remove("hidden");
+    chatAdminViewEl.classList.add("flex");
+    chatPanel.classList.remove("max-w-sm", "h-[70vh]", "max-h-[560px]");
+    chatPanel.classList.add("max-w-2xl", "h-[78vh]", "max-h-[640px]");
+    if (chatChannel) { supabase.removeChannel(chatChannel); chatChannel = null; }
+    if (presenceChannel) { supabase.removeChannel(presenceChannel); presenceChannel = null; }
+    if (presenceHeartbeatTimer) { clearInterval(presenceHeartbeatTimer); presenceHeartbeatTimer = null; }
+    startAdminChatPanel();
+  } else {
+    chatPanelTitleEl.textContent = "Chat với nomnom";
+    chatAdminViewEl.classList.add("hidden");
+    chatAdminViewEl.classList.remove("flex");
+    chatCustomerViewEl.classList.remove("hidden");
+    chatPanel.classList.remove("max-w-2xl", "h-[78vh]", "max-h-[640px]");
+    chatPanel.classList.add("max-w-sm", "h-[70vh]", "max-h-[560px]");
+    stopAdminChatPanel();
+    restartChatWatcher();
+    startPresence();
+  }
+}
+
+function hydrateAdminChatCache() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(ADMIN_CHAT_CACHE_KEY) || "null");
+    if (cached && Array.isArray(cached.conversations)) {
+      adminChatConversations = cached.conversations;
+      return true;
+    }
+  } catch (e) {
+    // cache hỏng thì bỏ qua, tải mới như bình thường
+  }
+  return false;
+}
+
+function saveAdminChatCache() {
+  try {
+    localStorage.setItem(ADMIN_CHAT_CACHE_KEY, JSON.stringify({ conversations: adminChatConversations }));
+  } catch (e) {
+    // hết dung lượng localStorage thì bỏ qua
+  }
+}
+
+function updateAdminChatBadge() {
+  const total = adminChatConversations.reduce((sum, c) => sum + c.unread, 0);
+  const badge = document.getElementById("chat-fab-badge");
+  if (!badge) return;
+  badge.textContent = total;
+  badge.classList.toggle("hidden", total === 0);
+}
+
+function adminChatOnlineStatusText(conversationId) {
+  if (adminChatOnlineIds.has(conversationId)) return "Đang online";
+  const lastSeen = adminChatLastSeenMap.get(conversationId);
+  return lastSeen ? timeAgo(lastSeen) : "";
+}
+
+function renderAdminChatConversations() {
+  if (!adminChatConversations.length) {
+    chatAdminConversationsEl.innerHTML = `<p class="py-8 text-center text-xs text-ash">Chưa có tin nhắn nào.</p>`;
+    return;
+  }
+  chatAdminConversationsEl.innerHTML = adminChatConversations
+    .map((c) => {
+      const online = adminChatOnlineIds.has(c.conversationId);
+      const statusText = adminChatOnlineStatusText(c.conversationId);
+      return `
+      <button type="button" data-conversation="${c.conversationId}"
+        class="flex w-full items-start gap-3 border-b border-earth/15 px-3 py-2.5 text-left transition-colors ${c.conversationId === adminChatActiveId ? "bg-earth/10" : "bg-white hover:bg-earth/5"}">
+        ${avatarHtml(c.customerName || c.conversationId, online)}
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center justify-between gap-2">
+            <span class="truncate text-sm font-semibold text-ink">${escapeHtml(c.customerName || c.conversationId)}</span>
+            ${c.unread > 0 ? `<span class="shrink-0 rounded-full bg-[#7a0c1f] px-1.5 py-0.5 text-[10px] font-medium text-white">${c.unread}</span>` : ""}
+          </div>
+          <p class="mt-1 truncate text-xs text-ash">${escapeHtml(c.lastMessage || "")}</p>
+          <p class="mt-0.5 text-[10px] ${online ? "font-medium text-[#34C759]" : "text-ash/70"}">${statusText || formatDateTime(c.lastTime)}</p>
+        </div>
+      </button>
+    `;
+    })
+    .join("");
+
+  chatAdminConversationsEl.querySelectorAll("[data-conversation]").forEach((btn) =>
+    btn.addEventListener("click", () => openAdminChatThread(btn.dataset.conversation))
+  );
+}
+
+async function loadAdminChatConversations() {
+  const hasCache = hydrateAdminChatCache();
+  if (hasCache) {
+    renderAdminChatConversations();
+    updateAdminChatBadge();
+  }
+
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) {
+    if (!hasCache) chatAdminConversationsEl.innerHTML = `<p class="py-8 text-center text-xs text-red-600">Lỗi: ${escapeHtml(error.message)}</p>`;
+    return;
+  }
+
+  const map = new Map();
+  (data || []).forEach((m) => {
+    let conv = map.get(m.conversation_id);
+    if (!conv) {
+      conv = {
+        conversationId: m.conversation_id,
+        customerName: m.sender === "customer" ? m.customer_name : null,
+        lastMessage: m.message,
+        lastTime: m.created_at,
+        unread: 0,
+      };
+      map.set(m.conversation_id, conv);
+    } else if (!conv.customerName && m.sender === "customer") {
+      conv.customerName = m.customer_name;
+    }
+    if (m.sender === "customer" && !m.read_by_admin) conv.unread++;
+  });
+
+  adminChatConversations = [...map.values()].sort((a, b) => new Date(b.lastTime) - new Date(a.lastTime));
+  saveAdminChatCache();
+  updateAdminChatBadge();
+  renderAdminChatConversations();
+
+  adminChatLastSeenMap = await fetchAllLastSeen();
+  renderAdminChatConversations();
+}
+
+function showAdminChatThreadPane() {
+  chatAdminListPaneEl.classList.add("hidden");
+  chatAdminListPaneEl.classList.remove("flex");
+  chatAdminThreadPaneEl.classList.remove("hidden");
+  chatAdminThreadPaneEl.classList.add("flex");
+}
+
+function showAdminChatListPane() {
+  chatAdminThreadPaneEl.classList.add("hidden");
+  chatAdminThreadPaneEl.classList.remove("flex");
+  chatAdminListPaneEl.classList.remove("hidden");
+  chatAdminListPaneEl.classList.add("flex");
+}
+
+document.getElementById("chat-admin-back").addEventListener("click", showAdminChatListPane);
+
+async function openAdminChatThread(conversationId) {
+  adminChatActiveId = conversationId;
+  renderAdminChatConversations();
+  showAdminChatThreadPane();
+
+  const conv = adminChatConversations.find((c) => c.conversationId === conversationId);
+  chatAdminThreadTitleEl.textContent = (conv && conv.customerName) || conversationId;
+  const online = adminChatOnlineIds.has(conversationId);
+  chatAdminThreadSubtitleEl.textContent = adminChatOnlineStatusText(conversationId) || "Khách chưa từng online";
+  chatAdminThreadSubtitleEl.className = online ? "truncate text-xs font-medium text-[#34C759]" : "truncate text-xs text-ash";
+
+  chatAdminThreadMessagesEl.innerHTML = `<p class="py-6 text-center text-xs text-ash">Đang tải...</p>`;
+  chatAdminReplyForm.classList.remove("hidden");
+  chatAdminReplyForm.classList.add("flex");
+
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true })
+    .limit(300);
+
+  if (error) {
+    chatAdminThreadMessagesEl.innerHTML = `<p class="py-6 text-center text-xs text-red-600">Lỗi: ${escapeHtml(error.message)}</p>`;
+    return;
+  }
+
+  chatAdminThreadMessagesEl.innerHTML = data && data.length
+    ? data.map((m) => chatBubbleHtml(m, m.sender === "shop")).join("")
+    : `<p class="py-6 text-center text-xs text-ash">Chưa có tin nhắn.</p>`;
+  chatAdminThreadMessagesEl.scrollTop = chatAdminThreadMessagesEl.scrollHeight;
+
+  await supabase
+    .from("chat_messages")
+    .update({ read_by_admin: true })
+    .eq("conversation_id", conversationId)
+    .eq("sender", "customer")
+    .eq("read_by_admin", false);
+
+  if (conv) conv.unread = 0;
+  saveAdminChatCache();
+  updateAdminChatBadge();
+  renderAdminChatConversations();
+}
+
+chatAdminReplyForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!adminChatActiveId) return;
+  const text = chatAdminReplyInput.value.trim();
+  if (!text) return;
+  chatAdminReplyInput.value = "";
+  const { error } = await supabase.from("chat_messages").insert({
+    conversation_id: adminChatActiveId,
+    customer_name: "nomnom",
+    sender: "shop",
+    message: text,
+  });
+  if (error) alert("Lỗi gửi tin nhắn: " + error.message);
+});
+
+function handleAdminChatIncoming(message) {
+  let conv = adminChatConversations.find((c) => c.conversationId === message.conversation_id);
+  if (!conv) {
+    conv = { conversationId: message.conversation_id, customerName: null, lastMessage: "", lastTime: message.created_at, unread: 0 };
+    adminChatConversations.unshift(conv);
+  }
+  if (message.sender === "customer") conv.customerName = message.customer_name;
+  conv.lastMessage = message.message;
+  conv.lastTime = message.created_at;
+
+  if (adminChatActiveId === message.conversation_id) {
+    chatAdminThreadMessagesEl.insertAdjacentHTML("beforeend", chatBubbleHtml(message, message.sender === "shop"));
+    chatAdminThreadMessagesEl.scrollTop = chatAdminThreadMessagesEl.scrollHeight;
+    if (message.sender === "customer") {
+      supabase.from("chat_messages").update({ read_by_admin: true }).eq("id", message.id).then(() => {});
+    }
+  } else if (message.sender === "customer") {
+    conv.unread++;
+  }
+
+  adminChatConversations.sort((a, b) => new Date(b.lastTime) - new Date(a.lastTime));
+  saveAdminChatCache();
+  updateAdminChatBadge();
+  renderAdminChatConversations();
+}
+
+function startAdminChatPanel() {
+  showAdminChatListPane();
+  loadAdminChatConversations();
+
+  adminChatRealtimeChannel = supabase
+    .channel("storefront-admin-chat-changes")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => handleAdminChatIncoming(payload.new))
+    .subscribe();
+
+  adminChatPresenceChannel = joinPresence("shop", (state) => {
+    adminChatOnlineIds = new Set(Object.keys(state).filter((key) => key !== "shop"));
+    renderAdminChatConversations();
+  });
+  adminChatPresenceHeartbeat = startHeartbeatLoop(() => "shop");
+}
+
+function stopAdminChatPanel() {
+  if (adminChatRealtimeChannel) { supabase.removeChannel(adminChatRealtimeChannel); adminChatRealtimeChannel = null; }
+  if (adminChatPresenceChannel) { supabase.removeChannel(adminChatPresenceChannel); adminChatPresenceChannel = null; }
+  if (adminChatPresenceHeartbeat) { clearInterval(adminChatPresenceHeartbeat); adminChatPresenceHeartbeat = null; }
+  adminChatActiveId = null;
+}
 
 // ── Reveal on scroll (fade + slide) — lặp lại mỗi lần vào tầm nhìn ──
 

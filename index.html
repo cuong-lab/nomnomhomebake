@@ -386,21 +386,50 @@
     </button>
 
     <!-- ===== Khung Chat ===== -->
+    <!-- Khách thường: chat 1-1 với shop. Cô chủ đăng nhập admin: tự chuyển thành bảng
+         quản lý tin nhắn (list hội thoại + nội dung), JS toggle bằng class chat-panel-admin -->
     <div id="chat-panel" class="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-4 z-50 hidden h-[70vh] max-h-[560px] w-[92vw] max-w-sm flex-col overflow-hidden rounded-2xl border border-earth/40 bg-cream shadow-2xl md:right-6">
       <div class="flex items-center justify-between border-b border-dashed border-earth bg-white/70 px-4 py-3">
-        <div>
-          <p class="font-serif text-lg text-ink">Chat với nomnom</p>
+        <div class="min-w-0">
+          <p id="chat-panel-title" class="font-serif text-lg text-ink">Chat với nomnom</p>
           <p id="chat-shop-status" class="text-xs text-ash">Đang kết nối...</p>
         </div>
         <button id="chat-close" class="text-ash hover:text-ink transition-colors" aria-label="Đóng chat">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
       </div>
-      <div id="chat-messages" class="flex-1 space-y-2 overflow-y-auto px-4 py-3 text-sm"></div>
-      <form id="chat-form" class="flex items-center gap-2 border-t border-dashed border-earth p-3">
-        <input id="chat-input" type="text" placeholder="Nhập tin nhắn..." autocomplete="off" class="flex-1 border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
-        <button type="submit" class="bg-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90">Gửi</button>
-      </form>
+
+      <!-- Chế độ khách hàng -->
+      <div id="chat-customer-view" class="flex flex-1 flex-col overflow-hidden">
+        <div id="chat-messages" class="flex-1 space-y-2 overflow-y-auto px-4 py-3 text-sm"></div>
+        <form id="chat-form" class="flex items-center gap-2 border-t border-dashed border-earth p-3">
+          <input id="chat-input" type="text" placeholder="Nhập tin nhắn..." autocomplete="off" class="flex-1 border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
+          <button type="submit" class="bg-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90">Gửi</button>
+        </form>
+      </div>
+
+      <!-- Chế độ admin: danh sách hội thoại + nội dung — mobile chỉ hiện 1 cột tại 1 thời điểm -->
+      <div id="chat-admin-view" class="hidden flex-1 overflow-hidden md:flex">
+        <div id="chat-admin-list-pane" class="flex w-full flex-col overflow-hidden border-r border-earth/20 md:flex md:w-[42%]">
+          <div id="chat-admin-conversations" class="flex-1 overflow-y-auto"></div>
+        </div>
+        <div id="chat-admin-thread-pane" class="hidden w-full flex-col overflow-hidden md:flex md:w-[58%]">
+          <div class="flex items-center gap-2 border-b border-earth/20 px-3 py-2">
+            <button id="chat-admin-back" type="button" class="shrink-0 text-ash hover:text-ink md:hidden" aria-label="Quay lại danh sách">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div class="min-w-0 flex-1">
+              <p id="chat-admin-thread-title" class="truncate text-sm font-semibold text-ink">Chọn 1 hội thoại</p>
+              <p id="chat-admin-thread-subtitle" class="truncate text-xs text-ash"></p>
+            </div>
+          </div>
+          <div id="chat-admin-thread-messages" class="flex-1 space-y-2 overflow-y-auto px-3 py-3"></div>
+          <form id="chat-admin-reply-form" class="hidden items-center gap-2 border-t border-earth/20 p-3">
+            <input id="chat-admin-reply-input" type="text" placeholder="Nhập tin nhắn trả lời..." autocomplete="off" class="flex-1 border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
+            <button type="submit" class="bg-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90">Gửi</button>
+          </form>
+        </div>
+      </div>
     </div>
 
     <!-- ===== Toast ===== -->

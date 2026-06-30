@@ -4,6 +4,7 @@ import { supabase } from "./supabase.js";
 import { formatCurrency, formatDateTime, escapeHtml, timeAgo } from "./shared/format.js";
 import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
 import { joinPresence, startHeartbeatLoop, fetchAllLastSeen } from "./shared/presence.js";
+import { avatarHtml, chatBubbleHtml } from "./shared/chatUi.js";
 
 const app = document.getElementById("admin-app");
 const login = document.getElementById("admin-login");
@@ -160,6 +161,7 @@ function hydrateFromCache() {
     if (cached && Array.isArray(cached.orders)) {
       orders = cached.orders;
       customers = cached.customers || [];
+      chatConversations = cached.chatConversations || [];
       return true;
     }
   } catch (e) {
@@ -170,7 +172,7 @@ function hydrateFromCache() {
 
 function saveCache() {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ orders, customers }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ orders, customers, chatConversations }));
   } catch (e) {
     // hết dung lượng localStorage thì bỏ qua, không ảnh hưởng chức năng
   }
@@ -809,30 +811,12 @@ async function loadConversations() {
   });
 
   chatConversations = [...map.values()].sort((a, b) => new Date(b.lastTime) - new Date(a.lastTime));
+  saveCache();
   updateMessagesBadge();
   if (activeRoute === "messages") renderConversations();
 
   lastSeenMap = await fetchAllLastSeen();
   if (activeRoute === "messages") renderConversations();
-}
-
-const AVATAR_COLORS = ["#7a0c1f", "#0068ff", "#34C759", "#f39c12", "#8e44ad", "#16a085", "#e74c3c", "#2c3e50"];
-
-function avatarColor(name) {
-  const str = name || "?";
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function avatarHtml(name, online) {
-  const letter = (name || "?").charAt(0).toUpperCase();
-  return `
-    <span class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white" style="background:${avatarColor(name)}">
-      ${escapeHtml(letter)}
-      <span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${online ? "bg-[#34C759]" : "bg-ash"}"></span>
-    </span>
-  `;
 }
 
 function onlineStatusText(conversationId) {
@@ -938,16 +922,6 @@ function startThreadTypingChannel(conversationId) {
       }
     })
     .subscribe();
-}
-
-function chatBubbleHtml(message, mine) {
-  return `
-    <div class="flex ${mine ? "justify-end" : "justify-start"}">
-      <div class="max-w-[75%] rounded-2xl px-3 py-2 ${mine ? "bg-ink text-white" : "border border-earth/40 bg-white text-ink"}">
-        <p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(message.message)}</p>
-      </div>
-    </div>
-  `;
 }
 
 function setThreadStatusRow(html) {
@@ -1067,7 +1041,10 @@ supabase.auth.onAuthStateChange(async (_event, session) => {
     // lệnh Supabase cùng lúc ngay lúc vừa đăng nhập từng gây treo (deadlock).
     const hasCache = hydrateFromCache();
     navigate(window.location.hash.replace("#", "") || "overview");
-    if (hasCache) renderAll();
+    if (hasCache) {
+      renderAll();
+      updateMessagesBadge();
+    }
     await loadBackoffice();
     startRealtime();
     updateNotifyButton();
