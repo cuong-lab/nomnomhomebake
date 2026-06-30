@@ -103,26 +103,20 @@ if (loginForm) {
   });
 }
 
-// CƠ CHẾ ĐĂNG XUẤT TẬN GỐC - XÓA TRONG MÁY TRƯỚC, CHUYỂN TRANG SAU
+// Đăng xuất tận gốc, xóa bộ nhớ máy rồi ép chuyển trang về frontend khách hàng
 document.getElementById("admin-signout")?.addEventListener("click", () => {
   showToast("Đang đăng xuất...");
-  
   try {
-    // 1. Ép trình duyệt xóa sạch bách mọi token lưu trong bộ nhớ máy ngay lập tức
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith("sb-") || key.includes("auth-token")) {
         localStorage.removeItem(key);
       }
     });
     sessionStorage.clear();
-    
-    // 2. Gọi lệnh thông báo lên server Supabase ngầm
     supabase.auth.signOut().catch(() => {});
   } catch (e) {
-    console.error("Lỗi xóa bộ nhớ đệm:", e);
+    console.error(e);
   }
-
-  // 3. Chờ 400ms để hiệu ứng Toast hiển thị mượt rồi đẩy thẳng về trang chủ khách hàng công khai
   window.setTimeout(() => {
     window.location.href = "/";
   }, 400);
@@ -167,8 +161,7 @@ function navigate(route) {
 
 async function loadBackoffice() {
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-    console.error("❌ LỖI CHÍNH: Vercel chưa đọc được Biến môi trường! Bạn thiếu VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY.");
-    showToast("Lỗi: Thiếu cấu hình API Supabase trên Vercel!");
+    console.error("❌ LỖI: Thiếu cấu hình VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY trên Vercel.");
     return;
   }
 
@@ -180,7 +173,6 @@ async function loadBackoffice() {
       ]);
       
     console.log("=== DỮ LIỆU ĐƠN HÀNG LẤY TỪ SUPABASE ===");
-    console.log("Lỗi hệ thống:", orderError);
     console.log("Mảng dữ liệu:", orderData);
     
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
@@ -191,7 +183,7 @@ async function loadBackoffice() {
     await loadTraffic();
     renderAll();
   } catch (catchErr) {
-    console.error("Lỗi kết nối nghiêm trọng:", catchErr);
+    console.error("Lỗi kết nối:", catchErr);
   }
 }
 
@@ -567,7 +559,7 @@ function renderTraffic() {
           <p class="font-semibold text-ink">Chưa có bảng analytics_events hoặc chưa cấp quyền đọc.</p>
           <p class="mt-2 text-sm leading-relaxed text-ash">
             Khi bật tracking, storefront sẽ ghi page_view vào Supabase với visitor_id, session_id, path và created_at.
-            Admin shell này đã sẵn sàng để đọc và tính unique visitors, page views và conversion hôm nay.
+            Admin shell này đã sẵn sàng để đọc và tính unique visitors, page views and conversion hôm nay.
           </p>
         </div>
       `;
