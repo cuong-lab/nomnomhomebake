@@ -3,7 +3,8 @@ import { supabase } from "./supabase.js";
 import { formatCurrency, formatDateTime, escapeHtml, timeAgo } from "./shared/format.js";
 import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
 import { joinPresence, startHeartbeatLoop, fetchLastSeen, fetchAllLastSeen } from "./shared/presence.js";
-import { avatarHtml, chatBubbleHtml } from "./shared/chatUi.js";
+import { avatarHtml, chatBubbleHtml, chatThreadSkeletonHtml } from "./shared/chatUi.js";
+import { compressImage } from "./shared/imageUtils.js";
 
 const yearEl = document.querySelector("[data-year]");
 if (yearEl) yearEl.textContent = new Date().getFullYear();
@@ -610,7 +611,7 @@ function renderProductCard(p) {
       <div data-detail="${p.id}" class="aspect-[4/5] overflow-hidden rounded-xl bg-earth/30 cursor-pointer relative">
         ${
           p.image_url
-            ? `<img src="${p.image_url}" alt="${p.name}" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />`
+            ? `<img src="${p.image_url}" alt="${p.name}" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />`
             : `<div class="flex h-full items-center justify-center"><span class="font-serif text-lg italic text-ash">nomnom</span></div>`
         }
         ${p.badge === "bestseller" ? `<span class="absolute top-2 left-2 bg-[#f39c12] px-2 py-0.5 text-[10px] font-medium text-white rounded-full">Bán chạy</span>` : ""}
@@ -770,7 +771,7 @@ function openDetailModal(p) {
     detailTrack.innerHTML = `<div class="flex h-full w-full shrink-0 items-center justify-center"><span class="font-serif text-lg italic text-ash">nomnom</span></div>`;
   } else {
     detailTrack.innerHTML = detailImages
-      .map((src) => `<div class="h-full w-full shrink-0"><img src="${src}" alt="${p.name}" class="h-full w-full object-cover" /></div>`)
+      .map((src) => `<div class="h-full w-full shrink-0"><img src="${src}" alt="${p.name}" loading="lazy" decoding="async" class="h-full w-full object-cover" /></div>`)
       .join("");
   }
 
@@ -825,7 +826,7 @@ function renderRelated(p) {
       (x) => `
     <button data-related="${x.id}" class="group text-left">
       <div class="aspect-square overflow-hidden rounded-lg bg-earth/30">
-        ${x.image_url ? `<img src="${x.image_url}" alt="${x.name}" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />` : `<div class="flex h-full items-center justify-center"><span class="font-serif text-sm italic text-ash">nomnom</span></div>`}
+        ${x.image_url ? `<img src="${x.image_url}" alt="${x.name}" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />` : `<div class="flex h-full items-center justify-center"><span class="font-serif text-sm italic text-ash">nomnom</span></div>`}
       </div>
       <p class="mt-1.5 line-clamp-1 text-xs font-medium text-ink">${x.name}</p>
       <p class="text-xs text-ash">${formatPrice(x.sale_price || x.price)}</p>
@@ -918,11 +919,17 @@ const productModal = document.getElementById("product-modal");
 const productForm = document.getElementById("product-form");
 const productError = document.getElementById("product-error");
 
+// Nguồn sự thật cho việc đang SỬA hay THÊM sản phẩm — dùng biến JS thay vì đọc ô ẩn
+// trong form (ô ẩn từng giữ lại id sản phẩm cũ khiến "thêm mới" chạy nhầm sang "cập nhật"
+// và ghi đè lên sản phẩm trước đó).
+let editingProductId = null;
+
 function openProductForm(product) {
   document.getElementById("product-form-title").textContent = product
     ? "Sửa sản phẩm"
     : "Thêm sản phẩm";
   productForm.reset();
+  editingProductId = product ? product.id : null;
   if (product) {
     productForm.elements.id.value = product.id;
     productForm.elements.name.value = product.name;
@@ -942,6 +949,7 @@ function closeProductForm() {
   productModal.classList.add("hidden");
   productModal.classList.remove("flex");
   productForm.reset();
+  editingProductId = null;
 }
 
 document.getElementById("product-cancel").addEventListener("click", closeProductForm);
@@ -950,6 +958,7 @@ productModal.addEventListener("click", (e) => {
 });
 
 async function uploadProductImage(file, prefix) {
+  file = await compressImage(file);
   const ext = file.name.split(".").pop();
   const fileName = `${prefix}${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
   const { error: uploadError } = await supabase.storage
@@ -963,7 +972,7 @@ async function uploadProductImage(file, prefix) {
 productForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = new FormData(productForm);
-  const id = form.get("id");
+  const id = editingProductId; // dùng biến trạng thái, KHÔNG đọc ô ẩn (tránh ghi đè nhầm)
 
   const salePriceVal = form.get("sale_price");
   const isKey = form.get("is_key") === "on";
@@ -1166,8 +1175,9 @@ async function renderSlidesList() {
 }
 
 slideUpload.addEventListener("change", async () => {
-  const file = slideUpload.files[0];
+  let file = slideUpload.files[0];
   if (!file) return;
+  file = await compressImage(file);
 
   const ext = file.name.split(".").pop();
   const fileName = `hero-${Date.now()}.${ext}`;
@@ -1322,8 +1332,9 @@ async function renderBannerList() {
 }
 
 bannerUpload.addEventListener("change", async () => {
-  const file = bannerUpload.files[0];
+  let file = bannerUpload.files[0];
   if (!file) return;
+  file = await compressImage(file);
 
   const ext = file.name.split(".").pop();
   const fileName = `banner-${Date.now()}.${ext}`;
@@ -1440,6 +1451,37 @@ async function saveField(column, value) {
   }
 }
 
+// Upload 1 file cho khung hero: ảnh thì nén, video thì giữ nguyên. Trả về { url, type }.
+async function uploadHeroSide(file, prefix) {
+  const isVideo = file.type.startsWith("video/");
+  const toUpload = isVideo ? file : await compressImage(file);
+  const ext = isVideo ? (file.name.split(".").pop() || "mp4") : toUpload.name.split(".").pop();
+  const fileName = `${prefix}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from("product-images")
+    .upload(fileName, toUpload, isVideo ? { contentType: file.type } : undefined);
+  if (error) throw error;
+  const { data } = supabase.storage.from("product-images").getPublicUrl(fileName);
+  return { url: data.publicUrl, type: isVideo ? "video" : "image" };
+}
+
+// Điền 1 khung hero (trái/phải) bằng ảnh hoặc video tùy loại đã lưu.
+function renderHeroSide(containerId, url, type) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!url) {
+    el.innerHTML = "";
+    el.classList.remove("hero-side-visible");
+    return;
+  }
+  if (type === "video") {
+    el.innerHTML = `<video class="h-full w-full object-cover" src="${url}" autoplay muted loop playsinline></video>`;
+  } else {
+    el.innerHTML = `<img class="h-full w-full object-cover" src="${url}" alt="" />`;
+  }
+  el.classList.add("hero-side-visible");
+}
+
 async function loadContactSettings() {
   const { data } = await supabase.from("site_settings").select("*").single();
   if (!data) return;
@@ -1447,25 +1489,17 @@ async function loadContactSettings() {
   updateLogo(data);
   updateHeroContent(data);
 
-  const heroVideo = document.getElementById("hero-video");
-  const heroVideoEdit = document.getElementById("hero-video-edit");
-  if (data.hero_video_url) {
-    heroVideo.src = data.hero_video_url;
-    heroVideo.classList.add("hero-side-visible");
-  } else {
-    heroVideo.classList.remove("hero-side-visible");
-  }
-  heroVideoEdit.classList.toggle("hidden", !isAdmin);
-
-  const heroSideImg = document.getElementById("hero-side-image");
-  const heroSideEdit = document.getElementById("hero-side-edit");
-  if (data.hero_side_image_url) {
-    heroSideImg.src = data.hero_side_image_url;
-    heroSideImg.classList.add("hero-side-visible");
-  } else {
-    heroSideImg.classList.remove("hero-side-visible");
-  }
-  heroSideEdit.classList.toggle("hidden", !isAdmin);
+  // Hero 2 bên: mỗi bên có thể là ảnh HOẶC video. Ưu tiên cột mới (hero_left/right_url + type);
+  // nếu chưa có thì lấy dữ liệu cũ (hero_video_url = trái/video, hero_side_image_url = phải/ảnh)
+  // để không mất nội dung đã cài trước đây.
+  const leftUrl = data.hero_left_url || data.hero_video_url || "";
+  const leftType = data.hero_left_type || (data.hero_video_url ? "video" : "");
+  const rightUrl = data.hero_right_url || data.hero_side_image_url || "";
+  const rightType = data.hero_right_type || (data.hero_side_image_url ? "image" : "");
+  renderHeroSide("hero-left", leftUrl, leftType);
+  renderHeroSide("hero-right", rightUrl, rightType);
+  document.getElementById("hero-left-edit").classList.toggle("hidden", !isAdmin);
+  document.getElementById("hero-right-edit").classList.toggle("hidden", !isAdmin);
 
   const aboutImg = document.getElementById("about-image");
   const aboutPlaceholder = document.getElementById("about-image-placeholder");
@@ -1576,10 +1610,10 @@ async function loadContactSettings() {
   dTime.textContent = data.delivery_time ? `Thời gian: ${data.delivery_time}` : "";
 }
 
-document.getElementById("hero-video-edit").addEventListener("click", () => {
+document.getElementById("hero-left-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
-document.getElementById("hero-side-edit").addEventListener("click", () => {
+document.getElementById("hero-right-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
 document.getElementById("about-image-edit").addEventListener("click", () => {
@@ -1638,14 +1672,16 @@ contactForm.addEventListener("submit", async (e) => {
   const logoFile = contactForm.elements.logo_image.files[0];
 
   let logo_image_url = undefined;
-  let hero_video_url = undefined;
+  let heroLeft = null; // { url, type } bên trái
+  let heroRight = null; // { url, type } bên phải
 
   if (logoFile) {
-    const ext = logoFile.name.split(".").pop();
+    const logoC = await compressImage(logoFile);
+    const ext = logoC.name.split(".").pop();
     const fileName = `logo-${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("product-images")
-      .upload(fileName, logoFile);
+      .upload(fileName, logoC);
 
     if (uploadError) {
       contactError.textContent = "Lỗi upload logo: " + uploadError.message;
@@ -1657,44 +1693,25 @@ contactForm.addEventListener("submit", async (e) => {
     logo_image_url = urlData.publicUrl;
   }
 
-  const videoFile = contactForm.elements.hero_video.files[0];
-  if (videoFile) {
-    const vName = `hero-video-${Date.now()}.mp4`;
-    const { error: vErr } = await supabase.storage
-      .from("product-images")
-      .upload(vName, videoFile, { contentType: videoFile.type });
-    if (vErr) {
-      contactError.textContent = "Lỗi upload video: " + vErr.message;
-      contactError.classList.remove("hidden");
-      return;
-    }
-    const { data: vUrl } = supabase.storage.from("product-images").getPublicUrl(vName);
-    hero_video_url = vUrl.publicUrl;
-  }
-
-  let hero_side_image_url = undefined;
-  const sideFile = contactForm.elements.hero_side_image.files[0];
-  if (sideFile) {
-    const sName = `hero-side-${Date.now()}.${sideFile.name.split(".").pop()}`;
-    const { error: sErr } = await supabase.storage
-      .from("product-images")
-      .upload(sName, sideFile);
-    if (sErr) {
-      contactError.textContent = "Lỗi upload ảnh: " + sErr.message;
-      contactError.classList.remove("hidden");
-      return;
-    }
-    const { data: sUrl } = supabase.storage.from("product-images").getPublicUrl(sName);
-    hero_side_image_url = sUrl.publicUrl;
+  try {
+    const leftFile = contactForm.elements.hero_left.files[0];
+    const rightFile = contactForm.elements.hero_right.files[0];
+    if (leftFile) heroLeft = await uploadHeroSide(leftFile, "hero-left");
+    if (rightFile) heroRight = await uploadHeroSide(rightFile, "hero-right");
+  } catch (heroErr) {
+    contactError.textContent = "Lỗi upload hero: " + heroErr.message;
+    contactError.classList.remove("hidden");
+    return;
   }
 
   let about_image_url = undefined;
   const aboutFile = contactForm.elements.about_image.files[0];
   if (aboutFile) {
-    const aName = `about-${Date.now()}.${aboutFile.name.split(".").pop()}`;
+    const aboutC = await compressImage(aboutFile);
+    const aName = `about-${Date.now()}.${aboutC.name.split(".").pop()}`;
     const { error: aErr } = await supabase.storage
       .from("product-images")
-      .upload(aName, aboutFile);
+      .upload(aName, aboutC);
     if (aErr) {
       contactError.textContent = "Lỗi upload ảnh About: " + aErr.message;
       contactError.classList.remove("hidden");
@@ -1707,10 +1724,11 @@ contactForm.addEventListener("submit", async (e) => {
   let custom_image_url = undefined;
   const customFile = contactForm.elements.custom_image.files[0];
   if (customFile) {
-    const cName = `custom-${Date.now()}.${customFile.name.split(".").pop()}`;
+    const customC = await compressImage(customFile);
+    const cName = `custom-${Date.now()}.${customC.name.split(".").pop()}`;
     const { error: cErr } = await supabase.storage
       .from("product-images")
-      .upload(cName, customFile);
+      .upload(cName, customC);
     if (cErr) {
       contactError.textContent = "Lỗi upload ảnh Bánh đặt riêng: " + cErr.message;
       contactError.classList.remove("hidden");
@@ -1741,8 +1759,14 @@ contactForm.addEventListener("submit", async (e) => {
     reward_percent: form.get("reward_percent") ? parseInt(form.get("reward_percent")) : null,
   };
   if (logo_image_url) row.logo_image_url = logo_image_url;
-  if (hero_video_url) row.hero_video_url = hero_video_url;
-  if (hero_side_image_url) row.hero_side_image_url = hero_side_image_url;
+  if (heroLeft) {
+    row.hero_left_url = heroLeft.url;
+    row.hero_left_type = heroLeft.type;
+  }
+  if (heroRight) {
+    row.hero_right_url = heroRight.url;
+    row.hero_right_type = heroRight.type;
+  }
   if (about_image_url) row.about_image_url = about_image_url;
   if (custom_image_url) row.custom_image_url = custom_image_url;
 
@@ -1801,7 +1825,7 @@ function renderReviews(reviews) {
     .map(
       (r) => `
     <div class="w-[280px] shrink-0 snap-start border border-earth/40 p-5 md:w-[320px] ${isAdmin ? "group relative" : ""}">
-      ${r.image_url ? `<img src="${r.image_url}" alt="Ảnh đánh giá" class="mb-4 h-40 w-full rounded object-cover" />` : ""}
+      ${r.image_url ? `<img src="${r.image_url}" alt="Ảnh đánh giá" loading="lazy" decoding="async" class="mb-4 h-40 w-full rounded object-cover" />` : ""}
       <div class="flex items-center gap-2">
         <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-earth/30 font-serif text-sm text-ink">
           ${r.name.charAt(0).toUpperCase()}
@@ -1846,11 +1870,12 @@ reviewForm.addEventListener("submit", async (e) => {
   let image_url = null;
 
   if (imageFile) {
-    const ext = imageFile.name.split(".").pop();
+    const reviewC = await compressImage(imageFile);
+    const ext = reviewC.name.split(".").pop();
     const fileName = `review-${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("product-images")
-      .upload(fileName, imageFile);
+      .upload(fileName, reviewC);
 
     if (uploadError) {
       reviewError.textContent = "Lỗi upload ảnh: " + uploadError.message;
@@ -2168,7 +2193,12 @@ function switchCustomerTab(tab) {
 async function loadCustomerOrders() {
   const box = document.getElementById("customer-tab-orders");
   if (!currentCustomer) return;
-  box.innerHTML = `<p class="py-8 text-center text-sm text-ash">Đang tải đơn hàng…</p>`;
+  box.innerHTML = `
+    <div class="space-y-3">
+      <div class="skeleton h-24 w-full rounded-lg"></div>
+      <div class="skeleton h-24 w-full rounded-lg"></div>
+      <div class="skeleton h-24 w-full rounded-lg"></div>
+    </div>`;
 
   const { data, error } = await supabase
     .from("orders")
@@ -2429,6 +2459,7 @@ avatarBtn.addEventListener("drop", (e) => {
 
 async function uploadAvatar(file) {
   if (!currentCustomer || !file.type.startsWith("image/")) return;
+  file = await compressImage(file, { maxDim: 400 }); // avatar nhỏ nên nén mạnh hơn
   const ext = file.name.split(".").pop();
   const name = `avatar-${currentCustomer.phone}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage
@@ -2545,7 +2576,7 @@ function showShopTypingIndicator() {
 
 async function loadChatHistory() {
   const conversationId = getChatConversationId();
-  chatMessagesBox.innerHTML = `<p class="py-6 text-center text-xs text-ash">Đang tải...</p>`;
+  chatMessagesBox.innerHTML = `<div class="space-y-2 px-1">${chatThreadSkeletonHtml()}</div>`;
   const { data, error } = await supabase
     .from("chat_messages")
     .select("*")
@@ -2871,7 +2902,7 @@ async function openAdminChatThread(conversationId) {
   chatAdminThreadSubtitleEl.textContent = adminChatOnlineStatusText(conversationId) || "Khách chưa từng online";
   chatAdminThreadSubtitleEl.className = online ? "truncate text-xs font-medium text-[#34C759]" : "truncate text-xs text-ash";
 
-  chatAdminThreadMessagesEl.innerHTML = `<p class="py-6 text-center text-xs text-ash">Đang tải...</p>`;
+  chatAdminThreadMessagesEl.innerHTML = `<div class="space-y-2">${chatThreadSkeletonHtml()}</div>`;
   chatAdminReplyForm.classList.remove("hidden");
   chatAdminReplyForm.classList.add("flex");
 

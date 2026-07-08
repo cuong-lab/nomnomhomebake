@@ -8,6 +8,34 @@
       name="description"
       content="nomnom — tiệm bánh ngọt thủ công. Tinh tế, tươi mới, làm mỗi ngày."
     />
+    <link rel="canonical" href="https://nomnombake.vercel.app/" />
+    <meta name="theme-color" content="#FDFBF7" />
+
+    <!-- Thẻ Open Graph — quyết định ảnh + tiêu đề khi share link lên Facebook/Zalo/Messenger.
+         ĐỔI URL ẢNH OG Ở ĐÂY: dán link ảnh public từ Supabase Storage (logo hoặc ảnh bánh đẹp),
+         lý tưởng là 1 ảnh ngang 1200×630. Crawler không chạy JS nên URL phải là link tĩnh tuyệt đối. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="nomnom" />
+    <meta property="og:title" content="nomnom — Bánh ngọt thủ công" />
+    <meta property="og:description" content="Tiệm bánh ngọt thủ công. Tinh tế, tươi mới, làm mỗi ngày." />
+    <meta property="og:url" content="https://nomnombake.vercel.app/" />
+    <meta property="og:locale" content="vi_VN" />
+    <meta property="og:image" content="https://nomnombake.vercel.app/og-cover.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="nomnom — Bánh ngọt thủ công" />
+    <meta name="twitter:description" content="Tiệm bánh ngọt thủ công. Tinh tế, tươi mới, làm mỗi ngày." />
+    <meta name="twitter:image" content="https://nomnombake.vercel.app/og-cover.jpg" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Bakery",
+        "name": "nomnom",
+        "description": "Tiệm bánh ngọt thủ công. Tinh tế, tươi mới, làm mỗi ngày.",
+        "url": "https://nomnombake.vercel.app/"
+      }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -106,12 +134,11 @@
     <!-- ===== Hero ===== -->
     <main>
       <section class="relative overflow-hidden">
-        <!-- Video bên trái (chỉ desktop rộng) -->
-        <video id="hero-video" class="hero-side absolute left-0 top-0 h-full object-cover" style="width:calc((100% - 72rem)/2)" autoplay muted loop playsinline></video>
-        <button id="hero-video-edit" class="hidden absolute left-2 bottom-2 z-10 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors" aria-label="Đổi video">Đổi video</button>
-        <!-- Ảnh tĩnh bên phải (chỉ desktop rộng) -->
-        <img id="hero-side-image" class="hero-side absolute right-0 top-0 h-full object-cover" style="width:calc((100% - 72rem)/2)" alt="" />
-        <button id="hero-side-edit" class="hidden absolute right-2 bottom-2 z-10 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors" aria-label="Đổi ảnh">Đổi ảnh</button>
+        <!-- 2 khung mở rộng 2 bên (chỉ desktop rộng) — mỗi bên chứa được ảnh HOẶC video, JS tự điền -->
+        <div id="hero-left" class="hero-side absolute left-0 top-0 h-full overflow-hidden" style="width:calc((100% - 72rem)/2)"></div>
+        <button id="hero-left-edit" class="hidden absolute left-2 bottom-2 z-10 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors" aria-label="Đổi ảnh/video bên trái">Đổi ảnh/video</button>
+        <div id="hero-right" class="hero-side absolute right-0 top-0 h-full overflow-hidden" style="width:calc((100% - 72rem)/2)"></div>
+        <button id="hero-right-edit" class="hidden absolute right-2 bottom-2 z-10 bg-white/80 px-3 py-1.5 text-xs font-medium text-ink hover:bg-white transition-colors" aria-label="Đổi ảnh/video bên phải">Đổi ảnh/video</button>
         <div class="mx-auto max-w-6xl px-6 py-10 md:py-14">
         <div class="grid items-start gap-16 md:grid-cols-2">
           <div class="animate-fade-up">
@@ -174,7 +201,16 @@
           <option value="default">Sắp xếp giá</option>
         </select>
         <div id="product-sections" class="mt-8 space-y-12">
-          <p class="text-center text-sm text-ash py-12">Đang tải sản phẩm…</p>
+          <div class="grid grid-cols-2 gap-x-5 gap-y-8 md:grid-cols-3 lg:grid-cols-4">
+            <div class="skeleton aspect-[4/5] rounded-xl"></div>
+            <div class="skeleton aspect-[4/5] rounded-xl"></div>
+            <div class="skeleton aspect-[4/5] rounded-xl"></div>
+            <div class="skeleton aspect-[4/5] rounded-xl"></div>
+            <div class="skeleton aspect-[4/5] rounded-xl hidden md:block"></div>
+            <div class="skeleton aspect-[4/5] rounded-xl hidden md:block"></div>
+            <div class="skeleton aspect-[4/5] rounded-xl hidden lg:block"></div>
+            <div class="skeleton aspect-[4/5] rounded-xl hidden lg:block"></div>
+          </div>
         </div>
       </section>
       <hr class="mx-auto max-w-6xl border-dashed border-earth" />
@@ -810,14 +846,14 @@
         <div id="current-logo-preview" class="mt-2 hidden">
           <img id="logo-preview-img" src="" alt="Logo hiện tại" class="h-10 w-auto" />
         </div>
-        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Hero 2 bên (chỉ desktop)</p>
+        <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Hero 2 bên (chỉ desktop) — mỗi bên chọn ảnh hoặc video</p>
         <label class="mt-2 block">
-          <span class="text-sm text-ash">Video bên trái (.mp4)</span>
-          <input type="file" name="hero_video" accept="video/mp4,video/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+          <span class="text-sm text-ash">Bên trái (ảnh hoặc video)</span>
+          <input type="file" name="hero_left" accept="image/*,video/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
         </label>
         <label class="mt-3 block">
-          <span class="text-sm text-ash">Ảnh bên phải</span>
-          <input type="file" name="hero_side_image" accept="image/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
+          <span class="text-sm text-ash">Bên phải (ảnh hoặc video)</span>
+          <input type="file" name="hero_right" accept="image/*,video/*" class="mt-1 block w-full text-sm text-ash file:mr-3 file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:text-white file:cursor-pointer" />
         </label>
         <p class="mt-4 text-xs font-medium uppercase tracking-wider text-ash">Mục About</p>
         <label class="mt-2 block">

@@ -28,3 +28,16 @@ export function chatBubbleHtml(message, mine) {
     </div>
   `;
 }
+
+// Skeleton giữ chỗ khi đang tải nội dung 1 hội thoại (xen kẽ trái/phải cho giống chat thật)
+export function chatThreadSkeletonHtml() {
+  const rows = [
+    ["justify-start", "w-32"],
+    ["justify-end", "w-40"],
+    ["justify-start", "w-24"],
+    ["justify-end", "w-28"],
+  ];
+  return rows
+    .map(([side, w]) => `<div class="flex ${side}"><div class="skeleton h-8 ${w} rounded-2xl"></div></div>`)
+    .join("");
+}

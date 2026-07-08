@@ -4,7 +4,7 @@ import { supabase } from "./supabase.js";
 import { formatCurrency, formatDateTime, escapeHtml, timeAgo } from "./shared/format.js";
 import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
 import { joinPresence, startHeartbeatLoop, fetchAllLastSeen } from "./shared/presence.js";
-import { avatarHtml, chatBubbleHtml } from "./shared/chatUi.js";
+import { avatarHtml, chatBubbleHtml, chatThreadSkeletonHtml } from "./shared/chatUi.js";
 
 const app = document.getElementById("admin-app");
 const login = document.getElementById("admin-login");
@@ -198,7 +198,14 @@ async function loadBackoffice() {
   if (!orders.length) {
     const ordersTableEl = document.getElementById("orders-table");
     if (ordersTableEl) {
-      ordersTableEl.innerHTML = `<div class="admin-empty">nomnom đang tải dữ liệu, đừng vội nhé, không nhanh hơn được đâu 🧁</div>`;
+      ordersTableEl.innerHTML = `
+        <div class="admin-empty">nomnom đang tải dữ liệu, đừng vội nhé, không nhanh hơn được đâu 🧁</div>
+        <div class="mt-4 space-y-2">
+          <div class="skeleton h-12 w-full rounded"></div>
+          <div class="skeleton h-12 w-full rounded"></div>
+          <div class="skeleton h-12 w-full rounded"></div>
+          <div class="skeleton h-12 w-full rounded"></div>
+        </div>`;
     }
   }
 
@@ -873,7 +880,7 @@ async function openThread(conversationId) {
   }
 
   const threadBox = document.getElementById("chat-thread-messages");
-  threadBox.innerHTML = `<p class="py-6 text-center text-xs text-ash">Đang tải...</p>`;
+  threadBox.innerHTML = `<div class="space-y-2">${chatThreadSkeletonHtml()}</div>`;
   document.getElementById("chat-reply-form").classList.remove("hidden");
   document.getElementById("chat-reply-form").classList.add("flex");
 
