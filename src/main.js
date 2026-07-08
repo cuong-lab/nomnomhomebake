@@ -515,10 +515,13 @@ let tapTimer = null;
 
 logo.addEventListener("click", (e) => {
   e.preventDefault();
+  // Đang là admin: bấm logo chỉ cuộn lên đầu trang, KHÔNG đăng xuất nữa
+  // (giữ quyền admin khi vào lại storefront; muốn thoát thì dùng nút "Đăng xuất admin" ở footer).
   if (isAdmin) {
-    supabase.auth.signOut();
+    window.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
+  // Khách thường: bấm logo 3 lần liên tiếp để mở form đăng nhập admin (cửa vào ẩn).
   tapCount++;
   if (tapCount === 3) {
     tapCount = 0;
