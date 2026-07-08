@@ -611,7 +611,7 @@ const priceFilter = document.getElementById("price-filter");
 function renderProductCard(p) {
   return `
     <article class="group relative flex flex-col overflow-hidden rounded-2xl border border-earth/50 bg-cream/70 p-2 shadow-[0_3px_14px_-6px_rgba(10,10,10,0.18)] transition-all duration-300 hover:-translate-y-1 hover:border-earth hover:shadow-[0_16px_30px_-10px_rgba(10,10,10,0.28)] sm:p-3">
-      <div data-detail="${p.id}" class="aspect-[4/5] overflow-hidden rounded-xl bg-earth/30 cursor-pointer relative">
+      <div data-detail="${p.id}" class="aspect-square overflow-hidden rounded-xl bg-earth/30 cursor-pointer relative">
         ${
           p.image_url
             ? `<img src="${p.image_url}" alt="${p.name}" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />`
@@ -659,46 +659,70 @@ function renderProducts() {
   }
 
   const addBtn = isAdmin
-    ? `<button class="add-product-btn flex aspect-[4/5] items-center justify-center rounded-2xl border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink hover:bg-cream/50 transition-colors cursor-pointer">
+    ? `<button class="add-product-btn flex aspect-square w-full items-center justify-center rounded-2xl border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink hover:bg-cream/50 transition-colors cursor-pointer">
         <span class="text-center"><span class="block text-3xl leading-none">+</span><span class="mt-2 block text-sm">Thêm sản phẩm</span></span>
       </button>`
     : "";
 
-  let html = "";
+  // Mỗi ô (sản phẩm hoặc nút thêm) chiếm đúng 1/3 chiều ngang để luôn hiện 3 ô/hàng;
+  // nhiều hơn 3 thì cuộn ngang, có nút ‹ › ở 2 bên.
+  const cell = (inner) =>
+    `<div class="snap-start shrink-0" style="width:calc((100% - 2rem)/3)">${inner}</div>`;
 
-  categories.forEach((cat) => {
-    const items = allProducts.filter((p) => p.category === cat);
-    html += `
-      <div class="category-section">
-        <h3 class="font-serif text-2xl text-ink md:text-3xl">${cat}</h3>
-        <hr class="mt-3 border-dashed border-earth" />
-        <div class="mt-6 grid gap-5 grid-cols-3 md:grid-cols-5">
-          ${items.map(renderProductCard).join("")}
-          ${addBtn}
+  const carousel = (cellsHtml, showArrows) => {
+    const trackId = `pcar-${Math.random().toString(36).slice(2, 8)}`;
+    const arrowBtn = (dir, sym) =>
+      `<button data-car-${dir}="${trackId}" aria-label="${dir === "prev" ? "Xem trước" : "Xem tiếp"}"
+        class="absolute ${dir === "prev" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"} top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-earth bg-white text-ink shadow-md hover:bg-earth/20 active:scale-95 transition">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${dir === "prev" ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"}"/></svg>
+      </button>`;
+    return `
+      <div class="relative mt-6">
+        ${showArrows ? arrowBtn("prev") : ""}
+        <div id="${trackId}" class="pcar-track flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth">
+          ${cellsHtml}
         </div>
+        ${showArrows ? arrowBtn("next") : ""}
       </div>`;
+  };
+
+  const section = (title, items) => {
+    const cells = items.map((p) => cell(renderProductCard(p))).join("") + (isAdmin ? cell(addBtn) : "");
+    const total = items.length + (isAdmin ? 1 : 0);
+    return `
+      <div class="category-section">
+        <h3 class="font-serif text-2xl text-ink md:text-3xl">${title}</h3>
+        <hr class="mt-3 border-dashed border-earth" />
+        ${carousel(cells, total > 3)}
+      </div>`;
+  };
+
+  let html = "";
+  categories.forEach((cat) => {
+    html += section(cat, allProducts.filter((p) => p.category === cat));
   });
 
-  if (uncategorized.length || isAdmin) {
-    if (uncategorized.length) {
-      html += `
-        <div class="category-section">
-          <h3 class="font-serif text-2xl text-ink md:text-3xl">Khác</h3>
-          <hr class="mt-3 border-dashed border-earth" />
-          <div class="mt-6 grid gap-5 grid-cols-3 md:grid-cols-5">
-            ${uncategorized.map(renderProductCard).join("")}
-            ${addBtn}
-          </div>
-        </div>`;
-    } else if (isAdmin && !categories.length) {
-      html += `
-        <div class="mt-6 grid gap-5 grid-cols-3 md:grid-cols-5">
-          ${addBtn}
-        </div>`;
-    }
+  if (uncategorized.length) {
+    html += section("Khác", uncategorized);
+  } else if (isAdmin && !categories.length) {
+    html += carousel(cell(addBtn), false);
   }
 
   container.innerHTML = html;
+
+  // Nút ‹ › cuộn ngang track 1 "trang" (đúng bằng bề rộng đang thấy = 3 ô)
+  container.querySelectorAll("[data-car-prev]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const track = document.getElementById(btn.dataset.carPrev);
+      if (track) track.scrollBy({ left: -track.clientWidth, behavior: "smooth" });
+    })
+  );
+  container.querySelectorAll("[data-car-next]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const track = document.getElementById(btn.dataset.carNext);
+      if (track) track.scrollBy({ left: track.clientWidth, behavior: "smooth" });
+    })
+  );
 
   container.querySelectorAll(".add-product-btn").forEach((btn) =>
     btn.addEventListener("click", () => openProductForm())
