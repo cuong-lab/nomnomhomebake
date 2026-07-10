@@ -307,7 +307,9 @@ body {
 
 /* Full-width, cao theo 19:10 (52.6vw) nhưng không quá 82vh và không dưới 32rem.
    Dùng height trực tiếp thay cho aspect-ratio để KHÔNG bị co hẹp chiều rộng khi cap chiều cao. */
-.nn-hero { position: relative; display: flex; align-items: flex-end; height: clamp(32rem, 52.6vw, 82vh);
+/* Cao theo 19:10 (52.6vw), chặn trong khoảng 32rem–48rem. Dùng rem thay vh để zoom in/out
+   phóng ĐỀU như web thường (vh co theo chiều cao viewport nên zoom hay bị lệch nhịp). */
+.nn-hero { position: relative; display: flex; align-items: flex-end; height: clamp(32rem, 52.6vw, 48rem);
   overflow: hidden; background: var(--color-earth); }
 
 /* Chấm chọn ảnh hero (góc dưới phải) */
@@ -322,7 +324,10 @@ body {
 
 .nn-site-header { position: absolute; top: 0; left: 0; right: 0; z-index: 20; padding: 1.5rem 0; }
 .nn-nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+/* Logo + nút không được co (tránh bị nén méo khi thiếu chỗ / lúc zoom) */
+.nn-nav > * { flex-shrink: 0; }
 .nn-logo { font-family: var(--font-serif); font-size: 1.7rem; font-weight: 600; color: var(--color-cream); letter-spacing: .01em; line-height: 1; cursor: pointer; }
+.nn-logo img { max-width: none; }
 .nn-nav-pill { position: relative; display: flex; align-items: center; gap: .2rem; padding: .4rem .5rem; border-radius: 999px;
   background: rgba(255,255,255,.16); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255,255,255,.3); box-shadow: 0 8px 24px -12px rgba(0,0,0,.45); list-style: none; }
@@ -366,7 +371,9 @@ body {
   border-bottom: 1px solid rgba(212,197,185,.6); box-shadow: 0 10px 30px -20px rgba(0,0,0,.35); }
 .nn-mini.is-show { transform: translateY(0); }
 .nn-mini-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: .7rem; padding-bottom: .7rem; }
+.nn-mini-inner > * { flex-shrink: 0; }
 .nn-mini-logo { font-family: var(--font-serif); font-size: 1.35rem; font-weight: 600; color: #7a0c1f; cursor: pointer; }
+.nn-mini-logo img { max-width: none; }
 .nn-mini-pill { position: relative; display: flex; gap: .15rem; padding: .3rem .4rem; border-radius: 999px; background: rgba(122,12,31,.05); border: 1px solid rgba(212,197,185,.7); list-style: none; }
 .nn-mini-pill a { position: relative; z-index: 1; display: block; padding: .45rem .95rem; border-radius: 999px; font-size: .85rem; font-weight: 500; color: var(--color-ink); transition: color .25s; white-space: nowrap; }
 .nn-mini-pill a:hover { color: #7a0c1f; }
