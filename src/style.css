@@ -391,6 +391,16 @@ body {
   }
 }
 
+/* iOS Safari tự phóng to trang khi focus ô nhập có cỡ chữ < 16px. Ép 16px trên thiết bị
+   cảm ứng (điện thoại/tablet) để KHÔNG bị zoom khi bấm vào chat/checkout/đăng nhập... */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Chấm "đang gõ" trong khung chat */
 .chat-typing-dot {
   display: inline-block;
