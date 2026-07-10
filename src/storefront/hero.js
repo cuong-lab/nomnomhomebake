@@ -1,7 +1,8 @@
-// ── Hero Slideshow (+ quản lý ảnh hero cho admin) ──
+// ── Hero: ảnh nền full-bleed (crossfade ~20s) + quản lý ảnh cho admin ──
 // Export:
-//   - initHero():      gắn sự kiện (mũi tên, dots, modal quản lý ảnh) rồi tải lần đầu.
-//   - loadHeroSlides(): tải lại slideshow (auth handler gọi khi đổi trạng thái admin).
+//   - initHero():      gắn sự kiện quản lý ảnh rồi tải lần đầu.
+//   - loadHeroSlides(): tải lại ảnh nền (auth handler gọi khi đổi trạng thái admin).
+// Ảnh lấy từ bảng `hero_slides` — cô chủ vẫn thêm/xoá ảnh qua nút "Quản lý ảnh".
 
 import { supabase } from "../supabase.js";
 import { compressImage } from "../shared/imageUtils.js";
@@ -9,32 +10,32 @@ import { state } from "../store.js";
 
 const heroSlides = document.getElementById("hero-slides");
 const heroEditBtn = document.getElementById("hero-edit-btn");
-const heroPrev = document.getElementById("hero-prev");
-const heroNext = document.getElementById("hero-next");
 const heroDots = document.getElementById("hero-dots");
-const heroSlideshow = document.getElementById("hero-slideshow");
-let currentSlide = 0;
-let slideCount = 0;
-let autoplayTimer = null;
 
-function goToSlide(i) {
-  currentSlide = ((i % slideCount) + slideCount) % slideCount;
-  heroSlides.style.transform = `translateX(-${currentSlide * 100}%)`;
-  heroDots.querySelectorAll("button").forEach((dot, idx) => {
-    dot.classList.toggle("bg-ink", idx === currentSlide);
-    dot.classList.toggle("bg-ink/30", idx !== currentSlide);
-  });
+let heroLayers = [];
+let heroIndex = 0;
+let heroTimer = null;
+
+function updateHeroDots() {
+  if (!heroDots) return;
+  heroDots.querySelectorAll("[data-hero-dot]").forEach((b, idx) =>
+    b.classList.toggle("is-active", idx === heroIndex)
+  );
 }
 
-function startAutoplay() {
-  stopAutoplay();
-  if (slideCount > 1) {
-    autoplayTimer = setInterval(() => goToSlide(currentSlide + 1), 4000);
+function goToHeroSlide(i) {
+  if (heroLayers.length < 2) return;
+  heroLayers[heroIndex].style.opacity = "0";
+  heroIndex = ((i % heroLayers.length) + heroLayers.length) % heroLayers.length;
+  heroLayers[heroIndex].style.opacity = "1";
+  updateHeroDots();
+}
+
+function startHeroAutoplay() {
+  if (heroTimer) clearInterval(heroTimer);
+  if (heroLayers.length > 1) {
+    heroTimer = setInterval(() => goToHeroSlide(heroIndex + 1), 20000);
   }
-}
-
-function stopAutoplay() {
-  if (autoplayTimer) clearInterval(autoplayTimer);
 }
 
 export async function loadHeroSlides() {
@@ -44,53 +45,41 @@ export async function loadHeroSlides() {
     .order("sort_order", { ascending: true });
 
   const slides = data || [];
-  slideCount = slides.length;
-
   heroEditBtn.classList.toggle("hidden", !state.isAdmin);
 
+  if (heroTimer) { clearInterval(heroTimer); heroTimer = null; }
+  if (heroDots) heroDots.innerHTML = "";
+
   if (!slides.length) {
-    heroSlides.innerHTML = `<div class="flex h-full w-full shrink-0 items-center justify-center"><span class="font-serif text-xl italic text-ash">Ảnh sản phẩm</span></div>`;
-    heroPrev.classList.add("hidden");
-    heroNext.classList.add("hidden");
-    heroDots.classList.add("hidden");
-    stopAutoplay();
+    heroSlides.innerHTML = `<div class="flex h-full w-full items-center justify-center bg-earth/40"><span class="font-serif text-xl italic text-cream/70">Ảnh bìa</span></div>`;
     return;
   }
 
+  // Mỗi ảnh là 1 lớp phủ kín, chồng lên nhau; đổi ảnh bằng cách fade opacity.
   heroSlides.innerHTML = slides
-    .map((s) => `<div class="h-full w-full shrink-0"><img src="${s.image_url}" alt="" class="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.2]" /></div>`)
+    .map(
+      (s, i) =>
+        `<img src="${s.image_url}" alt="" class="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out" style="opacity:${i === 0 ? 1 : 0}" />`
+    )
     .join("");
 
-  if (slides.length > 1) {
-    heroPrev.classList.remove("hidden");
-    heroNext.classList.remove("hidden");
-    heroDots.classList.remove("hidden");
-    heroSlideshow.addEventListener("mouseenter", () => {
-      heroPrev.style.opacity = "1";
-      heroNext.style.opacity = "1";
-    });
-    heroSlideshow.addEventListener("mouseleave", () => {
-      heroPrev.style.opacity = "0";
-      heroNext.style.opacity = "0";
-    });
-    heroDots.innerHTML = slides
-      .map((_, i) => `<button class="h-2 w-2 rounded-full ${i === 0 ? "bg-ink" : "bg-ink/30"} transition-colors" aria-label="Slide ${i + 1}"></button>`)
+  heroLayers = Array.from(heroSlides.querySelectorAll("img"));
+  heroIndex = 0;
+
+  // Nhiều ảnh → chấm chọn ảnh + crossfade tự đổi mỗi 20 giây. 1 ảnh → tĩnh, không có chấm.
+  if (heroDots && heroLayers.length > 1) {
+    heroDots.innerHTML = heroLayers
+      .map((_, i) => `<button type="button" data-hero-dot="${i}" class="nn-hero-dot${i === 0 ? " is-active" : ""}" aria-label="Ảnh ${i + 1}"></button>`)
       .join("");
-    heroDots.querySelectorAll("button").forEach((dot, i) =>
-      dot.addEventListener("click", () => { goToSlide(i); startAutoplay(); })
+    heroDots.querySelectorAll("[data-hero-dot]").forEach((btn) =>
+      btn.addEventListener("click", () => { goToHeroSlide(parseInt(btn.dataset.heroDot)); startHeroAutoplay(); })
     );
-    startAutoplay();
-  } else {
-    heroPrev.classList.add("hidden");
-    heroNext.classList.add("hidden");
-    heroDots.classList.add("hidden");
   }
 
-  currentSlide = 0;
-  heroSlides.style.transform = "translateX(0)";
+  startHeroAutoplay();
 }
 
-// ── Hero Slides Admin ──
+// ── Quản lý ảnh hero (admin) ──
 
 const slidesModal = document.getElementById("slides-modal");
 const slidesList = document.getElementById("slides-list");
@@ -138,9 +127,6 @@ async function renderSlidesList() {
 }
 
 export function initHero() {
-  heroPrev.addEventListener("click", () => { goToSlide(currentSlide - 1); startAutoplay(); });
-  heroNext.addEventListener("click", () => { goToSlide(currentSlide + 1); startAutoplay(); });
-
   heroEditBtn.addEventListener("click", openSlidesModal);
   document.getElementById("slides-close").addEventListener("click", closeSlidesModal);
   slidesModal.addEventListener("click", (e) => { if (e.target === slidesModal) closeSlidesModal(); });

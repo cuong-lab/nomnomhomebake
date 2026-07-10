@@ -6,7 +6,6 @@ import { compressImage } from "./shared/imageUtils.js";
 import { state } from "./store.js";
 import { initReviews, loadReviews } from "./storefront/reviews.js";
 import { initHero, loadHeroSlides } from "./storefront/hero.js";
-import { initBanner, loadBanners } from "./storefront/banner.js";
 import { initChat, restartChatWatcher, startPresence, setChatAdminMode } from "./storefront/chat.js";
 
 const yearEl = document.querySelector("[data-year]");
@@ -25,6 +24,8 @@ function updateCartCount() {
   const total = cart.reduce((sum, item) => sum + item.qty, 0);
   document.getElementById("cart-count").textContent = `Giỏ hàng (${total})`;
   document.getElementById("cart-count-mobile").textContent = total;
+  const miniCount = document.getElementById("mini-cart-count");
+  if (miniCount) miniCount.textContent = `Giỏ hàng (${total})`;
   const fc = document.getElementById("floating-cart-count");
   if (fc) fc.textContent = total;
   const fb = document.getElementById("floating-cart");
@@ -579,7 +580,6 @@ supabase.auth.onAuthStateChange((_event, session) => {
   setChatAdminMode(state.isAdmin);
   loadProducts();
   loadHeroSlides();
-  loadBanners();
   loadContactSettings();
   loadReviews();
 });
@@ -595,18 +595,18 @@ const priceFilter = document.getElementById("price-filter");
 
 function renderProductCard(p) {
   return `
-    <article class="group relative flex w-full flex-col overflow-hidden rounded-2xl border border-earth/50 bg-cream/70 p-2 shadow-[0_3px_14px_-6px_rgba(10,10,10,0.18)] transition-all duration-300 hover:-translate-y-1 hover:border-earth hover:shadow-[0_16px_30px_-10px_rgba(10,10,10,0.28)] sm:p-3">
-      <div data-detail="${p.id}" class="aspect-square overflow-hidden rounded-xl bg-earth/30 cursor-pointer relative">
+    <article class="group relative flex w-full flex-col overflow-hidden rounded-2xl border border-earth/50 bg-cream/70 shadow-[0_3px_14px_-6px_rgba(10,10,10,0.18)] transition-all duration-300 hover:-translate-y-1 hover:border-earth hover:shadow-[0_16px_30px_-10px_rgba(10,10,10,0.28)]">
+      <div data-detail="${p.id}" class="aspect-square overflow-hidden bg-earth/30 cursor-pointer relative">
         ${
           p.image_url
             ? `<img src="${p.image_url}" alt="${p.name}" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />`
             : `<div class="flex h-full items-center justify-center"><span class="font-serif text-lg italic text-ash">nomnom</span></div>`
         }
-        ${p.badge === "bestseller" ? `<span class="absolute top-2 left-2 bg-[#f39c12] px-2 py-0.5 text-[10px] font-medium text-white rounded-full">Bán chạy</span>` : ""}
-        ${p.badge === "new" ? `<span class="absolute top-2 left-2 bg-[#34C759] px-2 py-0.5 text-[10px] font-medium text-white rounded-full">Mới</span>` : ""}
-        ${p.badge === "soldout" ? `<span class="absolute top-2 left-2 bg-ink px-2 py-0.5 text-[10px] font-medium text-white rounded-full">Hết hàng</span>` : ""}
+        ${p.badge === "bestseller" ? `<span class="absolute top-3 left-3 bg-[#f39c12] px-3 py-0.5 text-[15px] font-semibold text-white rounded-full">Bán chạy</span>` : ""}
+        ${p.badge === "new" ? `<span class="absolute top-3 left-3 bg-[#34C759] px-3 py-0.5 text-[15px] font-semibold text-white rounded-full">Mới</span>` : ""}
+        ${p.badge === "soldout" ? `<span class="absolute top-3 left-3 bg-ink px-3 py-0.5 text-[15px] font-semibold text-white rounded-full">Hết hàng</span>` : ""}
       </div>
-      <div class="mt-2 sm:mt-3 flex flex-col flex-1 px-1">
+      <div class="flex flex-col flex-1 p-3 sm:p-4">
         <h3 data-detail="${p.id}" class="font-serif text-xs sm:text-lg text-ink cursor-pointer hover:text-ash transition-colors line-clamp-2">${p.name}</h3>
         ${p.description ? `<p class="mt-0.5 sm:mt-1 text-[10px] sm:text-sm text-ash line-clamp-2">${p.description}</p>` : ""}
         <div class="mt-auto pt-1 sm:pt-2">
@@ -624,7 +624,7 @@ function renderProductCard(p) {
       </div>
       ${
         state.isAdmin
-          ? `<div class="mt-3 flex gap-2">
+          ? `<div class="flex gap-2 px-3 pb-3 sm:px-4">
               <button data-edit="${p.id}" class="text-xs text-ash hover:text-ink transition-colors">Sửa</button>
               <button data-delete="${p.id}" class="text-xs text-red-500 hover:text-red-700 transition-colors">Xóa</button>
             </div>`
@@ -1051,7 +1051,7 @@ async function deleteProduct(id) {
 
 // ── Hero Slideshow + Hero Slides Admin → đã tách sang src/storefront/hero.js (initHero / loadHeroSlides) ──
 
-// ── Banner Slideshow + Banner Admin → đã tách sang src/storefront/banner.js (initBanner / loadBanners) ──
+// ── Banner ngang đã gỡ khỏi trang (thay bằng hero full-bleed + marquee). Bảng `banners` ngưng dùng. ──
 
 // ── Contact Buttons ──
 
@@ -1063,14 +1063,17 @@ const contactError = document.getElementById("contact-error");
 function updateLogo(data) {
   const headerLogo = document.getElementById("logo");
   const footerLogo = document.getElementById("footer-logo");
+  const miniLogo = document.getElementById("mini-logo");
   const logoNames = document.querySelectorAll(".logo-name");
 
   if (data.logo_image_url) {
     headerLogo.innerHTML = `<img src="${data.logo_image_url}" alt="Logo" class="h-[50px] md:h-[60px] w-auto" />`;
     footerLogo.innerHTML = `<img src="${data.logo_image_url}" alt="Logo" class="h-8 w-auto" />`;
+    if (miniLogo) miniLogo.innerHTML = `<img src="${data.logo_image_url}" alt="Logo" class="h-9 w-auto" />`;
   } else {
     headerLogo.textContent = data.logo_text || "nomnom";
     footerLogo.textContent = data.logo_text || "nomnom";
+    if (miniLogo) miniLogo.textContent = data.logo_text || "nomnom";
   }
 
   const name = data.logo_text || "nomnom";
@@ -1110,10 +1113,26 @@ const editableFields = [
   { id: "custom-text", col: "custom_text" },
 ];
 
+// Tiêu đề hero — cô chủ tự quyết định bằng ký tự gõ tay (gõ ngay trên 1 dòng):
+//   /      → XUỐNG DÒNG   (vd "Ngọt ngào / trong từng ...")
+//   *chữ*  → tô CHỮ VÀNG italic (vd "từng *lát cắt.*")
+// Khách xem: render đẹp theo dấu. Admin: hiện chữ THÔ (còn dấu / và *) để sửa/lưu đúng dấu.
+function renderHeroTitle(raw) {
+  return escapeHtml(raw)
+    .replace(/\s*\/\s*/g, "<br>")
+    .replace(/\*([^*]+)\*/g, '<span class="hero-accent">$1</span>')
+    .replace(/\n/g, "<br>");
+}
+
 function updateHeroContent(data) {
   editableFields.forEach(({ id, col }) => {
     const el = document.getElementById(id);
-    if (data[col]) el.textContent = data[col];
+    if (!data[col]) return;
+    if (id === "hero-title" && !state.isAdmin) {
+      el.innerHTML = renderHeroTitle(data[col]);
+    } else {
+      el.textContent = data[col];
+    }
   });
 
   if (state.isAdmin) {
@@ -1145,55 +1164,31 @@ async function saveField(column, value) {
   }
 }
 
-// Upload 1 file cho khung hero: ảnh thì nén, video thì giữ nguyên. Trả về { url, type }.
-async function uploadHeroSide(file, prefix) {
-  const isVideo = file.type.startsWith("video/");
-  const toUpload = isVideo ? file : await compressImage(file);
-  const ext = isVideo ? (file.name.split(".").pop() || "mp4") : toUpload.name.split(".").pop();
-  const fileName = `${prefix}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage
-    .from("product-images")
-    .upload(fileName, toUpload, isVideo ? { contentType: file.type } : undefined);
-  if (error) throw error;
-  const { data } = supabase.storage.from("product-images").getPublicUrl(fileName);
-  return { url: data.publicUrl, type: isVideo ? "video" : "image" };
-}
-
-// Điền 1 khung hero (trái/phải) bằng ảnh hoặc video tùy loại đã lưu.
-function renderHeroSide(containerId, url, type) {
-  const el = document.getElementById(containerId);
+// Marquee dưới hero: khách xem thì chạy vô hạn; admin thì DỪNG + thành 1 dòng sửa trực tiếp
+// (gõ các cụm cách nhau bằng ✦). Lưu vào cột site_settings.marquee_text.
+const MARQUEE_DEFAULT = "Thủ công ✦ Mẻ nhỏ ✦ Tươi mỗi ngày ✦ Nguyên liệu thật ✦ Bơ thật ✦ Làm bằng tâm ✦";
+function renderMarquee(text) {
+  const el = document.getElementById("marquee");
   if (!el) return;
-  if (!url) {
-    el.innerHTML = "";
-    el.classList.remove("hero-side-visible");
-    return;
-  }
-  if (type === "video") {
-    el.innerHTML = `<video class="h-full w-full object-cover" src="${url}" autoplay muted loop playsinline></video>`;
+  const raw = (text && text.trim()) || MARQUEE_DEFAULT;
+
+  if (state.isAdmin) {
+    el.innerHTML = `<div id="marquee-edit" class="nn-marquee-edit" contenteditable="true" spellcheck="false" title="Gõ các cụm cách nhau bằng dấu ✦">${escapeHtml(raw)}</div>`;
+    const edit = document.getElementById("marquee-edit");
+    edit.addEventListener("blur", () => saveField("marquee_text", edit.textContent.trim()));
   } else {
-    el.innerHTML = `<img class="h-full w-full object-cover" src="${url}" alt="" />`;
+    const group = `<span class="nn-marquee-group"><span class="nn-marquee-item">${escapeHtml(raw).replace(/✦/g, "<i>✦</i>")}</span></span>`;
+    el.innerHTML = `<div class="nn-marquee-track">${group}${group.replace('class="nn-marquee-group"', 'class="nn-marquee-group" aria-hidden="true"')}</div>`;
   }
-  el.classList.add("hero-side-visible");
 }
 
 async function loadContactSettings() {
   const { data } = await supabase.from("site_settings").select("*").single();
   if (!data) return;
+  renderMarquee(data.marquee_text);
 
   updateLogo(data);
   updateHeroContent(data);
-
-  // Hero 2 bên: mỗi bên có thể là ảnh HOẶC video. Ưu tiên cột mới (hero_left/right_url + type);
-  // nếu chưa có thì lấy dữ liệu cũ (hero_video_url = trái/video, hero_side_image_url = phải/ảnh)
-  // để không mất nội dung đã cài trước đây.
-  const leftUrl = data.hero_left_url || data.hero_video_url || "";
-  const leftType = data.hero_left_type || (data.hero_video_url ? "video" : "");
-  const rightUrl = data.hero_right_url || data.hero_side_image_url || "";
-  const rightType = data.hero_right_type || (data.hero_side_image_url ? "image" : "");
-  renderHeroSide("hero-left", leftUrl, leftType);
-  renderHeroSide("hero-right", rightUrl, rightType);
-  document.getElementById("hero-left-edit").classList.toggle("hidden", !state.isAdmin);
-  document.getElementById("hero-right-edit").classList.toggle("hidden", !state.isAdmin);
 
   const aboutImg = document.getElementById("about-image");
   const aboutPlaceholder = document.getElementById("about-image-placeholder");
@@ -1305,12 +1300,6 @@ async function loadContactSettings() {
   dTime.textContent = data.delivery_time ? `Thời gian: ${data.delivery_time}` : "";
 }
 
-document.getElementById("hero-left-edit").addEventListener("click", () => {
-  contactEditBtn.click();
-});
-document.getElementById("hero-right-edit").addEventListener("click", () => {
-  contactEditBtn.click();
-});
 document.getElementById("about-image-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
@@ -1367,8 +1356,6 @@ contactForm.addEventListener("submit", async (e) => {
   const logoFile = contactForm.elements.logo_image.files[0];
 
   let logo_image_url = undefined;
-  let heroLeft = null; // { url, type } bên trái
-  let heroRight = null; // { url, type } bên phải
 
   if (logoFile) {
     const logoC = await compressImage(logoFile);
@@ -1386,17 +1373,6 @@ contactForm.addEventListener("submit", async (e) => {
 
     const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
     logo_image_url = urlData.publicUrl;
-  }
-
-  try {
-    const leftFile = contactForm.elements.hero_left.files[0];
-    const rightFile = contactForm.elements.hero_right.files[0];
-    if (leftFile) heroLeft = await uploadHeroSide(leftFile, "hero-left");
-    if (rightFile) heroRight = await uploadHeroSide(rightFile, "hero-right");
-  } catch (heroErr) {
-    contactError.textContent = "Lỗi upload hero: " + heroErr.message;
-    contactError.classList.remove("hidden");
-    return;
   }
 
   let about_image_url = undefined;
@@ -1454,14 +1430,6 @@ contactForm.addEventListener("submit", async (e) => {
     reward_percent: form.get("reward_percent") ? parseInt(form.get("reward_percent")) : null,
   };
   if (logo_image_url) row.logo_image_url = logo_image_url;
-  if (heroLeft) {
-    row.hero_left_url = heroLeft.url;
-    row.hero_left_type = heroLeft.type;
-  }
-  if (heroRight) {
-    row.hero_right_url = heroRight.url;
-    row.hero_right_type = heroRight.type;
-  }
   if (about_image_url) row.about_image_url = about_image_url;
   if (custom_image_url) row.custom_image_url = custom_image_url;
 
@@ -1831,21 +1799,91 @@ function updateAccountLabel() {
 function updateLoyaltyHint() {
   const hint = document.getElementById("hero-loyalty-hint");
   if (!hint) return;
-  const dismissed = localStorage.getItem("nomnom_hide_loyalty_hint") === "1";
-  const show = !state.currentCustomer && !dismissed;
+  // Luôn hiện với khách chưa đăng nhập (không cho tắt) — ẩn khi đã đăng nhập.
+  const show = !state.currentCustomer;
   hint.classList.toggle("hidden", !show);
-  hint.classList.toggle("flex", show);
   if (show) {
     document.getElementById("hero-loyalty-cycle").textContent = state.rewardConfig.cycle;
     document.getElementById("hero-loyalty-percent").textContent = `${state.rewardConfig.percent}%`;
   }
 }
 
-document.getElementById("hero-loyalty-close")?.addEventListener("click", () => {
-  localStorage.setItem("nomnom_hide_loyalty_hint", "1");
-  updateLoyaltyHint();
-});
 document.getElementById("hero-loyalty-login")?.addEventListener("click", openCustomerModal);
+
+// Scroll-spy: tự sáng mục nav đúng phần đang xem, và con trượt nền trượt mượt tới mục đó.
+function initNavSpy() {
+  // Theo đúng thứ tự XUẤT HIỆN trên trang (reviews nằm trước contact ở footer).
+  const ids = ["products", "custom-order", "reviews", "contact"];
+  const pills = [...document.querySelectorAll(".nn-nav-pill, .nn-mini-pill")];
+  const links = [...document.querySelectorAll(".nn-nav-pill a, .nn-mini-pill a")];
+  if (!links.length) return;
+
+  // Tạo con trượt (indicator) trong mỗi pill nếu chưa có.
+  pills.forEach((pill) => {
+    if (!pill.querySelector(".nn-nav-ind")) {
+      const ind = document.createElement("span");
+      ind.className = "nn-nav-ind";
+      ind.setAttribute("aria-hidden", "true");
+      pill.prepend(ind);
+    }
+  });
+
+  const moveIndicators = () => {
+    pills.forEach((pill) => {
+      const ind = pill.querySelector(".nn-nav-ind");
+      const active = pill.querySelector("a.is-active");
+      if (!ind) return;
+      if (!active || !active.offsetWidth) { ind.style.opacity = "0"; return; }
+      ind.style.opacity = "1";
+      ind.style.width = `${active.offsetWidth}px`;
+      ind.style.height = `${active.offsetHeight}px`;
+      ind.style.transform = `translate(${active.offsetLeft}px, ${active.offsetTop}px)`;
+    });
+    // Bật transition SAU lần đặt vị trí đầu để không bị trượt từ góc lúc mới tải.
+    requestAnimationFrame(() => pills.forEach((p) => p.querySelector(".nn-nav-ind")?.classList.add("is-ready")));
+  };
+
+  const onScroll = () => {
+    let current = ids[0];
+    // Cuộn chạm (gần) đáy trang → sáng mục cuối (Liên hệ), vì contact nằm sát đáy nên
+    // không thể kéo lên đủ mốc; nếu không, quét bình thường theo thứ tự trang.
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+      current = ids[ids.length - 1];
+    } else {
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= 140) current = id;
+      }
+    }
+    links.forEach((a) => a.classList.toggle("is-active", a.getAttribute("href") === `#${current}`));
+    moveIndicators();
+  };
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", moveIndicators, { passive: true });
+  onScroll();
+  window.addEventListener("load", moveIndicators);
+  setTimeout(moveIndicators, 350);
+}
+
+// Thanh nav gọn: hiện khi cuộn qua hero (chỉ desktop ≥1024px). Nút gọi lại đúng hàm cũ.
+function initMiniNav() {
+  const miniNav = document.getElementById("mini-nav");
+  const heroSection = document.querySelector("main > section");
+  if (!miniNav || !heroSection) return;
+  const desktop = window.matchMedia("(min-width:821px)");
+  const onScroll = () => {
+    const past = heroSection.getBoundingClientRect().bottom < 40;
+    miniNav.classList.toggle("is-show", desktop.matches && past);
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  desktop.addEventListener("change", onScroll);
+  onScroll();
+
+  document.getElementById("mini-account-btn")?.addEventListener("click", openCustomerModal);
+  document.getElementById("mini-cart-btn")?.addEventListener("click", openCart);
+  document.getElementById("mini-logo")?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+}
 
 function renderCustomerPanel() {
   const c = state.currentCustomer;
@@ -2115,6 +2153,7 @@ if (state.currentCustomer) syncCartWithAccount(state.currentCustomer);
 initChat();
 loadProducts();
 initHero();
-initBanner();
 loadContactSettings();
 initReviews();
+initMiniNav();
+initNavSpy();

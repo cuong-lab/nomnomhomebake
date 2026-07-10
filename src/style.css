@@ -236,18 +236,146 @@ body {
   }
 }
 
-/* Hero side elements — mặc định ẩn, chỉ hiện trên desktop rộng hơn max-w-6xl */
-.hero-side {
-  display: none !important;
+/* Mũi tên → cuối nút "Khám phá menu" — dùng ::after để không bị mất khi admin sửa chữ nút */
+#hero-cta::after {
+  content: "\2192";
+  font-weight: 400;
 }
-.hero-side.hero-side-visible {
-  display: none !important;
+
+/* Chữ nhấn vàng italic trong tiêu đề hero (bọc từ trong dấu * khi sửa: *lát cắt.*) */
+.hero-accent {
+  font-style: italic;
+  background: linear-gradient(180deg, #f6dd8e, #d8ab50 55%, #a1702a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
-@media (min-width: 72rem) {
-  .hero-side.hero-side-visible {
-    display: block !important;
+
+/* Marquee dưới hero — dải chữ chạy vô hạn (nhân đôi nội dung cho liền mạch) */
+.nn-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: nn-marquee 32s linear infinite;
+}
+.nn-marquee:hover .nn-marquee-track {
+  animation-play-state: paused;
+}
+.nn-marquee-group {
+  display: flex;
+  flex-shrink: 0;
+}
+.nn-marquee-item {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  padding: 0.9rem 1.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(253, 251, 247, 0.82);
+  white-space: nowrap;
+}
+.nn-marquee-item i {
+  color: #d8ab50;
+  font-style: normal;
+  font-size: 0.56rem;
+}
+/* Dòng sửa marquee cho admin (không chạy, gõ trực tiếp) */
+.nn-marquee-edit {
+  padding: 0.9rem 1.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(253, 251, 247, 0.82);
+  outline: none;
+}
+.nn-marquee-edit:focus {
+  color: #fff;
+}
+@keyframes nn-marquee {
+  to {
+    transform: translateX(-50%);
   }
 }
+
+/* ===== Header + Hero — port 1:1 từ demo-hero.html ===== */
+/* Full-width + lề 2 bên co giãn (màn 16:9 rộng → ~100px sát trái; màn hẹp → lề nhỏ tự cắt đẹp).
+   Dùng cho header, hero, mini-nav để logo + hero text luôn gần lề trái. */
+.nn-wrap { width: 100%; padding: 0 clamp(1.25rem, 5.2vw, 6.5rem); }
+
+/* Full-width, cao theo 19:10 (52.6vw) nhưng không quá 82vh và không dưới 32rem.
+   Dùng height trực tiếp thay cho aspect-ratio để KHÔNG bị co hẹp chiều rộng khi cap chiều cao. */
+.nn-hero { position: relative; display: flex; align-items: flex-end; height: clamp(32rem, 52.6vw, 82vh);
+  overflow: hidden; background: var(--color-earth); }
+
+/* Chấm chọn ảnh hero (góc dưới phải) */
+.nn-hero-dots { position: absolute; bottom: 1.4rem; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; gap: .5rem; }
+.nn-hero-dot { width: .55rem; height: .55rem; border: none; border-radius: 999px; background: rgba(253,251,247,.45); cursor: pointer; transition: width .25s, background .25s; padding: 0; }
+.nn-hero-dot:hover { background: rgba(253,251,247,.75); }
+.nn-hero-dot.is-active { width: 1.5rem; background: var(--color-cream); }
+.nn-hero-overlay { position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(10,10,10,.55) 0%, rgba(10,10,10,.12) 20%, rgba(10,10,10,0) 45%, rgba(10,10,10,.68) 100%),
+    linear-gradient(90deg, rgba(10,10,10,.5) 0%, rgba(10,10,10,.1) 65%, rgba(10,10,10,0) 100%); }
+
+.nn-site-header { position: absolute; top: 0; left: 0; right: 0; z-index: 20; padding: 1.5rem 0; }
+.nn-nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.nn-logo { font-family: var(--font-serif); font-size: 1.7rem; font-weight: 600; color: var(--color-cream); letter-spacing: .01em; line-height: 1; cursor: pointer; }
+.nn-nav-pill { position: relative; display: flex; align-items: center; gap: .2rem; padding: .4rem .5rem; border-radius: 999px;
+  background: rgba(255,255,255,.16); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,.3); box-shadow: 0 8px 24px -12px rgba(0,0,0,.45); list-style: none; }
+.nn-nav-pill a { position: relative; z-index: 1; display: block; padding: .55rem 1.05rem; border-radius: 999px; font-size: .88rem; font-weight: 500; color: var(--color-cream);
+  white-space: nowrap; transition: color .25s; }
+.nn-nav-pill a:hover { color: #fff; }
+.nn-nav-pill a.is-active { color: #fff; }
+
+/* Con trượt nền active — trượt mượt giữa các mục thay vì nhảy cứng */
+.nn-nav-ind { position: absolute; top: 0; left: 0; z-index: 0; border-radius: 999px; opacity: 0; pointer-events: none; transition: none; }
+.nn-nav-ind.is-ready { transition: transform .38s cubic-bezier(.22,1,.36,1), width .38s cubic-bezier(.22,1,.36,1), opacity .2s; }
+.nn-nav-pill .nn-nav-ind { background: rgba(253,251,247,.28); }
+.nn-mini-pill .nn-nav-ind { background: #7a0c1f; }
+.nn-actions { display: flex; align-items: center; gap: .35rem; }
+.nn-action { display: inline-flex; align-items: center; gap: .45rem; padding: .55rem .85rem; border-radius: 999px;
+  color: var(--color-cream); font-size: .88rem; font-weight: 500; white-space: nowrap; transition: background .2s; cursor: pointer; }
+.nn-action:hover { background: rgba(253,251,247,.14); }
+.nn-action.is-cart { background: rgba(255,255,255,.12); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.22); }
+
+.nn-hero-inner { position: relative; z-index: 10; padding: 6.5rem 0 3.75rem; max-width: 42rem; color: var(--color-cream); }
+.nn-eyebrow { font-size: .72rem; font-weight: 600; letter-spacing: .28em; text-transform: uppercase; color: rgba(253,251,247,.75); margin-bottom: .9rem; }
+.nn-hero-title { font-family: var(--font-serif); font-weight: 600; font-size: clamp(2.4rem, 5.4vw, 4rem); line-height: 1.03; letter-spacing: -.01em; color: var(--color-cream); }
+.nn-lead { margin-top: 1.25rem; max-width: 31rem; font-size: 1rem; line-height: 1.6; color: rgba(253,251,247,.9); }
+.nn-rating { margin-top: 1.15rem; align-items: center; gap: .5rem; font-size: .9rem; color: rgba(253,251,247,.85); }
+.nn-rating .nn-stars { color: #d8ab50; letter-spacing: .05em; }
+.nn-cta-row { margin-top: 2rem; display: flex; flex-wrap: wrap; gap: .85rem; }
+.nn-btn { display: inline-flex; align-items: center; gap: .5rem; border-radius: 999px; padding: .95rem 1.85rem; font-size: .9rem; font-weight: 600; transition: .25s; cursor: pointer; border: 1px solid transparent; }
+.nn-btn-primary { background: #7a0c1f; color: var(--color-cream); }
+.nn-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -12px rgba(122,12,31,.7); }
+.nn-btn-ghost { border-color: rgba(253,251,247,.6); color: var(--color-cream); background: rgba(253,251,247,.06); }
+.nn-btn-ghost:hover { background: rgba(253,251,247,.16); }
+.nn-hero-manage { position: absolute; top: 1.4rem; right: 1.5rem; z-index: 20; }
+
+@media (max-width: 680px) { .nn-nav-pill { display: none; } }
+@media (max-width: 820px) { .nn-hero-inner { padding: 5.5rem 0 2.5rem; } }
+
+/* Thanh nav gọn (mini-nav) */
+.nn-mini { position: fixed; top: 0; left: 0; right: 0; z-index: 40; transform: translateY(-105%);
+  transition: transform .35s cubic-bezier(.22,1,.36,1);
+  background: rgba(253,251,247,.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(212,197,185,.6); box-shadow: 0 10px 30px -20px rgba(0,0,0,.35); }
+.nn-mini.is-show { transform: translateY(0); }
+.nn-mini-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: .7rem; padding-bottom: .7rem; }
+.nn-mini-logo { font-family: var(--font-serif); font-size: 1.35rem; font-weight: 600; color: #7a0c1f; cursor: pointer; }
+.nn-mini-pill { position: relative; display: flex; gap: .15rem; padding: .3rem .4rem; border-radius: 999px; background: rgba(122,12,31,.05); border: 1px solid rgba(212,197,185,.7); list-style: none; }
+.nn-mini-pill a { position: relative; z-index: 1; display: block; padding: .45rem .95rem; border-radius: 999px; font-size: .85rem; font-weight: 500; color: var(--color-ink); transition: color .25s; white-space: nowrap; }
+.nn-mini-pill a:hover { color: #7a0c1f; }
+.nn-mini-pill a.is-active { color: var(--color-cream); }
+.nn-mini-actions { display: flex; align-items: center; gap: .3rem; }
+.nn-mini-action { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem .8rem; border-radius: 999px; color: var(--color-ink); font-size: .85rem; font-weight: 500; white-space: nowrap; transition: .2s; cursor: pointer; }
+.nn-mini-action:hover { background: rgba(122,12,31,.08); }
+.nn-mini-action.is-cart { background: rgba(122,12,31,.05); border: 1px solid rgba(212,197,185,.7); }
+@media (max-width: 820px) { .nn-mini { display: none; } }
 
 /* Touch feedback on mobile */
 @media (hover: none) {
