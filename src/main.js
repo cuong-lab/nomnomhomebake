@@ -1624,6 +1624,7 @@ async function loadContactSettings() {
     cycle: parseInt(data.reward_cycle_orders) || 10,
     percent: parseInt(data.reward_percent) || 20,
   };
+  updateLoyaltyHint();
   if (currentCustomer) refreshCustomerData();
 
   const dFee = document.getElementById("delivery-fee");
@@ -1832,6 +1833,43 @@ function renderStars(n) {
   return "★".repeat(n) + "☆".repeat(5 - n);
 }
 
+// Điểm trung bình + số lượng để làm social proof ở hero và đầu mục Reviews.
+function reviewSummary(reviews) {
+  const rated = reviews.filter((r) => Number(r.rating) > 0);
+  if (!rated.length) return { avg: 0, count: 0 };
+  const avg = rated.reduce((sum, r) => sum + Number(r.rating), 0) / rated.length;
+  return { avg, count: rated.length };
+}
+
+function renderReviewSummary(reviews) {
+  const { avg, count } = reviewSummary(reviews);
+  const heroBox = document.getElementById("hero-social-proof");
+  const summaryBox = document.getElementById("review-summary");
+  if (!count) {
+    heroBox?.classList.add("hidden");
+    heroBox?.classList.remove("inline-flex");
+    summaryBox?.classList.add("hidden");
+    summaryBox?.classList.remove("flex");
+    return;
+  }
+  const avgText = avg.toFixed(1);
+  const rounded = Math.round(avg);
+
+  if (heroBox) {
+    document.getElementById("hero-rating-value").textContent = avgText;
+    document.getElementById("hero-rating-count").textContent = count;
+    heroBox.classList.remove("hidden");
+    heroBox.classList.add("inline-flex");
+  }
+  if (summaryBox) {
+    document.getElementById("review-summary-avg").textContent = avgText;
+    document.getElementById("review-summary-stars").textContent = renderStars(rounded);
+    document.getElementById("review-summary-count").textContent = `${count} đánh giá`;
+    summaryBox.classList.remove("hidden");
+    summaryBox.classList.add("flex");
+  }
+}
+
 function formatReviewDate(iso) {
   const d = new Date(iso);
   const now = new Date();
@@ -1843,6 +1881,7 @@ function formatReviewDate(iso) {
 }
 
 function renderReviews(reviews) {
+  renderReviewSummary(reviews);
   if (!reviews.length) {
     reviewList.innerHTML = `<p class="text-sm text-ash">Chưa có đánh giá nào. Hãy là người đầu tiên!</p>`;
     return;
@@ -2280,7 +2319,29 @@ function updateAccountLabel() {
   } else {
     label.textContent = "Đăng nhập";
   }
+  updateLoyaltyHint();
 }
+
+// Ribbon ở hero mời khách chưa đăng nhập tham gia tích điểm. Ẩn khi đã đăng nhập
+// hoặc khi khách tự đóng (nhớ qua localStorage để không phiền lại).
+function updateLoyaltyHint() {
+  const hint = document.getElementById("hero-loyalty-hint");
+  if (!hint) return;
+  const dismissed = localStorage.getItem("nomnom_hide_loyalty_hint") === "1";
+  const show = !currentCustomer && !dismissed;
+  hint.classList.toggle("hidden", !show);
+  hint.classList.toggle("flex", show);
+  if (show) {
+    document.getElementById("hero-loyalty-cycle").textContent = rewardConfig.cycle;
+    document.getElementById("hero-loyalty-percent").textContent = `${rewardConfig.percent}%`;
+  }
+}
+
+document.getElementById("hero-loyalty-close")?.addEventListener("click", () => {
+  localStorage.setItem("nomnom_hide_loyalty_hint", "1");
+  updateLoyaltyHint();
+});
+document.getElementById("hero-loyalty-login")?.addEventListener("click", openCustomerModal);
 
 function renderCustomerPanel() {
   const c = currentCustomer;
