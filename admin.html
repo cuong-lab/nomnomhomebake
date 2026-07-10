@@ -135,6 +135,7 @@
               <article class="admin-stat-card">
                 <p class="admin-stat-label">Doanh thu hôm nay</p>
                 <p id="metric-revenue-today" class="admin-stat-value">0 đ</p>
+                <p id="metric-revenue-delta" class="admin-stat-delta is-flat"></p>
                 <p id="metric-revenue-note" class="admin-stat-note">Đơn đã thanh toán và đã giao</p>
               </article>
    
@@ -156,7 +157,33 @@
               </article>
             </div>
 
-            <div class="mt-6 grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+            <div class="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+              <section class="admin-panel">
+                <div class="admin-panel-head">
+                  <div>
+                    <h2 class="admin-panel-title">Doanh thu 7 ngày</h2>
+                    <p class="admin-panel-subtitle">Tổng đơn đã thanh toán / đã giao theo từng ngày.</p>
+                  </div>
+                  <div class="text-right">
+                    <p id="overview-revenue-total" class="font-serif text-2xl text-ink">0 đ</p>
+                    <p class="text-xs text-ash">7 ngày qua</p>
+                  </div>
+                </div>
+                <div id="overview-revenue-chart" class="mt-5"></div>
+              </section>
+
+              <section class="admin-panel">
+                <div class="admin-panel-head">
+                  <div>
+                    <h2 class="admin-panel-title">Bán chạy 7 ngày</h2>
+                    <p class="admin-panel-subtitle">Món được đặt nhiều nhất — biết nên nướng gì.</p>
+                  </div>
+                </div>
+                <div id="overview-top-sellers" class="mt-5 space-y-3.5"></div>
+              </section>
+            </div>
+
+            <div class="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
               <section class="admin-panel">
                 <div class="admin-panel-head">
                   <div>
