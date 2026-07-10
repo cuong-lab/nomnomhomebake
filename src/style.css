@@ -294,6 +294,14 @@ body {
 .nn-marquee-edit:focus {
   color: #fff;
 }
+
+/* Lưới sản phẩm (carousel 3 ô/hàng): mobile khe hẹp 8px → ô to & vuông hơn; desktop 16px như cũ */
+.pcar-track { gap: 0.5rem; }
+.pcar-cell { width: calc((100% - 1rem) / 3); }
+@media (min-width: 640px) {
+  .pcar-track { gap: 1rem; }
+  .pcar-cell { width: calc((100% - 2rem) / 3); }
+}
 @keyframes nn-marquee {
   to {
     transform: translateX(-50%);

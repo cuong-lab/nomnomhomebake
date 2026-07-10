@@ -602,9 +602,9 @@ function renderProductCard(p) {
             ? `<img src="${p.image_url}" alt="${p.name}" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />`
             : `<div class="flex h-full items-center justify-center"><span class="font-serif text-lg italic text-ash">nomnom</span></div>`
         }
-        ${p.badge === "bestseller" ? `<span class="absolute top-3 left-3 bg-[#f39c12] px-3 py-0.5 text-[15px] font-semibold text-white rounded-full">Bán chạy</span>` : ""}
-        ${p.badge === "new" ? `<span class="absolute top-3 left-3 bg-[#34C759] px-3 py-0.5 text-[15px] font-semibold text-white rounded-full">Mới</span>` : ""}
-        ${p.badge === "soldout" ? `<span class="absolute top-3 left-3 bg-ink px-3 py-0.5 text-[15px] font-semibold text-white rounded-full">Hết hàng</span>` : ""}
+        ${p.badge === "bestseller" ? `<span class="absolute top-2 left-2 sm:top-3 sm:left-3 bg-[#f39c12] px-2 py-0.5 text-[10px] font-semibold text-white rounded-full sm:px-3 sm:text-[15px]">Bán chạy</span>` : ""}
+        ${p.badge === "new" ? `<span class="absolute top-2 left-2 sm:top-3 sm:left-3 bg-[#34C759] px-2 py-0.5 text-[10px] font-semibold text-white rounded-full sm:px-3 sm:text-[15px]">Mới</span>` : ""}
+        ${p.badge === "soldout" ? `<span class="absolute top-2 left-2 sm:top-3 sm:left-3 bg-ink px-2 py-0.5 text-[10px] font-semibold text-white rounded-full sm:px-3 sm:text-[15px]">Hết hàng</span>` : ""}
       </div>
       <div class="flex flex-col flex-1 p-3 sm:p-4">
         <h3 data-detail="${p.id}" class="font-serif text-xs sm:text-lg text-ink cursor-pointer hover:text-ash transition-colors line-clamp-2">${p.name}</h3>
@@ -654,19 +654,19 @@ function renderProducts() {
   // Ô chứa là flex container để card con tự kéo giãn cao bằng nhau (align-items:stretch),
   // không dựa vào height:100% (dễ bị bỏ qua khi track cao auto → card cao thấp lệch nhau).
   const cell = (inner) =>
-    `<div class="snap-start shrink-0 flex" style="width:calc((100% - 2rem)/3)">${inner}</div>`;
+    `<div class="pcar-cell snap-start shrink-0 flex">${inner}</div>`;
 
   const carousel = (cellsHtml, showArrows) => {
     const trackId = `pcar-${Math.random().toString(36).slice(2, 8)}`;
     const arrowBtn = (dir, sym) =>
       `<button data-car-${dir}="${trackId}" aria-label="${dir === "prev" ? "Xem trước" : "Xem tiếp"}"
-        class="absolute ${dir === "prev" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"} top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-earth bg-white text-ink shadow-md hover:bg-earth/20 active:scale-95 transition">
+        class="absolute ${dir === "prev" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"} top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-earth bg-white text-ink shadow-md hover:bg-earth/20 active:scale-95 transition sm:flex">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${dir === "prev" ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"}"/></svg>
       </button>`;
     return `
       <div class="relative mt-6">
         ${showArrows ? arrowBtn("prev") : ""}
-        <div id="${trackId}" class="pcar-track flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth">
+        <div id="${trackId}" class="pcar-track flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth">
           ${cellsHtml}
         </div>
         ${showArrows ? arrowBtn("next") : ""}
