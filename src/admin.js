@@ -209,8 +209,11 @@ async function loadBackoffice() {
     }
   }
 
+  // Lưới an toàn chống treo: thư viện Supabase thỉnh thoảng deadlock khi bắn nhiều
+  // truy vấn cùng lúc lúc phiên đăng nhập vừa mở (xem CLAUDE.md). Để 30s cho rộng —
+  // tải bình thường luôn xong trước đó nên người dùng gần như không bao giờ thấy nó.
   const timeoutAfter = (ms) =>
-    new Promise((_, reject) => setTimeout(() => reject(new Error(`TIMEOUT sau ${ms / 1000}s`)), ms));
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Kết nối tới Supabase quá lâu — bấm Làm mới để thử lại.")), ms));
 
   try {
     const { start, end } = todayRange();
@@ -230,7 +233,7 @@ async function loadBackoffice() {
           .order("created_at", { ascending: false })
           .limit(1000),
       ]),
-      timeoutAfter(10000),
+      timeoutAfter(30000),
     ]);
 
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
@@ -254,7 +257,9 @@ async function loadBackoffice() {
     renderAll();
   } catch (catchErr) {
     console.error("Lỗi kết nối:", catchErr);
-    showToast(catchErr?.message || "Lỗi kết nối tới Supabase");
+    // Chỉ báo khi thật sự chưa có gì để hiện — nếu đã có dữ liệu (cache/lần tải trước)
+    // thì im lặng, tránh toast gây hiểu lầm dù màn hình vẫn đang hiển thị bình thường.
+    if (!orders.length) showToast(catchErr?.message || "Lỗi kết nối tới Supabase");
   } finally {
     isLoadingBackoffice = false;
   }
@@ -311,6 +316,32 @@ function renderMetrics() {
   const customersNoteEl = document.getElementById("metric-customers-note");
 
   if (revenueTodayEl) revenueTodayEl.textContent = formatCurrency(revenueToday);
+
+  // So sánh doanh thu hôm nay với hôm qua (▲/▼) — tính từ orders đã tải, không cần bảng mới.
+  const deltaEl = document.getElementById("metric-revenue-delta");
+  if (deltaEl) {
+    const { start: todayStart } = todayRange();
+    const yStart = new Date(todayStart);
+    yStart.setDate(yStart.getDate() - 1);
+    const revenueYesterday = orders
+      .filter(paidLike)
+      .filter((o) => {
+        const c = new Date(o.created_at);
+        return c >= yStart && c < todayStart;
+      })
+      .reduce((sum, o) => sum + Number(o.total || 0), 0);
+
+    if (revenueYesterday === 0) {
+      deltaEl.className = "admin-stat-delta is-flat";
+      deltaEl.textContent = revenueToday > 0 ? "Hôm qua chưa có doanh thu" : "";
+    } else {
+      const pct = Math.round(((revenueToday - revenueYesterday) / revenueYesterday) * 100);
+      const up = pct >= 0;
+      deltaEl.className = `admin-stat-delta ${up ? "is-up" : "is-down"}`;
+      deltaEl.textContent = `${up ? "▲" : "▼"} ${Math.abs(pct)}% so với hôm qua`;
+    }
+  }
+
   if (activeOrdersEl) activeOrdersEl.textContent = activeOrders.length;
   if (customersEl) customersEl.textContent = customers.length;
   if (customersNoteEl) customersNoteEl.textContent = `${new Set(orders.map((order) => order.customer_phone).filter(Boolean)).size} số điện thoại có đơn`;
@@ -337,7 +368,10 @@ function renderOverview() {
   const active = orders.filter((order) => order.status === "paid" || order.status === "pending").slice(0, 6);
   const overviewOrdersEl = document.getElementById("overview-orders");
   if (overviewOrdersEl) overviewOrdersEl.innerHTML = renderOrderTable(active, { compact: true });
-  
+
+  renderRevenueChart();
+  renderTopSellers();
+
   const today = ordersToday();
   const stats = trafficReady ? trafficStats() : null;
   const paidCount = today.filter(paidLike).length;
@@ -362,6 +396,161 @@ function renderPulseRow(label, value) {
       <span class="font-serif text-xl text-ink">${value}</span>
     </div>
   `;
+}
+
+// ── Biểu đồ Tổng quan (vẽ bằng SVG, dữ liệu từ mảng orders đã tải — không cần bảng/SQL mới) ──
+
+const CHART_ACCENT = "#7a0c1f";
+const WEEKDAY_VI = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+// Rút gọn tiền cho nhãn nhỏ trên cột: 1.200.000 → "1.2tr", 45.000 → "45k"
+function compactCurrency(value) {
+  const v = Number(value || 0);
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}tr`;
+  if (v >= 1_000) return `${Math.round(v / 1_000)}k`;
+  return String(v);
+}
+
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+// Doanh thu (đơn paid/delivered) gộp theo từng ngày trong `days` ngày gần nhất.
+function revenueLastDays(days) {
+  const buckets = [];
+  const base = startOfDay(new Date());
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(base);
+    d.setDate(d.getDate() - i);
+    buckets.push({ date: d, revenue: 0 });
+  }
+  orders.filter(paidLike).forEach((order) => {
+    const c = startOfDay(order.created_at).getTime();
+    const bucket = buckets.find((b) => b.date.getTime() === c);
+    if (bucket) bucket.revenue += Number(order.total || 0);
+  });
+  return buckets;
+}
+
+function renderRevenueChart() {
+  const el = document.getElementById("overview-revenue-chart");
+  const totalEl = document.getElementById("overview-revenue-total");
+  if (!el) return;
+
+  const data = revenueLastDays(7);
+  const total = data.reduce((sum, d) => sum + d.revenue, 0);
+  if (totalEl) totalEl.textContent = formatCurrency(total);
+
+  if (total <= 0) {
+    el.innerHTML = `<div class="admin-empty">Chưa có doanh thu trong 7 ngày qua.</div>`;
+    return;
+  }
+
+  const max = Math.max(...data.map((d) => d.revenue), 1);
+  const W = 700, H = 220, padX = 10, padTop = 26, padBottom = 26;
+  const plotH = H - padTop - padBottom;
+  const slot = (W - padX * 2) / data.length;
+  const barW = Math.min(46, slot * 0.6);
+  const todayTime = startOfDay(new Date()).getTime();
+
+  const bars = data
+    .map((d, i) => {
+      const h = Math.max(2, (d.revenue / max) * plotH);
+      const x = padX + slot * i + (slot - barW) / 2;
+      const y = padTop + (plotH - h);
+      const cx = x + barW / 2;
+      const isToday = d.date.getTime() === todayTime;
+      const isPeak = d.revenue === max;
+      const dd = String(d.date.getDate()).padStart(2, "0");
+      const mm = String(d.date.getMonth() + 1).padStart(2, "0");
+      const label = WEEKDAY_VI[d.date.getDay()];
+      const showValue = d.revenue > 0 && (isToday || isPeak);
+      const tip = `${label} ${dd}/${mm} · ${formatCurrency(d.revenue)}`;
+      return `
+        <g class="ov-bar" data-tip="${escapeHtml(tip)}" data-cx="${cx.toFixed(1)}" data-top="${y.toFixed(1)}" style="opacity:${isToday ? 1 : 0.78}">
+          <rect x="${(padX + slot * i).toFixed(1)}" y="${padTop}" width="${slot.toFixed(1)}" height="${plotH}" fill="transparent"></rect>
+          <rect class="ov-bar-fill" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="4" fill="${CHART_ACCENT}"></rect>
+          ${showValue ? `<text x="${cx.toFixed(1)}" y="${(y - 6).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="600" fill="${CHART_ACCENT}">${compactCurrency(d.revenue)}</text>` : ""}
+          <text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="12" fill="${isToday ? "#0A0A0A" : "#6B6B6B"}" font-weight="${isToday ? 700 : 400}">${label}</text>
+        </g>`;
+    })
+    .join("");
+
+  el.innerHTML = `
+    <div class="ov-chart-wrap">
+      <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Biểu đồ doanh thu 7 ngày qua">
+        <line x1="${padX}" y1="${(padTop + plotH + 0.5).toFixed(1)}" x2="${W - padX}" y2="${(padTop + plotH + 0.5).toFixed(1)}" stroke="#D4C5B9" stroke-width="1"></line>
+        ${bars}
+      </svg>
+      <div class="ov-tooltip" hidden></div>
+    </div>`;
+
+  // Tooltip tùy biến bám theo cột (thay cho <title> mặc định chậm & xấu).
+  const wrap = el.querySelector(".ov-chart-wrap");
+  const tip = el.querySelector(".ov-tooltip");
+  wrap.querySelectorAll(".ov-bar").forEach((g) => {
+    const showTip = () => {
+      tip.textContent = g.dataset.tip;
+      tip.hidden = false;
+      tip.style.left = `${(parseFloat(g.dataset.cx) / W) * 100}%`;
+      tip.style.top = `${(parseFloat(g.dataset.top) / H) * 100}%`;
+    };
+    g.addEventListener("mouseenter", showTip);
+    g.addEventListener("mouseleave", () => { tip.hidden = true; });
+  });
+}
+
+// Top món bán chạy trong `days` ngày gần nhất — gộp từ order.items của đơn paid/delivered.
+function topSellersLastDays(days, limit) {
+  const cutoff = startOfDay(new Date());
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  const map = new Map();
+  orders.filter(paidLike).forEach((order) => {
+    if (new Date(order.created_at) < cutoff) return;
+    (Array.isArray(order.items) ? order.items : []).forEach((item) => {
+      const name = item.name || "—";
+      const prev = map.get(name) || { qty: 0, revenue: 0 };
+      prev.qty += Number(item.qty || 0);
+      prev.revenue += Number(item.qty || 0) * Number(item.price || 0);
+      map.set(name, prev);
+    });
+  });
+  return [...map.entries()]
+    .map(([name, v]) => ({ name, ...v }))
+    .sort((a, b) => b.qty - a.qty)
+    .slice(0, limit);
+}
+
+function renderTopSellers() {
+  const el = document.getElementById("overview-top-sellers");
+  if (!el) return;
+
+  const list = topSellersLastDays(7, 5);
+  if (!list.length) {
+    el.innerHTML = `<div class="admin-empty">Chưa có món nào bán ra trong 7 ngày.</div>`;
+    return;
+  }
+
+  const maxQty = Math.max(...list.map((s) => s.qty), 1);
+  el.innerHTML = list
+    .map(
+      (s, i) => `
+      <div class="ov-seller" title="${escapeHtml(s.name)} · ×${s.qty} · ${formatCurrency(s.revenue)}">
+        <div class="flex items-baseline justify-between gap-3">
+          <span class="truncate text-sm font-medium text-ink">${i + 1}. ${escapeHtml(s.name)}</span>
+          <span class="shrink-0 text-sm font-semibold text-ink">×${s.qty}</span>
+        </div>
+        <div class="mt-1.5 flex items-center gap-2">
+          <div class="h-2 flex-1 overflow-hidden rounded-full bg-earth/25">
+            <div class="ov-seller-fill h-full rounded-full" style="width:${Math.max(6, (s.qty / maxQty) * 100)}%;background:${CHART_ACCENT}"></div>
+          </div>
+          <span class="shrink-0 text-xs text-ash">${formatCurrency(s.revenue)}</span>
+        </div>
+      </div>`
+    )
+    .join("");
 }
 
 function getFilteredOrders() {

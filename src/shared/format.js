@@ -6,6 +6,18 @@ export function formatCurrency(value) {
   }).format(Number(value || 0));
 }
 
+// Alias tường minh cho giá tiền — dùng ở storefront (giỏ hàng, sản phẩm, tài khoản).
+export const formatPrice = formatCurrency;
+
+// Bản đầy đủ có năm — dùng cho phiếu in bếp và lịch sử mua hàng (khác formatDateTime dùng chung).
+export function formatDateTimeLong(value) {
+  return value
+    ? new Date(value).toLocaleString("vi-VN", {
+        hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric",
+      })
+    : "--";
+}
+
 export function formatDateTime(value) {
   return value
     ? new Intl.DateTimeFormat("vi-VN", {

@@ -1,25 +1,24 @@
 import "./style.css";
 import { supabase } from "./supabase.js";
-import { formatCurrency, formatDateTime, escapeHtml, timeAgo } from "./shared/format.js";
+import { formatCurrency, formatPrice, formatDateTimeLong, formatDateTime, escapeHtml } from "./shared/format.js";
 import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
-import { joinPresence, startHeartbeatLoop, fetchLastSeen, fetchAllLastSeen } from "./shared/presence.js";
-import { avatarHtml, chatBubbleHtml, chatThreadSkeletonHtml } from "./shared/chatUi.js";
 import { compressImage } from "./shared/imageUtils.js";
+import { state } from "./store.js";
+import { initReviews, loadReviews } from "./storefront/reviews.js";
+import { initHero, loadHeroSlides } from "./storefront/hero.js";
+import { initBanner, loadBanners } from "./storefront/banner.js";
+import { initChat, restartChatWatcher, startPresence, setChatAdminMode } from "./storefront/chat.js";
 
 const yearEl = document.querySelector("[data-year]");
 if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-let isAdmin = false;
 let cart = JSON.parse(localStorage.getItem("nomnom-cart") || "[]");
-let currentCustomer = JSON.parse(localStorage.getItem("nomnom_customer") || "null");
-let rewardConfig = { cycle: 10, percent: 20 };
 let appliedVoucherPercent = 0;
-let freeShipThreshold = 0;
 
 function saveCart() {
   localStorage.setItem("nomnom-cart", JSON.stringify(cart));
   updateCartCount();
-  if (currentCustomer) pushCartToAccount(currentCustomer.phone);
+  if (state.currentCustomer) pushCartToAccount(state.currentCustomer.phone);
 }
 
 function updateCartCount() {
@@ -30,7 +29,7 @@ function updateCartCount() {
   if (fc) fc.textContent = total;
   const fb = document.getElementById("floating-cart");
   if (fb) {
-    const show = window.scrollY > 200 && total > 0 && !isAdmin;
+    const show = window.scrollY > 200 && total > 0 && !state.isAdmin;
     fb.classList.toggle("hidden", !show);
     fb.classList.toggle("flex", show);
   }
@@ -124,7 +123,7 @@ cartOverlay.addEventListener("click", closeCart);
 const floatingCart = document.getElementById("floating-cart");
 floatingCart.addEventListener("click", openCart);
 window.addEventListener("scroll", () => {
-  const show = window.scrollY > 200 && cart.length > 0 && !isAdmin;
+  const show = window.scrollY > 200 && cart.length > 0 && !state.isAdmin;
   floatingCart.classList.toggle("hidden", !show);
   floatingCart.classList.toggle("flex", show);
 }, { passive: true });
@@ -188,19 +187,19 @@ function renderCart() {
 
   // Thanh tiến trình freeship
   const fsBar = document.getElementById("freeship-bar");
-  if (freeShipThreshold > 0) {
+  if (state.freeShipThreshold > 0) {
     fsBar.classList.remove("hidden");
     const fsText = document.getElementById("freeship-text");
     const fsFill = document.getElementById("freeship-fill");
     const truckSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-text-bottom"><path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11"/><path d="M14 9h4l4 4v4c0 .6-.4 1-1 1h-2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>`;
     const checkSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-text-bottom"><path d="M20 6 9 17l-5-5"/></svg>`;
-    if (total >= freeShipThreshold) {
+    if (total >= state.freeShipThreshold) {
       fsText.innerHTML = `${checkSvg} Bạn được <b>miễn phí ship</b>!`;
       fsFill.style.width = "100%";
     } else {
-      const remain = freeShipThreshold - total;
+      const remain = state.freeShipThreshold - total;
       fsText.innerHTML = `${truckSvg} Mua thêm <b>${formatPrice(remain)}</b> để được <b>miễn phí ship</b>`;
-      fsFill.style.width = `${Math.round((total / freeShipThreshold) * 100)}%`;
+      fsFill.style.width = `${Math.round((total / state.freeShipThreshold) * 100)}%`;
     }
   } else {
     fsBar.classList.add("hidden");
@@ -235,9 +234,6 @@ function renderCart() {
   );
 }
 
-let bankSettings = {};
-let chatAutoReply = "";
-
 const cartCustomer = document.getElementById("cart-customer");
 const custError = document.getElementById("cust-error");
 
@@ -249,13 +245,13 @@ document.getElementById("cart-checkout-step").addEventListener("click", () => {
   cartCustomer.classList.remove("hidden");
 
   // Tự điền sẵn thông tin nếu khách đã đăng nhập
-  if (currentCustomer) {
+  if (state.currentCustomer) {
     const nameEl = document.getElementById("cust-name");
     const phoneEl = document.getElementById("cust-phone");
     const addrEl = document.getElementById("cust-address");
-    if (!nameEl.value) nameEl.value = currentCustomer.name || "";
-    if (!phoneEl.value) phoneEl.value = currentCustomer.phone || "";
-    if (!addrEl.value) addrEl.value = currentCustomer.address || "";
+    if (!nameEl.value) nameEl.value = state.currentCustomer.name || "";
+    if (!phoneEl.value) phoneEl.value = state.currentCustomer.phone || "";
+    if (!addrEl.value) addrEl.value = state.currentCustomer.address || "";
   }
 
   setupVoucherUI();
@@ -264,12 +260,12 @@ document.getElementById("cart-checkout-step").addEventListener("click", () => {
 function setupVoucherUI() {
   const row = document.getElementById("voucher-row");
   const check = document.getElementById("voucher-check");
-  const vouchers = availableVouchers(currentCustomer);
-  if (currentCustomer && vouchers > 0) {
+  const vouchers = availableVouchers(state.currentCustomer);
+  if (state.currentCustomer && vouchers > 0) {
     row.classList.remove("hidden");
     row.classList.add("flex");
     document.getElementById("voucher-label").textContent =
-      `Dùng ưu đãi giảm ${rewardConfig.percent}% (bạn có ${vouchers})`;
+      `Dùng ưu đãi giảm ${state.rewardConfig.percent}% (bạn có ${vouchers})`;
     check.checked = false;
   } else {
     row.classList.add("hidden");
@@ -282,7 +278,7 @@ function setupVoucherUI() {
 function renderCheckoutSummary() {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   const check = document.getElementById("voucher-check");
-  appliedVoucherPercent = check && check.checked ? rewardConfig.percent : 0;
+  appliedVoucherPercent = check && check.checked ? state.rewardConfig.percent : 0;
   const discount = Math.round((subtotal * appliedVoucherPercent) / 100);
   const total = subtotal - discount;
 
@@ -336,7 +332,7 @@ cartCheckout.addEventListener("click", async () => {
   }
   custError.classList.add("hidden");
 
-  if (!bankSettings.bank_id || !bankSettings.bank_account) {
+  if (!state.bankSettings.bank_id || !state.bankSettings.bank_account) {
     alert("Chủ shop chưa thiết lập thanh toán. Vui lòng liên hệ qua Zalo.");
     return;
   }
@@ -370,18 +366,18 @@ cartCheckout.addEventListener("click", async () => {
 
   pendingOrderActive = true;
 
-  const qrUrl = `https://img.vietqr.io/image/${bankSettings.bank_id}-${bankSettings.bank_account}-compact.jpg?amount=${total}&addInfo=${encodeURIComponent(content)}`;
+  const qrUrl = `https://img.vietqr.io/image/${state.bankSettings.bank_id}-${state.bankSettings.bank_account}-compact.jpg?amount=${total}&addInfo=${encodeURIComponent(content)}`;
 
   document.getElementById("qr-image").src = qrUrl;
-  document.getElementById("qr-bank-name").textContent = bankSettings.bank_id;
-  document.getElementById("qr-account").textContent = bankSettings.bank_account;
-  document.getElementById("qr-holder").textContent = bankSettings.bank_name || "";
+  document.getElementById("qr-bank-name").textContent = state.bankSettings.bank_id;
+  document.getElementById("qr-account").textContent = state.bankSettings.bank_account;
+  document.getElementById("qr-holder").textContent = state.bankSettings.bank_name || "";
   document.getElementById("qr-amount").textContent = formatPrice(total);
   document.getElementById("qr-content").textContent = content;
 
   const qrZaloHelp = document.getElementById("qr-zalo-help");
-  if (bankSettings.zalo_url) {
-    qrZaloHelp.href = bankSettings.zalo_url;
+  if (state.bankSettings.zalo_url) {
+    qrZaloHelp.href = state.bankSettings.zalo_url;
     qrZaloHelp.classList.remove("hidden");
   } else {
     qrZaloHelp.classList.add("hidden");
@@ -451,7 +447,7 @@ function showPaymentSuccess() {
   document.getElementById("cart-qr").classList.add("hidden");
   document.getElementById("success-order-code").textContent = lastOrderCode;
 
-  const zaloUrl = bankSettings.zalo_url || "";
+  const zaloUrl = state.bankSettings.zalo_url || "";
   const successZalo = document.getElementById("success-zalo");
   if (zaloUrl) {
     successZalo.href = zaloUrl;
@@ -464,7 +460,7 @@ function showPaymentSuccess() {
 
   appliedVoucherPercent = 0;
   // cập nhật lại điểm tích lũy sau khi webhook đã cộng (đợi 1.5s cho chắc)
-  if (currentCustomer) setTimeout(refreshCustomerData, 1500);
+  if (state.currentCustomer) setTimeout(refreshCustomerData, 1500);
 }
 
 document.getElementById("success-close").addEventListener("click", () => {
@@ -478,17 +474,6 @@ document.getElementById("qr-back").addEventListener("click", async () => {
   cartFooter.classList.remove("hidden");
   renderCart();
 });
-
-const formatPrice = formatCurrency;
-
-// Bản đầy đủ có năm — dùng cho phiếu in bếp và lịch sử mua hàng (khác formatDateTime dùng chung)
-function formatDateTimeLong(value) {
-  return value
-    ? new Date(value).toLocaleString("vi-VN", {
-        hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric",
-      })
-    : "--";
-}
 
 // ── Mobile Menu ──
 
@@ -517,7 +502,7 @@ logo.addEventListener("click", (e) => {
   e.preventDefault();
   // Đang là admin: bấm logo chỉ cuộn lên đầu trang, KHÔNG đăng xuất nữa
   // (giữ quyền admin khi vào lại storefront; muốn thoát thì dùng nút "Đăng xuất admin" ở footer).
-  if (isAdmin) {
+  if (state.isAdmin) {
     window.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
@@ -579,19 +564,19 @@ function setAdminNavLink(link, admin) {
 }
 
 supabase.auth.onAuthStateChange((_event, session) => {
-  isAdmin = !!session;
-  adminLogoutBtn.classList.toggle("hidden", !isAdmin);
-  setAdminNavLink(adminNavLink, isAdmin);
-  setAdminNavLink(adminMobileNavLink, isAdmin);
-  adminOrdersBtn.classList.toggle("hidden", !isAdmin);
-  if (isAdmin) {
+  state.isAdmin = !!session;
+  adminLogoutBtn.classList.toggle("hidden", !state.isAdmin);
+  setAdminNavLink(adminNavLink, state.isAdmin);
+  setAdminNavLink(adminMobileNavLink, state.isAdmin);
+  adminOrdersBtn.classList.toggle("hidden", !state.isAdmin);
+  if (state.isAdmin) {
     startAdminOrdersRealtime();
   } else {
     stopAdminOrdersRealtime();
     closeOrdersDrawer();
     adminOrdersBadge.classList.add("hidden");
   }
-  setChatAdminMode(isAdmin);
+  setChatAdminMode(state.isAdmin);
   loadProducts();
   loadHeroSlides();
   loadBanners();
@@ -610,7 +595,7 @@ const priceFilter = document.getElementById("price-filter");
 
 function renderProductCard(p) {
   return `
-    <article class="group relative flex flex-col overflow-hidden rounded-2xl border border-earth/50 bg-cream/70 p-2 shadow-[0_3px_14px_-6px_rgba(10,10,10,0.18)] transition-all duration-300 hover:-translate-y-1 hover:border-earth hover:shadow-[0_16px_30px_-10px_rgba(10,10,10,0.28)] sm:p-3">
+    <article class="group relative flex w-full flex-col overflow-hidden rounded-2xl border border-earth/50 bg-cream/70 p-2 shadow-[0_3px_14px_-6px_rgba(10,10,10,0.18)] transition-all duration-300 hover:-translate-y-1 hover:border-earth hover:shadow-[0_16px_30px_-10px_rgba(10,10,10,0.28)] sm:p-3">
       <div data-detail="${p.id}" class="aspect-square overflow-hidden rounded-xl bg-earth/30 cursor-pointer relative">
         ${
           p.image_url
@@ -638,7 +623,7 @@ function renderProductCard(p) {
         </div>
       </div>
       ${
-        isAdmin
+        state.isAdmin
           ? `<div class="mt-3 flex gap-2">
               <button data-edit="${p.id}" class="text-xs text-ash hover:text-ink transition-colors">Sửa</button>
               <button data-delete="${p.id}" class="text-xs text-red-500 hover:text-red-700 transition-colors">Xóa</button>
@@ -653,12 +638,12 @@ function renderProducts() {
   const categories = [...new Set(allProducts.map((p) => p.category).filter(Boolean))];
   const uncategorized = allProducts.filter((p) => !p.category);
 
-  if (!allProducts.length && !isAdmin) {
+  if (!allProducts.length && !state.isAdmin) {
     container.innerHTML = `<p class="text-center text-sm text-ash py-12">Chưa có sản phẩm nào.</p>`;
     return;
   }
 
-  const addBtn = isAdmin
+  const addBtn = state.isAdmin
     ? `<button class="add-product-btn flex aspect-square w-full items-center justify-center rounded-2xl border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink hover:bg-cream/50 transition-colors cursor-pointer">
         <span class="text-center"><span class="block text-3xl leading-none">+</span><span class="mt-2 block text-sm">Thêm sản phẩm</span></span>
       </button>`
@@ -666,8 +651,10 @@ function renderProducts() {
 
   // Mỗi ô (sản phẩm hoặc nút thêm) chiếm đúng 1/3 chiều ngang để luôn hiện 3 ô/hàng;
   // nhiều hơn 3 thì cuộn ngang, có nút ‹ › ở 2 bên.
+  // Ô chứa là flex container để card con tự kéo giãn cao bằng nhau (align-items:stretch),
+  // không dựa vào height:100% (dễ bị bỏ qua khi track cao auto → card cao thấp lệch nhau).
   const cell = (inner) =>
-    `<div class="snap-start shrink-0" style="width:calc((100% - 2rem)/3)">${inner}</div>`;
+    `<div class="snap-start shrink-0 flex" style="width:calc((100% - 2rem)/3)">${inner}</div>`;
 
   const carousel = (cellsHtml, showArrows) => {
     const trackId = `pcar-${Math.random().toString(36).slice(2, 8)}`;
@@ -687,8 +674,8 @@ function renderProducts() {
   };
 
   const section = (title, items) => {
-    const cells = items.map((p) => cell(renderProductCard(p))).join("") + (isAdmin ? cell(addBtn) : "");
-    const total = items.length + (isAdmin ? 1 : 0);
+    const cells = items.map((p) => cell(renderProductCard(p))).join("") + (state.isAdmin ? cell(addBtn) : "");
+    const total = items.length + (state.isAdmin ? 1 : 0);
     return `
       <div class="category-section">
         <h3 class="font-serif text-2xl text-ink md:text-3xl">${title}</h3>
@@ -704,7 +691,7 @@ function renderProducts() {
 
   if (uncategorized.length) {
     html += section("Khác", uncategorized);
-  } else if (isAdmin && !categories.length) {
+  } else if (state.isAdmin && !categories.length) {
     html += carousel(cell(addBtn), false);
   }
 
@@ -1062,329 +1049,9 @@ async function deleteProduct(id) {
   loadProducts();
 }
 
-// ── Hero Slideshow ──
+// ── Hero Slideshow + Hero Slides Admin → đã tách sang src/storefront/hero.js (initHero / loadHeroSlides) ──
 
-const heroSlides = document.getElementById("hero-slides");
-const heroEditBtn = document.getElementById("hero-edit-btn");
-const heroPrev = document.getElementById("hero-prev");
-const heroNext = document.getElementById("hero-next");
-const heroDots = document.getElementById("hero-dots");
-const heroSlideshow = document.getElementById("hero-slideshow");
-let currentSlide = 0;
-let slideCount = 0;
-let autoplayTimer = null;
-
-function goToSlide(i) {
-  currentSlide = ((i % slideCount) + slideCount) % slideCount;
-  heroSlides.style.transform = `translateX(-${currentSlide * 100}%)`;
-  heroDots.querySelectorAll("button").forEach((dot, idx) => {
-    dot.classList.toggle("bg-ink", idx === currentSlide);
-    dot.classList.toggle("bg-ink/30", idx !== currentSlide);
-  });
-}
-
-function startAutoplay() {
-  stopAutoplay();
-  if (slideCount > 1) {
-    autoplayTimer = setInterval(() => goToSlide(currentSlide + 1), 4000);
-  }
-}
-
-function stopAutoplay() {
-  if (autoplayTimer) clearInterval(autoplayTimer);
-}
-
-heroPrev.addEventListener("click", () => { goToSlide(currentSlide - 1); startAutoplay(); });
-heroNext.addEventListener("click", () => { goToSlide(currentSlide + 1); startAutoplay(); });
-
-async function loadHeroSlides() {
-  const { data } = await supabase
-    .from("hero_slides")
-    .select("*")
-    .order("sort_order", { ascending: true });
-
-  const slides = data || [];
-  slideCount = slides.length;
-
-  heroEditBtn.classList.toggle("hidden", !isAdmin);
-
-  if (!slides.length) {
-    heroSlides.innerHTML = `<div class="flex h-full w-full shrink-0 items-center justify-center"><span class="font-serif text-xl italic text-ash">Ảnh sản phẩm</span></div>`;
-    heroPrev.classList.add("hidden");
-    heroNext.classList.add("hidden");
-    heroDots.classList.add("hidden");
-    stopAutoplay();
-    return;
-  }
-
-  heroSlides.innerHTML = slides
-    .map((s) => `<div class="h-full w-full shrink-0"><img src="${s.image_url}" alt="" class="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.2]" /></div>`)
-    .join("");
-
-  if (slides.length > 1) {
-    heroPrev.classList.remove("hidden");
-    heroNext.classList.remove("hidden");
-    heroDots.classList.remove("hidden");
-    heroSlideshow.addEventListener("mouseenter", () => {
-      heroPrev.style.opacity = "1";
-      heroNext.style.opacity = "1";
-    });
-    heroSlideshow.addEventListener("mouseleave", () => {
-      heroPrev.style.opacity = "0";
-      heroNext.style.opacity = "0";
-    });
-    heroDots.innerHTML = slides
-      .map((_, i) => `<button class="h-2 w-2 rounded-full ${i === 0 ? "bg-ink" : "bg-ink/30"} transition-colors" aria-label="Slide ${i + 1}"></button>`)
-      .join("");
-    heroDots.querySelectorAll("button").forEach((dot, i) =>
-      dot.addEventListener("click", () => { goToSlide(i); startAutoplay(); })
-    );
-    startAutoplay();
-  } else {
-    heroPrev.classList.add("hidden");
-    heroNext.classList.add("hidden");
-    heroDots.classList.add("hidden");
-  }
-
-  currentSlide = 0;
-  heroSlides.style.transform = "translateX(0)";
-}
-
-// ── Hero Slides Admin ──
-
-const slidesModal = document.getElementById("slides-modal");
-const slidesList = document.getElementById("slides-list");
-const slideUpload = document.getElementById("slide-upload");
-
-heroEditBtn.addEventListener("click", openSlidesModal);
-document.getElementById("slides-close").addEventListener("click", closeSlidesModal);
-slidesModal.addEventListener("click", (e) => { if (e.target === slidesModal) closeSlidesModal(); });
-
-async function openSlidesModal() {
-  slidesModal.classList.remove("hidden");
-  slidesModal.classList.add("flex");
-  await renderSlidesList();
-}
-
-function closeSlidesModal() {
-  slidesModal.classList.add("hidden");
-  slidesModal.classList.remove("flex");
-}
-
-async function renderSlidesList() {
-  const { data } = await supabase.from("hero_slides").select("*").order("sort_order");
-  const slides = data || [];
-
-  if (!slides.length) {
-    slidesList.innerHTML = `<p class="text-sm text-ash">Chưa có ảnh nào.</p>`;
-    return;
-  }
-
-  slidesList.innerHTML = slides
-    .map(
-      (s) => `
-    <div class="flex items-center gap-3 border border-earth/40 p-2">
-      <img src="${s.image_url}" alt="" class="h-16 w-16 object-cover shrink-0" />
-      <span class="text-sm text-ash flex-1 truncate">${s.image_url.split("/").pop()}</span>
-      <button data-delete-slide="${s.id}" class="text-xs text-red-500 hover:text-red-700 shrink-0">Xóa</button>
-    </div>
-  `
-    )
-    .join("");
-
-  slidesList.querySelectorAll("[data-delete-slide]").forEach((btn) =>
-    btn.addEventListener("click", async () => {
-      await supabase.from("hero_slides").delete().eq("id", btn.dataset.deleteSlide);
-      await renderSlidesList();
-      loadHeroSlides();
-    })
-  );
-}
-
-slideUpload.addEventListener("change", async () => {
-  let file = slideUpload.files[0];
-  if (!file) return;
-  file = await compressImage(file);
-
-  const ext = file.name.split(".").pop();
-  const fileName = `hero-${Date.now()}.${ext}`;
-  const { error: uploadError } = await supabase.storage
-    .from("product-images")
-    .upload(fileName, file);
-
-  if (uploadError) {
-    alert("Lỗi upload: " + uploadError.message);
-    return;
-  }
-
-  const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
-
-  const { data: existing } = await supabase.from("hero_slides").select("sort_order").order("sort_order", { ascending: false }).limit(1);
-  const nextOrder = existing?.length ? existing[0].sort_order + 1 : 0;
-
-  await supabase.from("hero_slides").insert({ image_url: urlData.publicUrl, sort_order: nextOrder });
-
-  slideUpload.value = "";
-  await renderSlidesList();
-  loadHeroSlides();
-});
-
-// ── Banner Slideshow ──
-
-const bannerSlides = document.getElementById("banner-slides");
-const bannerDots = document.getElementById("banner-dots");
-const bannerEditBtn = document.getElementById("banner-edit-btn");
-const bannerSection = document.getElementById("banner-section");
-let bannerIndex = 0;
-let bannerCount = 0;
-let bannerTimer = null;
-
-function goToBanner(i) {
-  bannerIndex = ((i % bannerCount) + bannerCount) % bannerCount;
-  bannerSlides.style.transform = `translateX(-${bannerIndex * 100}%)`;
-  bannerDots.querySelectorAll("button").forEach((dot, idx) => {
-    dot.classList.toggle("bg-ink", idx === bannerIndex);
-    dot.classList.toggle("bg-ink/30", idx !== bannerIndex);
-  });
-}
-
-function startBannerAutoplay() {
-  if (bannerTimer) clearInterval(bannerTimer);
-  if (bannerCount > 1) {
-    bannerTimer = setInterval(() => goToBanner(bannerIndex + 1), 10000);
-  }
-}
-
-async function loadBanners() {
-  const { data, error } = await supabase
-    .from("banners")
-    .select("*")
-    .order("sort_order", { ascending: true });
-
-  if (error) {
-    bannerSection.classList.add("hidden");
-    return;
-  }
-
-  const slides = data || [];
-  bannerCount = slides.length;
-
-  bannerEditBtn.classList.toggle("hidden", !isAdmin);
-
-  if (!slides.length) {
-    if (isAdmin) {
-      bannerSection.classList.remove("hidden");
-      bannerSlides.innerHTML = `<div class="flex h-[120px] w-full shrink-0 items-center justify-center md:h-[200px]"><span class="text-sm italic text-ash">Chưa có banner</span></div>`;
-    } else {
-      bannerSection.classList.add("hidden");
-    }
-    if (bannerTimer) clearInterval(bannerTimer);
-    return;
-  }
-
-  bannerSection.classList.remove("hidden");
-  bannerSlides.innerHTML = slides
-    .map((s) => `<div class="h-[120px] w-full shrink-0 md:h-[200px]"><img src="${s.image_url}" alt="" class="h-full w-full object-cover" /></div>`)
-    .join("");
-
-  if (slides.length > 1) {
-    bannerDots.classList.remove("hidden");
-    bannerDots.innerHTML = slides
-      .map((_, i) => `<button class="h-2 w-2 rounded-full ${i === 0 ? "bg-ink" : "bg-ink/30"} transition-colors" aria-label="Banner ${i + 1}"></button>`)
-      .join("");
-    bannerDots.querySelectorAll("button").forEach((dot, i) =>
-      dot.addEventListener("click", () => { goToBanner(i); startBannerAutoplay(); })
-    );
-    startBannerAutoplay();
-  } else {
-    bannerDots.classList.add("hidden");
-  }
-
-  bannerIndex = 0;
-  bannerSlides.style.transform = "translateX(0)";
-}
-
-// ── Banner Admin ──
-
-const bannerModal = document.getElementById("banner-modal");
-const bannerList = document.getElementById("banner-list");
-const bannerUpload = document.getElementById("banner-upload");
-
-bannerEditBtn.addEventListener("click", () => {
-  bannerModal.classList.remove("hidden");
-  bannerModal.classList.add("flex");
-  renderBannerList();
-});
-
-document.getElementById("banner-close").addEventListener("click", () => {
-  bannerModal.classList.add("hidden");
-  bannerModal.classList.remove("flex");
-});
-
-bannerModal.addEventListener("click", (e) => {
-  if (e.target === bannerModal) {
-    bannerModal.classList.add("hidden");
-    bannerModal.classList.remove("flex");
-  }
-});
-
-async function renderBannerList() {
-  const { data } = await supabase.from("banners").select("*").order("sort_order");
-  const items = data || [];
-
-  if (!items.length) {
-    bannerList.innerHTML = `<p class="text-sm text-ash">Chưa có banner nào.</p>`;
-    return;
-  }
-
-  bannerList.innerHTML = items
-    .map(
-      (s) => `
-    <div class="flex items-center gap-3 border border-earth/40 p-2">
-      <img src="${s.image_url}" alt="" class="h-12 w-20 object-cover shrink-0" />
-      <span class="text-sm text-ash flex-1 truncate">${s.image_url.split("/").pop()}</span>
-      <button data-delete-banner="${s.id}" class="text-xs text-red-500 hover:text-red-700 shrink-0">Xóa</button>
-    </div>
-  `
-    )
-    .join("");
-
-  bannerList.querySelectorAll("[data-delete-banner]").forEach((btn) =>
-    btn.addEventListener("click", async () => {
-      await supabase.from("banners").delete().eq("id", btn.dataset.deleteBanner);
-      await renderBannerList();
-      loadBanners();
-    })
-  );
-}
-
-bannerUpload.addEventListener("change", async () => {
-  let file = bannerUpload.files[0];
-  if (!file) return;
-  file = await compressImage(file);
-
-  const ext = file.name.split(".").pop();
-  const fileName = `banner-${Date.now()}.${ext}`;
-  const { error: uploadError } = await supabase.storage
-    .from("product-images")
-    .upload(fileName, file);
-
-  if (uploadError) {
-    alert("Lỗi upload: " + uploadError.message);
-    return;
-  }
-
-  const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
-
-  const { data: existing } = await supabase.from("banners").select("sort_order").order("sort_order", { ascending: false }).limit(1);
-  const nextOrder = existing?.length ? existing[0].sort_order + 1 : 0;
-
-  await supabase.from("banners").insert({ image_url: urlData.publicUrl, sort_order: nextOrder });
-
-  bannerUpload.value = "";
-  await renderBannerList();
-  loadBanners();
-});
+// ── Banner Slideshow + Banner Admin → đã tách sang src/storefront/banner.js (initBanner / loadBanners) ──
 
 // ── Contact Buttons ──
 
@@ -1449,7 +1116,7 @@ function updateHeroContent(data) {
     if (data[col]) el.textContent = data[col];
   });
 
-  if (isAdmin) {
+  if (state.isAdmin) {
     editableFields.forEach(({ id, col }) => {
       const el = document.getElementById(id);
       el.setAttribute("contenteditable", "true");
@@ -1525,8 +1192,8 @@ async function loadContactSettings() {
   const rightType = data.hero_right_type || (data.hero_side_image_url ? "image" : "");
   renderHeroSide("hero-left", leftUrl, leftType);
   renderHeroSide("hero-right", rightUrl, rightType);
-  document.getElementById("hero-left-edit").classList.toggle("hidden", !isAdmin);
-  document.getElementById("hero-right-edit").classList.toggle("hidden", !isAdmin);
+  document.getElementById("hero-left-edit").classList.toggle("hidden", !state.isAdmin);
+  document.getElementById("hero-right-edit").classList.toggle("hidden", !state.isAdmin);
 
   const aboutImg = document.getElementById("about-image");
   const aboutPlaceholder = document.getElementById("about-image-placeholder");
@@ -1539,7 +1206,7 @@ async function loadContactSettings() {
     aboutImg.style.display = "none";
     aboutPlaceholder.style.display = "flex";
   }
-  aboutImgEdit.classList.toggle("hidden", !isAdmin);
+  aboutImgEdit.classList.toggle("hidden", !state.isAdmin);
 
   const customImg = document.getElementById("custom-image");
   const customPlaceholder = document.getElementById("custom-image-placeholder");
@@ -1552,7 +1219,7 @@ async function loadContactSettings() {
     customImg.style.display = "none";
     customPlaceholder.style.display = "flex";
   }
-  customImgEdit.classList.toggle("hidden", !isAdmin);
+  customImgEdit.classList.toggle("hidden", !state.isAdmin);
 
   const zaloBtn = document.getElementById("btn-zalo");
   const messengerBtn = document.getElementById("btn-messenger");
@@ -1591,7 +1258,7 @@ async function loadContactSettings() {
   customCta.href = data.zalo_url || data.messenger_url || (data.phone ? `tel:${data.phone}` : "#");
 
   // Ngưỡng miễn phí ship (để giỏ hàng tính thanh freeship)
-  freeShipThreshold = parseInt(data.free_ship_threshold) || 0;
+  state.freeShipThreshold = parseInt(data.free_ship_threshold) || 0;
   if (!cartFooter.classList.contains("hidden")) renderCart();
 
   const socials = [
@@ -1603,29 +1270,29 @@ async function loadContactSettings() {
     const el = document.getElementById(elId);
     el.href = url || "#";
     // khách chỉ thấy icon đã có link; admin luôn thấy cả 3 để điền
-    const show = !!url || isAdmin;
+    const show = !!url || state.isAdmin;
     el.classList.toggle("hidden", !show);
     el.classList.toggle("inline-flex", show);
     el.classList.toggle("opacity-40", !url); // mờ nếu chưa có link (gợi ý cho admin)
   });
 
-  contactEditBtn.classList.toggle("hidden", !isAdmin);
-  contactEditBtn.classList.toggle("flex", isAdmin);
+  contactEditBtn.classList.toggle("hidden", !state.isAdmin);
+  contactEditBtn.classList.toggle("flex", state.isAdmin);
 
-  bankSettings = {
+  state.bankSettings = {
     bank_id: data.bank_id || "",
     bank_account: data.bank_account || "",
     bank_name: data.bank_name || "",
     zalo_url: data.zalo_url || "",
   };
-  chatAutoReply = data.chat_auto_reply || "";
+  state.chatAutoReply = data.chat_auto_reply || "";
 
-  rewardConfig = {
+  state.rewardConfig = {
     cycle: parseInt(data.reward_cycle_orders) || 10,
     percent: parseInt(data.reward_percent) || 20,
   };
   updateLoyaltyHint();
-  if (currentCustomer) refreshCustomerData();
+  if (state.currentCustomer) refreshCustomerData();
 
   const dFee = document.getElementById("delivery-fee");
   const dZones = document.getElementById("delivery-zones");
@@ -1810,170 +1477,7 @@ contactForm.addEventListener("submit", async (e) => {
   loadContactSettings();
 });
 
-// ── Reviews ──
-
-const reviewList = document.getElementById("review-list");
-const reviewForm = document.getElementById("review-form");
-const reviewError = document.getElementById("review-error");
-const starPicker = document.getElementById("star-picker");
-let selectedRating = 5;
-
-starPicker.querySelectorAll("[data-star]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    selectedRating = parseInt(btn.dataset.star);
-    reviewForm.elements.rating.value = selectedRating;
-    starPicker.querySelectorAll("[data-star]").forEach((b, i) => {
-      b.classList.toggle("text-[#f39c12]", i < selectedRating);
-      b.classList.toggle("text-earth/50", i >= selectedRating);
-    });
-  });
-});
-
-function renderStars(n) {
-  return "★".repeat(n) + "☆".repeat(5 - n);
-}
-
-// Điểm trung bình + số lượng để làm social proof ở hero và đầu mục Reviews.
-function reviewSummary(reviews) {
-  const rated = reviews.filter((r) => Number(r.rating) > 0);
-  if (!rated.length) return { avg: 0, count: 0 };
-  const avg = rated.reduce((sum, r) => sum + Number(r.rating), 0) / rated.length;
-  return { avg, count: rated.length };
-}
-
-function renderReviewSummary(reviews) {
-  const { avg, count } = reviewSummary(reviews);
-  const heroBox = document.getElementById("hero-social-proof");
-  const summaryBox = document.getElementById("review-summary");
-  if (!count) {
-    heroBox?.classList.add("hidden");
-    heroBox?.classList.remove("inline-flex");
-    summaryBox?.classList.add("hidden");
-    summaryBox?.classList.remove("flex");
-    return;
-  }
-  const avgText = avg.toFixed(1);
-  const rounded = Math.round(avg);
-
-  if (heroBox) {
-    document.getElementById("hero-rating-value").textContent = avgText;
-    document.getElementById("hero-rating-count").textContent = count;
-    heroBox.classList.remove("hidden");
-    heroBox.classList.add("inline-flex");
-  }
-  if (summaryBox) {
-    document.getElementById("review-summary-avg").textContent = avgText;
-    document.getElementById("review-summary-stars").textContent = renderStars(rounded);
-    document.getElementById("review-summary-count").textContent = `${count} đánh giá`;
-    summaryBox.classList.remove("hidden");
-    summaryBox.classList.add("flex");
-  }
-}
-
-function formatReviewDate(iso) {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffDays = Math.floor((now - d) / 86400000);
-  if (diffDays === 0) return "Hôm nay";
-  if (diffDays === 1) return "Hôm qua";
-  if (diffDays < 7) return `${diffDays} ngày trước`;
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-function renderReviews(reviews) {
-  renderReviewSummary(reviews);
-  if (!reviews.length) {
-    reviewList.innerHTML = `<p class="text-sm text-ash">Chưa có đánh giá nào. Hãy là người đầu tiên!</p>`;
-    return;
-  }
-
-  reviewList.innerHTML = reviews
-    .map(
-      (r) => `
-    <div class="w-[280px] shrink-0 snap-start border border-earth/40 p-5 md:w-[320px] ${isAdmin ? "group relative" : ""}">
-      ${r.image_url ? `<img src="${r.image_url}" alt="Ảnh đánh giá" loading="lazy" decoding="async" class="mb-4 h-40 w-full rounded object-cover" />` : ""}
-      <div class="flex items-center gap-2">
-        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-earth/30 font-serif text-sm text-ink">
-          ${r.name.charAt(0).toUpperCase()}
-        </div>
-        <div class="min-w-0">
-          <span class="block text-sm font-medium text-ink leading-tight">${r.name}</span>
-          ${r.created_at ? `<span class="block text-[11px] text-ash">${formatReviewDate(r.created_at)}</span>` : ""}
-        </div>
-      </div>
-      <div class="mt-2 text-sm text-[#f39c12]">${renderStars(r.rating)}</div>
-      <p class="mt-2 text-sm text-ash line-clamp-3">${r.comment}</p>
-      ${isAdmin ? `<button data-delete-review="${r.id}" class="absolute top-2 right-2 text-xs text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity">✕</button>` : ""}
-    </div>
-  `
-    )
-    .join("");
-
-  if (isAdmin) {
-    reviewList.querySelectorAll("[data-delete-review]").forEach((btn) =>
-      btn.addEventListener("click", async () => {
-        await supabase.from("reviews").delete().eq("id", btn.dataset.deleteReview);
-        loadReviews();
-      })
-    );
-  }
-}
-
-async function loadReviews() {
-  const { data } = await supabase
-    .from("reviews")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  renderReviews(data || []);
-}
-
-reviewForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const form = new FormData(reviewForm);
-  const imageFile = reviewForm.elements.image.files[0];
-
-  let image_url = null;
-
-  if (imageFile) {
-    const reviewC = await compressImage(imageFile);
-    const ext = reviewC.name.split(".").pop();
-    const fileName = `review-${Date.now()}.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from("product-images")
-      .upload(fileName, reviewC);
-
-    if (uploadError) {
-      reviewError.textContent = "Lỗi upload ảnh: " + uploadError.message;
-      reviewError.classList.remove("hidden");
-      return;
-    }
-
-    const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
-    image_url = urlData.publicUrl;
-  }
-
-  const row = {
-    name: form.get("name"),
-    rating: parseInt(form.get("rating")),
-    comment: form.get("comment"),
-  };
-  if (image_url) row.image_url = image_url;
-
-  const { error } = await supabase.from("reviews").insert(row);
-
-  if (error) {
-    reviewError.textContent = "Lỗi gửi đánh giá: " + error.message;
-    reviewError.classList.remove("hidden");
-    return;
-  }
-
-  reviewError.classList.add("hidden");
-  reviewForm.reset();
-  selectedRating = 5;
-  starPicker.querySelectorAll("[data-star]").forEach((b) => b.classList.replace("text-earth/50", "text-[#f39c12]"));
-  loadReviews();
-});
+// ── Reviews → đã tách sang src/storefront/reviews.js (initReviews / loadReviews) ──
 
 // ── Admin: Quản lý đơn hàng ──
 
@@ -2035,7 +1539,7 @@ function closeOrdersDrawer() {
 }
 
 async function fetchAdminOrders() {
-  if (!isAdmin) return;
+  if (!state.isAdmin) return;
   // Chỉ lấy đơn ĐÃ THANH TOÁN trở đi — đơn 'pending' (chưa chuyển khoản)
   // không hiện cho cô chủ. Đơn pending vẫn nằm trong DB để webhook Sepay
   // match mã đơn và cập nhật thành 'paid' khi khách trả tiền.
@@ -2212,12 +1716,12 @@ const customerLoginError = document.getElementById("customer-login-error");
 
 function availableVouchers(c) {
   if (!c) return 0;
-  const earned = Math.floor((c.points || 0) / rewardConfig.cycle);
+  const earned = Math.floor((c.points || 0) / state.rewardConfig.cycle);
   return Math.max(0, earned - (c.vouchers_used || 0));
 }
 
 function openCustomerModal() {
-  if (currentCustomer) {
+  if (state.currentCustomer) {
     customerLoginForm.classList.add("hidden");
     customerPanel.classList.remove("hidden");
     renderCustomerPanel();
@@ -2258,7 +1762,7 @@ function switchCustomerTab(tab) {
 
 async function loadCustomerOrders() {
   const box = document.getElementById("customer-tab-orders");
-  if (!currentCustomer) return;
+  if (!state.currentCustomer) return;
   box.innerHTML = `
     <div class="space-y-3">
       <div class="skeleton h-24 w-full rounded-lg"></div>
@@ -2269,7 +1773,7 @@ async function loadCustomerOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select("*")
-    .eq("customer_phone", currentCustomer.phone)
+    .eq("customer_phone", state.currentCustomer.phone)
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -2314,8 +1818,8 @@ async function loadCustomerOrders() {
 
 function updateAccountLabel() {
   const label = document.getElementById("account-label");
-  if (currentCustomer) {
-    label.textContent = currentCustomer.name || "Tài khoản";
+  if (state.currentCustomer) {
+    label.textContent = state.currentCustomer.name || "Tài khoản";
   } else {
     label.textContent = "Đăng nhập";
   }
@@ -2328,12 +1832,12 @@ function updateLoyaltyHint() {
   const hint = document.getElementById("hero-loyalty-hint");
   if (!hint) return;
   const dismissed = localStorage.getItem("nomnom_hide_loyalty_hint") === "1";
-  const show = !currentCustomer && !dismissed;
+  const show = !state.currentCustomer && !dismissed;
   hint.classList.toggle("hidden", !show);
   hint.classList.toggle("flex", show);
   if (show) {
-    document.getElementById("hero-loyalty-cycle").textContent = rewardConfig.cycle;
-    document.getElementById("hero-loyalty-percent").textContent = `${rewardConfig.percent}%`;
+    document.getElementById("hero-loyalty-cycle").textContent = state.rewardConfig.cycle;
+    document.getElementById("hero-loyalty-percent").textContent = `${state.rewardConfig.percent}%`;
   }
 }
 
@@ -2344,7 +1848,7 @@ document.getElementById("hero-loyalty-close")?.addEventListener("click", () => {
 document.getElementById("hero-loyalty-login")?.addEventListener("click", openCustomerModal);
 
 function renderCustomerPanel() {
-  const c = currentCustomer;
+  const c = state.currentCustomer;
   const avImg = document.getElementById("customer-avatar-img");
   const avLetter = document.getElementById("customer-avatar-letter");
   if (c.avatar_url) {
@@ -2360,19 +1864,19 @@ function renderCustomerPanel() {
   document.getElementById("customer-phone-display").textContent = c.phone;
   document.getElementById("customer-points").textContent = c.points || 0;
 
-  const cycle = rewardConfig.cycle;
+  const cycle = state.rewardConfig.cycle;
   const intoCycle = (c.points || 0) % cycle;
   const remain = cycle - intoCycle;
   document.getElementById("customer-progress").style.width = `${(intoCycle / cycle) * 100}%`;
   document.getElementById("customer-progress-text").textContent =
-    `Còn ${remain} đơn nữa để nhận ưu đãi giảm ${rewardConfig.percent}%`;
+    `Còn ${remain} đơn nữa để nhận ưu đãi giảm ${state.rewardConfig.percent}%`;
 
   const vouchers = availableVouchers(c);
   const voucherBox = document.getElementById("customer-voucher");
   if (vouchers > 0) {
     voucherBox.classList.remove("hidden");
     document.getElementById("customer-voucher-text").textContent =
-      `${vouchers} ưu đãi giảm ${rewardConfig.percent}% — tự áp dụng khi thanh toán.`;
+      `${vouchers} ưu đãi giảm ${state.rewardConfig.percent}% — tự áp dụng khi thanh toán.`;
   } else {
     voucherBox.classList.add("hidden");
   }
@@ -2382,25 +1886,25 @@ function renderCustomerPanel() {
 }
 
 async function refreshCustomerData() {
-  if (!currentCustomer) return;
+  if (!state.currentCustomer) return;
   // hồ sơ (tên/địa chỉ/avatar)
   const { data } = await supabase
     .from("customers")
     .select("*")
-    .eq("phone", currentCustomer.phone)
+    .eq("phone", state.currentCustomer.phone)
     .maybeSingle();
-  if (data) currentCustomer = { ...currentCustomer, ...data };
+  if (data) state.currentCustomer = { ...state.currentCustomer, ...data };
 
   // điểm tính động từ đơn đã thanh toán/đã giao — đúng với MỌI cách thanh toán
   const { data: stats } = await supabase.rpc("customer_stats", {
-    p_phone: currentCustomer.phone,
+    p_phone: state.currentCustomer.phone,
   });
   if (stats && stats.length) {
-    currentCustomer.points = stats[0].points || 0;
-    currentCustomer.vouchers_used = stats[0].vouchers_used || 0;
+    state.currentCustomer.points = stats[0].points || 0;
+    state.currentCustomer.vouchers_used = stats[0].vouchers_used || 0;
   }
 
-  localStorage.setItem("nomnom_customer", JSON.stringify(currentCustomer));
+  localStorage.setItem("nomnom_customer", JSON.stringify(state.currentCustomer));
   updateAccountLabel();
   if (!customerPanel.classList.contains("hidden")) renderCustomerPanel();
 }
@@ -2419,15 +1923,17 @@ async function syncCartWithAccount(customer) {
     // Máy này chưa có gì trong giỏ — lấy lại giỏ đã lưu từ tài khoản
     cart = remoteCart;
   } else if (cart.length && remoteCart.length) {
-    // Cả máy và tài khoản đều có hàng — gộp lại, không mất món của bên nào
+    // Cả máy và tài khoản đều có hàng — gộp lại, không mất món của bên nào.
+    // Món trùng: lấy MAX (không CỘNG) — nếu cộng thì mỗi lần reload/đăng nhập lại,
+    // giỏ ở máy và giỏ đã lưu vốn giống nhau sẽ tự nhân đôi số lượng (6→12→24...).
     remoteCart.forEach((rItem) => {
       const local = cart.find((i) => i.id === rItem.id);
-      if (local) local.qty += rItem.qty;
+      if (local) local.qty = Math.max(local.qty, rItem.qty);
       else cart.push(rItem);
     });
   }
 
-  saveCart(); // currentCustomer đã được gán trước khi gọi hàm này nên sẽ tự đẩy giỏ đã gộp lên tài khoản
+  saveCart(); // state.currentCustomer đã được gán trước khi gọi hàm này nên sẽ tự đẩy giỏ đã gộp lên tài khoản
 }
 
 document.getElementById("account-btn").addEventListener("click", openCustomerModal);
@@ -2482,7 +1988,7 @@ customerLoginForm.addEventListener("submit", async (e) => {
     customer = created;
   }
 
-  currentCustomer = customer;
+  state.currentCustomer = customer;
   localStorage.setItem("nomnom_customer", JSON.stringify(customer));
   updateAccountLabel();
   customerLoginForm.reset();
@@ -2493,25 +1999,29 @@ customerLoginForm.addEventListener("submit", async (e) => {
 });
 
 document.getElementById("customer-save").addEventListener("click", async () => {
-  if (!currentCustomer) return;
+  if (!state.currentCustomer) return;
   const name = document.getElementById("customer-edit-name").value.trim();
   const address = document.getElementById("customer-edit-address").value.trim();
   const { data } = await supabase
     .from("customers")
     .update({ name: name || null, address: address || null })
-    .eq("phone", currentCustomer.phone)
+    .eq("phone", state.currentCustomer.phone)
     .select()
     .maybeSingle();
   if (data) {
-    currentCustomer = data;
-    localStorage.setItem("nomnom_customer", JSON.stringify(data));
+    // `points`/`vouchers_used` là điểm tính ĐỘNG qua RPC customer_stats — cột cùng tên
+    // trong bảng customers luôn = 0 (không dùng). Phải loại chúng khỏi row trước khi merge,
+    // nếu không sẽ đè điểm đang hiển thị về 0 cho tới lần refresh sau.
+    const { points, vouchers_used, cart: _ignoredCart, ...profile } = data;
+    state.currentCustomer = { ...state.currentCustomer, ...profile };
+    localStorage.setItem("nomnom_customer", JSON.stringify(state.currentCustomer));
     updateAccountLabel();
     renderCustomerPanel();
   }
 });
 
 document.getElementById("customer-logout").addEventListener("click", () => {
-  currentCustomer = null;
+  state.currentCustomer = null;
   localStorage.removeItem("nomnom_customer");
   updateAccountLabel();
   closeCustomerModal();
@@ -2546,10 +2056,10 @@ avatarBtn.addEventListener("drop", (e) => {
 });
 
 async function uploadAvatar(file) {
-  if (!currentCustomer || !file.type.startsWith("image/")) return;
+  if (!state.currentCustomer || !file.type.startsWith("image/")) return;
   file = await compressImage(file, { maxDim: 400 }); // avatar nhỏ nên nén mạnh hơn
   const ext = file.name.split(".").pop();
-  const name = `avatar-${currentCustomer.phone}-${Date.now()}.${ext}`;
+  const name = `avatar-${state.currentCustomer.phone}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage
     .from("product-images")
     .upload(name, file, { upsert: true });
@@ -2561,532 +2071,17 @@ async function uploadAvatar(file) {
   const { data } = await supabase
     .from("customers")
     .update({ avatar_url: url.publicUrl })
-    .eq("phone", currentCustomer.phone)
+    .eq("phone", state.currentCustomer.phone)
     .select()
     .maybeSingle();
   if (data) {
-    currentCustomer = { ...currentCustomer, ...data };
-    localStorage.setItem("nomnom_customer", JSON.stringify(currentCustomer));
+    state.currentCustomer = { ...state.currentCustomer, ...data };
+    localStorage.setItem("nomnom_customer", JSON.stringify(state.currentCustomer));
     renderCustomerPanel();
   }
 }
 
-// ── Chat trực tiếp với shop ──
-
-const chatFab = document.getElementById("chat-fab");
-const chatPanel = document.getElementById("chat-panel");
-const chatMessagesBox = document.getElementById("chat-messages");
-const chatForm = document.getElementById("chat-form");
-const chatInput = document.getElementById("chat-input");
-
-let chatChannel = null;
-let chatMessageCache = [];
-let chatUnreadCount = 0;
-let chatIdleTimer = null;
-let chatTypingHideTimer = null;
-let chatTypingSendThrottle = null;
-
-function getChatConversationId() {
-  if (currentCustomer) return currentCustomer.phone;
-  let guestId = localStorage.getItem("nomnom_chat_guest_id");
-  if (!guestId) {
-    guestId = "guest-" + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem("nomnom_chat_guest_id", guestId);
-  }
-  return guestId;
-}
-
-function getChatDisplayName() {
-  return (currentCustomer && (currentCustomer.name || currentCustomer.phone)) || "Khách vãng lai";
-}
-
-function updateChatBadge() {
-  const badge = document.getElementById("chat-fab-badge");
-  if (!badge) return;
-  badge.textContent = chatUnreadCount;
-  badge.classList.toggle("hidden", chatUnreadCount === 0);
-}
-
-const CHAT_SHOP_AVATAR_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>`;
-
-function renderChatMessages(messages) {
-  if (!messages.length) {
-    chatMessagesBox.innerHTML = `<p class="py-6 text-center text-xs text-ash">Nhắn gì đó cho nomnom nhé!</p>`;
-  } else {
-    chatMessagesBox.innerHTML = messages
-      .map((m) => {
-        const mine = m.sender === "customer";
-        return `
-          <div class="flex ${mine ? "justify-end" : "justify-start"}">
-            <div class="max-w-[80%] rounded-2xl px-3 py-2 ${mine ? "bg-ink text-white" : "border border-earth/40 bg-white text-ink"}">
-              <p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(m.message)}</p>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
-  }
-  chatMessagesBox.insertAdjacentHTML("beforeend", `<div id="chat-status-row" class="mt-1"></div>`);
-  chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight;
-  scheduleChatIdleTimestamp(messages[messages.length - 1]);
-}
-
-function setChatStatusRow(html) {
-  const row = document.getElementById("chat-status-row");
-  if (row) row.innerHTML = html;
-  chatMessagesBox.scrollTop = chatMessagesBox.scrollHeight;
-}
-
-function scheduleChatIdleTimestamp(lastMessage) {
-  clearTimeout(chatIdleTimer);
-  setChatStatusRow("");
-  if (!lastMessage) return;
-  chatIdleTimer = setTimeout(() => {
-    setChatStatusRow(`<p class="px-1 pt-1 text-center text-[10px] text-ash">${formatDateTime(lastMessage.created_at)}</p>`);
-  }, 15000);
-}
-
-function showShopTypingIndicator() {
-  clearTimeout(chatIdleTimer);
-  clearTimeout(chatTypingHideTimer);
-  setChatStatusRow(`
-    <div class="flex items-end justify-start gap-2">
-      <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-earth/40 text-ash">${CHAT_SHOP_AVATAR_SVG}</div>
-      <div class="flex items-center gap-1 rounded-2xl border border-earth/40 bg-white px-3 py-2.5">
-        <span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span>
-      </div>
-    </div>
-  `);
-  chatTypingHideTimer = setTimeout(() => {
-    scheduleChatIdleTimestamp(chatMessageCache[chatMessageCache.length - 1]);
-  }, 3000);
-}
-
-async function loadChatHistory() {
-  const conversationId = getChatConversationId();
-  chatMessagesBox.innerHTML = `<div class="space-y-2 px-1">${chatThreadSkeletonHtml()}</div>`;
-  const { data, error } = await supabase
-    .from("chat_messages")
-    .select("*")
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
-    .limit(200);
-  if (error) {
-    chatMessagesBox.innerHTML = `<p class="py-6 text-center text-xs text-red-600">Lỗi tải tin nhắn: ${error.message}</p>`;
-    return;
-  }
-  chatMessageCache = data || [];
-  renderChatMessages(chatMessageCache);
-}
-
-function restartChatWatcher() {
-  if (chatChannel) {
-    supabase.removeChannel(chatChannel);
-    chatChannel = null;
-  }
-  chatMessageCache = [];
-  chatUnreadCount = 0;
-  updateChatBadge();
-
-  const conversationId = getChatConversationId();
-  chatChannel = supabase
-    .channel(`chat-${conversationId}`)
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "chat_messages", filter: `conversation_id=eq.${conversationId}` },
-      (payload) => {
-        chatMessageCache.push(payload.new);
-        if (!chatPanel.classList.contains("hidden")) {
-          renderChatMessages(chatMessageCache);
-        } else if (payload.new.sender === "shop") {
-          chatUnreadCount++;
-          updateChatBadge();
-        }
-      }
-    )
-    .on("broadcast", { event: "typing" }, (payload) => {
-      if (payload.payload?.sender === "shop" && !chatPanel.classList.contains("hidden")) {
-        showShopTypingIndicator();
-      }
-    })
-    .subscribe();
-
-  if (!chatPanel.classList.contains("hidden")) loadChatHistory();
-}
-
-function openChat() {
-  chatPanel.classList.remove("hidden");
-  chatPanel.classList.add("flex");
-  if (isAdmin) return; // dữ liệu bảng tin nhắn admin đã tự cập nhật realtime sẵn, không cần tải lại
-  chatUnreadCount = 0;
-  updateChatBadge();
-  loadChatHistory();
-}
-
-function closeChat() {
-  chatPanel.classList.add("hidden");
-  chatPanel.classList.remove("flex");
-}
-
-chatFab.addEventListener("click", openChat);
-document.getElementById("chat-close").addEventListener("click", closeChat);
-
-chatInput.addEventListener("input", () => {
-  if (!chatChannel || chatTypingSendThrottle) return;
-  chatChannel.send({ type: "broadcast", event: "typing", payload: { sender: "customer" } });
-  chatTypingSendThrottle = setTimeout(() => { chatTypingSendThrottle = null; }, 2000);
-});
-
-chatForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const text = chatInput.value.trim();
-  if (!text) return;
-  chatInput.value = "";
-  const isFirstMessage = chatMessageCache.length === 0;
-  const conversationId = getChatConversationId();
-
-  const { error } = await supabase.from("chat_messages").insert({
-    conversation_id: conversationId,
-    customer_name: getChatDisplayName(),
-    sender: "customer",
-    message: text,
-  });
-  if (error) {
-    alert("Lỗi gửi tin nhắn: " + error.message);
-    return;
-  }
-
-  // Tin nhắn lần đầu của khách trong hội thoại này — tự gửi câu trả lời đã cấu hình (nếu có)
-  if (isFirstMessage && chatAutoReply) {
-    await supabase.from("chat_messages").insert({
-      conversation_id: conversationId,
-      customer_name: "nomnom",
-      sender: "shop",
-      message: chatAutoReply,
-    });
-  }
-});
-
-// ── Trạng thái online/offline của shop (Supabase Realtime Presence — không tốn DB
-// cho phần "đang online", chỉ ghi nhẹ heartbeat để biết "lần cuối hoạt động" khi
-// shop đã offline) ──
-
-let presenceChannel = null;
-let presenceHeartbeatTimer = null;
-
-async function updateShopStatusUI(state) {
-  const statusEl = document.getElementById("chat-shop-status");
-  if (!statusEl) return;
-  const shopOnline = !!(state["shop"] && state["shop"].length);
-  if (shopOnline) {
-    statusEl.textContent = "● nomnom đang online";
-    statusEl.className = "text-xs text-[#34C759]";
-    return;
-  }
-  const lastSeen = await fetchLastSeen("shop");
-  statusEl.textContent = lastSeen ? timeAgo(lastSeen) : "Chưa từng online";
-  statusEl.className = "text-xs text-ash";
-}
-
-function startPresence() {
-  if (presenceChannel) {
-    supabase.removeChannel(presenceChannel);
-    presenceChannel = null;
-  }
-  if (presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
-
-  presenceChannel = joinPresence(getChatConversationId(), updateShopStatusUI);
-  presenceHeartbeatTimer = startHeartbeatLoop(getChatConversationId);
-}
-
-startPresence();
-
-// ── Bảng quản lý tin nhắn nổi (khi cô chủ đăng nhập admin trên trang chính) ──
-// Cùng 1 khung chat nổi: khách thường thấy "Chat với nomnom" (1-1 với shop), cô chủ
-// đăng nhập admin thì tự chuyển thành bảng kiểu Messenger — danh sách hội thoại bên
-// trái, nội dung bên phải (mobile: list trước, bấm vào mới sang nội dung, có nút back).
-
-const ADMIN_CHAT_CACHE_KEY = "nomnom_storefront_chat_cache";
-
-let adminChatConversations = [];
-let adminChatActiveId = null;
-let adminChatOnlineIds = new Set();
-let adminChatLastSeenMap = new Map();
-let adminChatRealtimeChannel = null;
-let adminChatPresenceChannel = null;
-let adminChatPresenceHeartbeat = null;
-
-const chatPanelTitleEl = document.getElementById("chat-panel-title");
-const chatCustomerViewEl = document.getElementById("chat-customer-view");
-const chatAdminViewEl = document.getElementById("chat-admin-view");
-const chatAdminListPaneEl = document.getElementById("chat-admin-list-pane");
-const chatAdminThreadPaneEl = document.getElementById("chat-admin-thread-pane");
-const chatAdminConversationsEl = document.getElementById("chat-admin-conversations");
-const chatAdminThreadTitleEl = document.getElementById("chat-admin-thread-title");
-const chatAdminThreadSubtitleEl = document.getElementById("chat-admin-thread-subtitle");
-const chatAdminThreadMessagesEl = document.getElementById("chat-admin-thread-messages");
-const chatAdminReplyForm = document.getElementById("chat-admin-reply-form");
-const chatAdminReplyInput = document.getElementById("chat-admin-reply-input");
-
-function setChatAdminMode(adminMode) {
-  if (adminMode) {
-    chatPanelTitleEl.textContent = "Tin nhắn khách hàng";
-    chatCustomerViewEl.classList.add("hidden");
-    chatAdminViewEl.classList.remove("hidden");
-    chatAdminViewEl.classList.add("flex");
-    chatPanel.classList.remove("max-w-sm", "h-[70vh]", "max-h-[560px]");
-    chatPanel.classList.add("max-w-2xl", "h-[78vh]", "max-h-[640px]");
-    if (chatChannel) { supabase.removeChannel(chatChannel); chatChannel = null; }
-    if (presenceChannel) { supabase.removeChannel(presenceChannel); presenceChannel = null; }
-    if (presenceHeartbeatTimer) { clearInterval(presenceHeartbeatTimer); presenceHeartbeatTimer = null; }
-    startAdminChatPanel();
-  } else {
-    chatPanelTitleEl.textContent = "Chat với nomnom";
-    chatAdminViewEl.classList.add("hidden");
-    chatAdminViewEl.classList.remove("flex");
-    chatCustomerViewEl.classList.remove("hidden");
-    chatPanel.classList.remove("max-w-2xl", "h-[78vh]", "max-h-[640px]");
-    chatPanel.classList.add("max-w-sm", "h-[70vh]", "max-h-[560px]");
-    stopAdminChatPanel();
-    restartChatWatcher();
-    startPresence();
-  }
-}
-
-function hydrateAdminChatCache() {
-  try {
-    const cached = JSON.parse(localStorage.getItem(ADMIN_CHAT_CACHE_KEY) || "null");
-    if (cached && Array.isArray(cached.conversations)) {
-      adminChatConversations = cached.conversations;
-      return true;
-    }
-  } catch (e) {
-    // cache hỏng thì bỏ qua, tải mới như bình thường
-  }
-  return false;
-}
-
-function saveAdminChatCache() {
-  try {
-    localStorage.setItem(ADMIN_CHAT_CACHE_KEY, JSON.stringify({ conversations: adminChatConversations }));
-  } catch (e) {
-    // hết dung lượng localStorage thì bỏ qua
-  }
-}
-
-function updateAdminChatBadge() {
-  const total = adminChatConversations.reduce((sum, c) => sum + c.unread, 0);
-  const badge = document.getElementById("chat-fab-badge");
-  if (!badge) return;
-  badge.textContent = total;
-  badge.classList.toggle("hidden", total === 0);
-}
-
-function adminChatOnlineStatusText(conversationId) {
-  if (adminChatOnlineIds.has(conversationId)) return "Đang online";
-  const lastSeen = adminChatLastSeenMap.get(conversationId);
-  return lastSeen ? timeAgo(lastSeen) : "";
-}
-
-function renderAdminChatConversations() {
-  if (!adminChatConversations.length) {
-    chatAdminConversationsEl.innerHTML = `<p class="py-8 text-center text-xs text-ash">Chưa có tin nhắn nào.</p>`;
-    return;
-  }
-  chatAdminConversationsEl.innerHTML = adminChatConversations
-    .map((c) => {
-      const online = adminChatOnlineIds.has(c.conversationId);
-      const statusText = adminChatOnlineStatusText(c.conversationId);
-      return `
-      <button type="button" data-conversation="${c.conversationId}"
-        class="flex w-full items-start gap-3 border-b border-earth/15 px-3 py-2.5 text-left transition-colors ${c.conversationId === adminChatActiveId ? "bg-earth/10" : "bg-white hover:bg-earth/5"}">
-        ${avatarHtml(c.customerName || c.conversationId, online)}
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center justify-between gap-2">
-            <span class="truncate text-sm font-semibold text-ink">${escapeHtml(c.customerName || c.conversationId)}</span>
-            ${c.unread > 0 ? `<span class="shrink-0 rounded-full bg-[#7a0c1f] px-1.5 py-0.5 text-[10px] font-medium text-white">${c.unread}</span>` : ""}
-          </div>
-          <p class="mt-1 truncate text-xs text-ash">${escapeHtml(c.lastMessage || "")}</p>
-          <p class="mt-0.5 text-[10px] ${online ? "font-medium text-[#34C759]" : "text-ash/70"}">${statusText || formatDateTime(c.lastTime)}</p>
-        </div>
-      </button>
-    `;
-    })
-    .join("");
-
-  chatAdminConversationsEl.querySelectorAll("[data-conversation]").forEach((btn) =>
-    btn.addEventListener("click", () => openAdminChatThread(btn.dataset.conversation))
-  );
-}
-
-async function loadAdminChatConversations() {
-  const hasCache = hydrateAdminChatCache();
-  if (hasCache) {
-    renderAdminChatConversations();
-    updateAdminChatBadge();
-  }
-
-  const { data, error } = await supabase
-    .from("chat_messages")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(500);
-  if (error) {
-    if (!hasCache) chatAdminConversationsEl.innerHTML = `<p class="py-8 text-center text-xs text-red-600">Lỗi: ${escapeHtml(error.message)}</p>`;
-    return;
-  }
-
-  const map = new Map();
-  (data || []).forEach((m) => {
-    let conv = map.get(m.conversation_id);
-    if (!conv) {
-      conv = {
-        conversationId: m.conversation_id,
-        customerName: m.sender === "customer" ? m.customer_name : null,
-        lastMessage: m.message,
-        lastTime: m.created_at,
-        unread: 0,
-      };
-      map.set(m.conversation_id, conv);
-    } else if (!conv.customerName && m.sender === "customer") {
-      conv.customerName = m.customer_name;
-    }
-    if (m.sender === "customer" && !m.read_by_admin) conv.unread++;
-  });
-
-  adminChatConversations = [...map.values()].sort((a, b) => new Date(b.lastTime) - new Date(a.lastTime));
-  saveAdminChatCache();
-  updateAdminChatBadge();
-  renderAdminChatConversations();
-
-  adminChatLastSeenMap = await fetchAllLastSeen();
-  renderAdminChatConversations();
-}
-
-function showAdminChatThreadPane() {
-  chatAdminListPaneEl.classList.add("hidden");
-  chatAdminListPaneEl.classList.remove("flex");
-  chatAdminThreadPaneEl.classList.remove("hidden");
-  chatAdminThreadPaneEl.classList.add("flex");
-}
-
-function showAdminChatListPane() {
-  chatAdminThreadPaneEl.classList.add("hidden");
-  chatAdminThreadPaneEl.classList.remove("flex");
-  chatAdminListPaneEl.classList.remove("hidden");
-  chatAdminListPaneEl.classList.add("flex");
-}
-
-document.getElementById("chat-admin-back").addEventListener("click", showAdminChatListPane);
-
-async function openAdminChatThread(conversationId) {
-  adminChatActiveId = conversationId;
-  renderAdminChatConversations();
-  showAdminChatThreadPane();
-
-  const conv = adminChatConversations.find((c) => c.conversationId === conversationId);
-  chatAdminThreadTitleEl.textContent = (conv && conv.customerName) || conversationId;
-  const online = adminChatOnlineIds.has(conversationId);
-  chatAdminThreadSubtitleEl.textContent = adminChatOnlineStatusText(conversationId) || "Khách chưa từng online";
-  chatAdminThreadSubtitleEl.className = online ? "truncate text-xs font-medium text-[#34C759]" : "truncate text-xs text-ash";
-
-  chatAdminThreadMessagesEl.innerHTML = `<div class="space-y-2">${chatThreadSkeletonHtml()}</div>`;
-  chatAdminReplyForm.classList.remove("hidden");
-  chatAdminReplyForm.classList.add("flex");
-
-  const { data, error } = await supabase
-    .from("chat_messages")
-    .select("*")
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
-    .limit(300);
-
-  if (error) {
-    chatAdminThreadMessagesEl.innerHTML = `<p class="py-6 text-center text-xs text-red-600">Lỗi: ${escapeHtml(error.message)}</p>`;
-    return;
-  }
-
-  chatAdminThreadMessagesEl.innerHTML = data && data.length
-    ? data.map((m) => chatBubbleHtml(m, m.sender === "shop")).join("")
-    : `<p class="py-6 text-center text-xs text-ash">Chưa có tin nhắn.</p>`;
-  chatAdminThreadMessagesEl.scrollTop = chatAdminThreadMessagesEl.scrollHeight;
-
-  await supabase
-    .from("chat_messages")
-    .update({ read_by_admin: true })
-    .eq("conversation_id", conversationId)
-    .eq("sender", "customer")
-    .eq("read_by_admin", false);
-
-  if (conv) conv.unread = 0;
-  saveAdminChatCache();
-  updateAdminChatBadge();
-  renderAdminChatConversations();
-}
-
-chatAdminReplyForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!adminChatActiveId) return;
-  const text = chatAdminReplyInput.value.trim();
-  if (!text) return;
-  chatAdminReplyInput.value = "";
-  const { error } = await supabase.from("chat_messages").insert({
-    conversation_id: adminChatActiveId,
-    customer_name: "nomnom",
-    sender: "shop",
-    message: text,
-  });
-  if (error) alert("Lỗi gửi tin nhắn: " + error.message);
-});
-
-function handleAdminChatIncoming(message) {
-  let conv = adminChatConversations.find((c) => c.conversationId === message.conversation_id);
-  if (!conv) {
-    conv = { conversationId: message.conversation_id, customerName: null, lastMessage: "", lastTime: message.created_at, unread: 0 };
-    adminChatConversations.unshift(conv);
-  }
-  if (message.sender === "customer") conv.customerName = message.customer_name;
-  conv.lastMessage = message.message;
-  conv.lastTime = message.created_at;
-
-  if (adminChatActiveId === message.conversation_id) {
-    chatAdminThreadMessagesEl.insertAdjacentHTML("beforeend", chatBubbleHtml(message, message.sender === "shop"));
-    chatAdminThreadMessagesEl.scrollTop = chatAdminThreadMessagesEl.scrollHeight;
-    if (message.sender === "customer") {
-      supabase.from("chat_messages").update({ read_by_admin: true }).eq("id", message.id).then(() => {});
-    }
-  } else if (message.sender === "customer") {
-    conv.unread++;
-  }
-
-  adminChatConversations.sort((a, b) => new Date(b.lastTime) - new Date(a.lastTime));
-  saveAdminChatCache();
-  updateAdminChatBadge();
-  renderAdminChatConversations();
-}
-
-function startAdminChatPanel() {
-  showAdminChatListPane();
-  loadAdminChatConversations();
-
-  adminChatRealtimeChannel = supabase
-    .channel("storefront-admin-chat-changes")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => handleAdminChatIncoming(payload.new))
-    .subscribe();
-
-  adminChatPresenceChannel = joinPresence("shop", (state) => {
-    adminChatOnlineIds = new Set(Object.keys(state).filter((key) => key !== "shop"));
-    renderAdminChatConversations();
-  });
-  adminChatPresenceHeartbeat = startHeartbeatLoop(() => "shop");
-}
-
-function stopAdminChatPanel() {
-  if (adminChatRealtimeChannel) { supabase.removeChannel(adminChatRealtimeChannel); adminChatRealtimeChannel = null; }
-  if (adminChatPresenceChannel) { supabase.removeChannel(adminChatPresenceChannel); adminChatPresenceChannel = null; }
-  if (adminChatPresenceHeartbeat) { clearInterval(adminChatPresenceHeartbeat); adminChatPresenceHeartbeat = null; }
-  adminChatActiveId = null;
-}
+// ── Chat (khách + bảng admin) + Presence → đã tách sang src/storefront/chat.js (initChat / restartChatWatcher / startPresence / setChatAdminMode) ──
 
 // ── Reveal on scroll (fade + slide) — lặp lại mỗi lần vào tầm nhìn ──
 
@@ -3116,10 +2111,10 @@ document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el))
 
 updateCartCount();
 updateAccountLabel();
-if (currentCustomer) syncCartWithAccount(currentCustomer);
-restartChatWatcher();
+if (state.currentCustomer) syncCartWithAccount(state.currentCustomer);
+initChat();
 loadProducts();
-loadHeroSlides();
-loadBanners();
+initHero();
+initBanner();
 loadContactSettings();
-loadReviews();
+initReviews();

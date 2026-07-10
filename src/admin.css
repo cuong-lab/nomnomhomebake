@@ -101,6 +101,102 @@
   color: var(--color-ash);
 }
 
+.admin-stat-delta {
+  margin-top: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.admin-stat-delta:empty {
+  display: none;
+}
+
+.admin-stat-delta.is-up {
+  color: #16783a;
+}
+
+.admin-stat-delta.is-down {
+  color: rgb(185, 28, 28);
+}
+
+.admin-stat-delta.is-flat {
+  color: var(--color-ash);
+  font-weight: 600;
+}
+
+/* Cột biểu đồ doanh thu — mờ nhẹ, hover nổi rõ */
+.ov-bar {
+  transition: opacity 0.15s var(--ease-soft);
+  cursor: pointer;
+}
+
+.ov-bar:hover {
+  opacity: 1 !important;
+}
+
+.ov-bar-fill {
+  transition: filter 0.15s var(--ease-soft);
+}
+
+.ov-bar:hover .ov-bar-fill {
+  filter: brightness(1.15);
+}
+
+/* Tooltip tùy biến cho biểu đồ doanh thu */
+.ov-chart-wrap {
+  position: relative;
+}
+
+.ov-tooltip {
+  position: absolute;
+  transform: translate(-50%, -125%);
+  background: var(--color-ink);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.32rem 0.6rem;
+  border-radius: 0.45rem;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: 0 10px 24px -10px rgba(10, 10, 10, 0.6);
+}
+
+.ov-tooltip[hidden] {
+  display: none;
+}
+
+/* Hàng top bán chạy — hover đổi nền + thanh sáng hơn */
+.ov-seller {
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  margin: 0 -0.6rem;
+  transition: background 0.15s var(--ease-soft);
+  cursor: default;
+}
+
+.ov-seller:hover {
+  background: rgba(122, 12, 31, 0.06);
+}
+
+.ov-seller-fill {
+  transition: filter 0.15s var(--ease-soft);
+}
+
+.ov-seller:hover .ov-seller-fill {
+  filter: brightness(1.12);
+}
+
+/* Thẻ số — hover nhấc nhẹ cho cảm giác hiện đại */
+.admin-stat-card {
+  transition: transform 0.2s var(--ease-soft), box-shadow 0.2s var(--ease-soft);
+}
+
+.admin-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 55px -30px rgba(10, 10, 10, 0.6);
+}
+
 .admin-panel {
   padding: 1rem;
 }
