@@ -158,6 +158,5 @@ export function initHero() {
     await renderSlidesList();
     loadHeroSlides();
   });
-
-  loadHeroSlides();
+  // Tải ảnh hero do handler auth gọi loadHeroSlides() (tránh tải 2 lần + chớp).
 }

@@ -538,13 +538,19 @@
           </div>
           <textarea id="cust-note" placeholder="Ghi chú (tuỳ chọn)" rows="2" class="w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink resize-none"></textarea>
         </div>
-        <label id="voucher-row" class="mt-3 hidden cursor-pointer items-center gap-2 rounded-xl border border-dashed border-[#7a0c1f] bg-[#7a0c1f]/5 px-4 py-3">
-          <input id="voucher-check" type="checkbox" class="h-4 w-4 accent-[#7a0c1f]" />
-          <span class="text-sm text-[#7a0c1f]" id="voucher-label">Dùng ưu đãi giảm giá</span>
-        </label>
+        <div id="voucher-section" class="mt-4 hidden border-t border-dashed border-earth pt-4">
+          <p class="text-sm font-medium text-ink">Voucher ưu đãi <span id="voucher-max-hint" class="text-xs font-normal text-ash">(chọn tối đa 2)</span></p>
+          <div class="mt-2 flex gap-2">
+            <input id="voucher-code-input" type="text" placeholder="Nhập mã bạn bè cho (NN-XXXXXX)" class="flex-1 border border-earth/60 bg-white px-3 py-2 text-sm uppercase text-ink outline-none focus:border-ink" />
+            <button type="button" id="voucher-code-apply" class="shrink-0 bg-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90">Áp mã</button>
+          </div>
+          <p id="voucher-code-msg" class="mt-1 hidden text-xs"></p>
+          <div id="voucher-list" class="mt-2 space-y-2"></div>
+          <div id="voucher-cap-note" class="mt-2 hidden rounded-lg bg-[#f59e0b]/10 px-3 py-2 text-xs text-[#9a5d00]"></div>
+        </div>
         <div id="checkout-summary" class="mt-3 space-y-1 text-sm hidden">
           <div class="flex justify-between text-ash"><span>Tạm tính</span><span id="sum-subtotal"></span></div>
-          <div id="sum-discount-row" class="flex justify-between text-[#7a0c1f] hidden"><span>Ưu đãi</span><span id="sum-discount"></span></div>
+          <div id="sum-discount-row" class="flex justify-between text-[#7a0c1f] hidden"><span id="sum-discount-label">Ưu đãi</span><span id="sum-discount"></span></div>
           <div class="flex justify-between font-medium text-ink"><span>Thanh toán</span><span id="sum-total"></span></div>
         </div>
         <div id="delivery-info" class="mt-4 border border-earth/40 p-3 text-xs text-ash space-y-1 hidden">
@@ -596,7 +602,7 @@
 
     <!-- ===== Customer Account Modal ===== -->
     <div id="customer-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50">
-      <div class="w-full max-w-sm bg-cream p-6 mx-4 max-h-[88vh] overflow-y-auto md:mx-auto md:p-8">
+      <div class="w-full max-w-sm bg-cream p-6 mx-4 max-h-[88vh] overflow-y-auto overflow-x-hidden md:mx-auto md:p-8">
         <!-- Form đăng nhập / đăng ký -->
         <form id="customer-login-form">
           <h2 class="font-serif text-2xl text-ink">Đăng nhập nomnom</h2>
@@ -647,18 +653,23 @@
                 <p id="customer-phone-display" class="text-sm text-ash"></p>
               </div>
             </div>
-            <div class="mt-6 rounded-2xl bg-ink px-5 py-5 text-cream">
-              <p class="text-xs uppercase tracking-wider text-cream/60">Điểm tích lũy</p>
-              <p class="mt-1 font-serif text-3xl"><span id="customer-points">0</span> <span class="text-base font-sans text-cream/70">đơn</span></p>
-              <div class="mt-4 h-2 w-full overflow-hidden rounded-full bg-cream/20">
-                <div id="customer-progress" class="h-full bg-cream transition-all" style="width:0%"></div>
-              </div>
-              <p id="customer-progress-text" class="mt-2 text-xs text-cream/70"></p>
+            <!-- Hạng thành viên (khung sang trọng, tràn viền) -->
+            <div id="customer-tier"></div>
+
+            <!-- Kho voucher của khách -->
+            <div class="mt-6">
+              <span class="text-xs font-medium uppercase tracking-wider text-ash">Kho voucher của bạn</span>
+              <div id="customer-vouchers" class="vlist"></div>
+              <p id="customer-vouchers-empty" class="mt-3 hidden text-sm text-ash">Chưa có voucher nào. Mua đủ đơn hoặc lên hạng để nhận ưu đãi nhé!</p>
             </div>
-            <div id="customer-voucher" class="mt-4 hidden rounded-2xl border border-dashed border-[#7a0c1f] bg-[#7a0c1f]/5 px-5 py-4 text-center">
-              <p class="flex items-center justify-center gap-1.5 text-sm font-medium text-[#7a0c1f]"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8M16.5 8a2.5 2.5 0 0 0 0-5C13 3 12 8 12 8"/></svg>Bạn có ưu đãi!</p>
-              <p id="customer-voucher-text" class="mt-1 text-xs text-ash"></p>
+
+            <!-- Ngày sinh (voucher sinh nhật) -->
+            <div class="mt-6 border-t border-dashed border-earth pt-4">
+              <span class="text-xs font-medium uppercase tracking-wider text-ash">Ngày sinh (để nhận voucher sinh nhật)</span>
+              <div id="customer-birthday-area" class="mt-2 flex flex-wrap items-center gap-2"></div>
+              <p class="mt-2 text-xs text-ash">🔒 Sau khi lưu, ngày sinh sẽ bị <b>khoá</b>, không tự đổi được (chống lạm dụng voucher sinh nhật). Muốn sửa phải nhờ shop.</p>
             </div>
+
             <label class="mt-6 block">
               <span class="text-xs font-medium uppercase tracking-wider text-ash">Cập nhật thông tin</span>
               <input id="customer-edit-name" type="text" placeholder="Họ tên" class="mt-2 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink" />
@@ -676,6 +687,20 @@
           <div class="mt-6 border-t border-dashed border-earth pt-4">
             <button id="customer-panel-close" class="text-sm text-ash hover:text-ink">Đóng</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Modal Tặng voucher ===== -->
+    <div id="gift-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-ink/50 px-5">
+      <div class="w-full max-w-sm bg-cream p-6">
+        <h3 class="font-serif text-xl text-ink">Tặng voucher</h3>
+        <p class="mt-1 text-sm text-ash">Nhập SĐT người nhận. Nếu họ đã có tài khoản nomnom, mã tự chuyển sang. Nếu chưa, bạn copy mã gửi tay — mã vẫn ở kho tới khi được dùng.</p>
+        <input id="gift-phone" type="tel" placeholder="SĐT người nhận" class="mt-4 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink" />
+        <div id="gift-result" class="mt-2"></div>
+        <div class="mt-4 flex items-center justify-end gap-3">
+          <button type="button" id="gift-cancel" class="text-sm text-ash hover:text-ink">Đóng</button>
+          <button type="button" id="gift-go" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90">Tặng</button>
         </div>
       </div>
     </div>
@@ -915,6 +940,23 @@
           type="number" name="reward_percent" placeholder="VD: 20" min="1" max="100"
           class="mt-1 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
         />
+        <p class="mt-5 text-xs font-medium uppercase tracking-wider text-ash">Hạng khách &amp; voucher</p>
+        <p class="mt-1 text-xs text-ash">Hạng theo tổng chi 6 tháng; mỗi hạng được cấp số voucher %/tháng như dưới (giữ song song ưu đãi "đủ đơn" ở trên).</p>
+        <div class="mt-2 grid grid-cols-[1.1fr_1fr_0.75fr_0.75fr] gap-2 text-[10px] font-medium uppercase tracking-wide text-ash">
+          <span>Hạng</span><span>Mốc chi từ (đ)</span><span>SL/tháng</span><span>Giảm %</span>
+        </div>
+        <div id="tier-config-rows" class="mt-1 space-y-1.5"></div>
+        <div class="mt-3 grid grid-cols-2 gap-3">
+          <label class="block text-sm text-ash">% voucher sinh nhật
+            <input type="number" name="birthday_voucher_percent" min="0" max="100" placeholder="VD: 25" class="mt-1 w-full border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
+          </label>
+          <label class="block text-sm text-ash">Voucher tối đa / đơn
+            <input type="number" name="max_vouchers_per_order" min="1" max="5" placeholder="VD: 2" class="mt-1 w-full border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
+          </label>
+          <label class="col-span-2 block text-sm text-ash">Trần giảm mỗi đơn (đ) — 0 = không giới hạn
+            <input type="number" name="max_discount_amount" min="0" step="10000" placeholder="VD: 100000" class="mt-1 w-full border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
+          </label>
+        </div>
         <p id="contact-error" class="mt-2 text-xs text-red-600 hidden"></p>
         <div class="mt-6 flex items-center gap-3">
           <button type="submit" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90">Lưu</button>

@@ -171,6 +171,5 @@ export function initReviews() {
     starPicker.querySelectorAll("[data-star]").forEach((b) => b.classList.replace("text-earth/50", "text-[#f39c12]"));
     loadReviews();
   });
-
-  loadReviews();
+  // Tải review do handler auth gọi loadReviews() (tránh tải 2 lần).
 }

@@ -3,16 +3,20 @@ import { supabase } from "./supabase.js";
 import { formatCurrency, formatPrice, formatDateTimeLong, formatDateTime, escapeHtml } from "./shared/format.js";
 import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
 import { compressImage } from "./shared/imageUtils.js";
-import { state } from "./store.js";
+import { state, DEFAULT_TIERS } from "./store.js";
 import { initReviews, loadReviews } from "./storefront/reviews.js";
 import { initHero, loadHeroSlides } from "./storefront/hero.js";
 import { initChat, restartChatWatcher, startPresence, setChatAdminMode } from "./storefront/chat.js";
+import { tierHeroHtml, activateLadders, voucherCardHtml, coVoucherHtml } from "./storefront/vouchers.js";
 
 const yearEl = document.querySelector("[data-year]");
 if (yearEl) yearEl.textContent = new Date().getFullYear();
 
 let cart = JSON.parse(localStorage.getItem("nomnom-cart") || "[]");
-let appliedVoucherPercent = 0;
+let appliedVoucherPercent = 0;   // tổng % của các voucher đang chọn ở checkout
+let appliedDiscount = 0;         // số tiền giảm THỰC (đã chặn trần) ở checkout
+let checkoutVouchers = [];       // pool voucher hiện ở checkout = kho khách + mã nhập tay
+let selectedVoucherCodes = [];   // mã voucher đang chọn (tối đa maxVouchersPerOrder)
 
 function saveCart() {
   localStorage.setItem("nomnom-cart", JSON.stringify(cart));
@@ -259,28 +263,90 @@ document.getElementById("cart-checkout-step").addEventListener("click", () => {
 });
 
 function setupVoucherUI() {
-  const row = document.getElementById("voucher-row");
-  const check = document.getElementById("voucher-check");
-  const vouchers = availableVouchers(state.currentCustomer);
-  if (state.currentCustomer && vouchers > 0) {
-    row.classList.remove("hidden");
-    row.classList.add("flex");
-    document.getElementById("voucher-label").textContent =
-      `Dùng ưu đãi giảm ${state.rewardConfig.percent}% (bạn có ${vouchers})`;
-    check.checked = false;
-  } else {
-    row.classList.add("hidden");
-    row.classList.remove("flex");
-    check.checked = false;
+  // Pool voucher ở checkout = kho của khách (nếu đã đăng nhập). Khách vãng lai vẫn
+  // nhập được mã bạn bè cho ở ô "Áp mã". Reset lựa chọn mỗi lần vào bước thanh toán.
+  checkoutVouchers = (state.myVouchers || []).map((v) => ({ ...v }));
+  selectedVoucherCodes = [];
+  document.getElementById("voucher-section").classList.remove("hidden");
+  const hint = document.getElementById("voucher-max-hint");
+  if (hint) hint.textContent = `(chọn tối đa ${state.maxVouchersPerOrder || 2})`;
+  const msg = document.getElementById("voucher-code-msg");
+  msg.textContent = "";
+  msg.classList.add("hidden");
+  document.getElementById("voucher-code-input").value = "";
+  renderVoucherList();
+}
+
+function renderVoucherList() {
+  const box = document.getElementById("voucher-list");
+  const maxPer = state.maxVouchersPerOrder || 2;
+  if (!checkoutVouchers.length) {
+    box.innerHTML = `<p class="text-xs text-ash">Chưa có voucher nào. Nhập mã bạn bè cho ở trên, hoặc lên hạng / đủ đơn để nhận.</p>`;
+    renderCheckoutSummary();
+    return;
   }
+  box.innerHTML = checkoutVouchers
+    .map((v) =>
+      coVoucherHtml(v, {
+        on: selectedVoucherCodes.includes(v.code),
+        disabled: !selectedVoucherCodes.includes(v.code) && selectedVoucherCodes.length >= maxPer,
+      })
+    )
+    .join("");
+  box.querySelectorAll(".co-v").forEach((el) =>
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (el.classList.contains("disabled")) return;
+      const code = el.dataset.code;
+      const i = selectedVoucherCodes.indexOf(code);
+      if (i >= 0) selectedVoucherCodes.splice(i, 1);
+      else selectedVoucherCodes.push(code);
+      renderVoucherList();
+    })
+  );
   renderCheckoutSummary();
+}
+
+// Nhập mã tay (mã bạn bè cho): tra DB, nếu active & còn hạn thì thêm vào pool + tự chọn.
+async function applyVoucherCode() {
+  const input = document.getElementById("voucher-code-input");
+  const msg = document.getElementById("voucher-code-msg");
+  const code = input.value.trim().toUpperCase();
+  const show = (text, ok) => {
+    msg.textContent = text;
+    msg.classList.remove("hidden");
+    msg.classList.toggle("text-green-700", ok);
+    msg.classList.toggle("text-[#7a0c1f]", !ok);
+  };
+  if (!code) return;
+  if (checkoutVouchers.some((v) => v.code === code)) { show("Mã này đã có trong danh sách rồi.", false); return; }
+  const { data } = await supabase
+    .from("vouchers")
+    .select("code, percent, source, status, expires_at")
+    .eq("code", code)
+    .maybeSingle();
+  if (!data || data.status !== "active" || (data.expires_at && new Date(data.expires_at) < new Date())) {
+    show("Mã không tồn tại, đã dùng hoặc đã hết hạn.", false);
+    return;
+  }
+  checkoutVouchers.push({ code: data.code, percent: data.percent, source: data.source, expires_at: data.expires_at });
+  if (selectedVoucherCodes.length < (state.maxVouchersPerOrder || 2)) selectedVoucherCodes.push(data.code);
+  input.value = "";
+  renderVoucherList();
+  show(`✓ Đã thêm ${data.code} (−${data.percent}%).`, true);
 }
 
 function renderCheckoutSummary() {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const check = document.getElementById("voucher-check");
-  appliedVoucherPercent = check && check.checked ? state.rewardConfig.percent : 0;
-  const discount = Math.round((subtotal * appliedVoucherPercent) / 100);
+  const pct = selectedVoucherCodes.reduce((s, code) => {
+    const v = checkoutVouchers.find((x) => x.code === code);
+    return s + (v ? v.percent : 0);
+  }, 0);
+  const rawDiscount = Math.round((subtotal * pct) / 100);
+  const cap = state.maxDiscountAmount || 0;
+  const discount = cap > 0 ? Math.min(rawDiscount, cap) : rawDiscount;
+  appliedVoucherPercent = pct;
+  appliedDiscount = discount;
   const total = subtotal - discount;
 
   const summary = document.getElementById("checkout-summary");
@@ -291,15 +357,27 @@ function renderCheckoutSummary() {
   if (discount > 0) {
     dRow.classList.remove("hidden");
     dRow.classList.add("flex");
+    document.getElementById("sum-discount-label").textContent = `Ưu đãi (${pct}%)`;
     document.getElementById("sum-discount").textContent = "-" + formatPrice(discount);
   } else {
     dRow.classList.add("hidden");
     dRow.classList.remove("flex");
   }
+
+  const capNote = document.getElementById("voucher-cap-note");
+  if (cap > 0 && rawDiscount > cap) {
+    capNote.classList.remove("hidden");
+    capNote.innerHTML = `⚠️ ${pct}% của ${formatPrice(subtotal)} = <b>${formatPrice(rawDiscount)}</b>, nhưng trần giảm là <b>${formatPrice(cap)}</b> → chỉ giảm <b>${formatPrice(cap)}</b>.`;
+  } else {
+    capNote.classList.add("hidden");
+  }
   return total;
 }
 
-document.getElementById("voucher-check").addEventListener("change", renderCheckoutSummary);
+document.getElementById("voucher-code-apply").addEventListener("click", applyVoucherCode);
+document.getElementById("voucher-code-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); applyVoucherCode(); }
+});
 
 function buildDeliveryTime() {
   const d = document.getElementById("cust-date").value; // YYYY-MM-DD
@@ -339,8 +417,8 @@ cartCheckout.addEventListener("click", async () => {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const voucherPercent = appliedVoucherPercent || 0;
-  const total = subtotal - Math.round((subtotal * voucherPercent) / 100);
+  const voucherPercent = appliedVoucherPercent || 0;       // tổng % các voucher đang chọn
+  const total = subtotal - (appliedDiscount || 0);          // đã chặn trần giảm
   const orderCode = "NN" + Date.now().toString().slice(-8);
   lastOrderCode = orderCode;
   const content = `${orderCode} nomnom`;
@@ -363,6 +441,12 @@ cartCheckout.addEventListener("click", async () => {
     ce.textContent = "Lỗi tạo đơn: " + orderErr.message;
     ce.classList.remove("hidden");
     return;
+  }
+
+  // Đánh dấu voucher đã dùng (RPC nguyên tử, chống double-spend). Voucher rời kho khách.
+  if (selectedVoucherCodes.length) {
+    await supabase.rpc("redeem_vouchers", { p_codes: selectedVoucherCodes, p_order_code: orderCode });
+    if (state.currentCustomer) refreshCustomerData();
   }
 
   pendingOrderActive = true;
@@ -460,7 +544,10 @@ function showPaymentSuccess() {
   document.getElementById("cart-success").classList.remove("hidden");
 
   appliedVoucherPercent = 0;
-  // cập nhật lại điểm tích lũy sau khi webhook đã cộng (đợi 1.5s cho chắc)
+  appliedDiscount = 0;
+  selectedVoucherCodes = [];
+  checkoutVouchers = [];
+  // cập nhật lại điểm tích lũy + kho voucher sau khi webhook đã cộng (đợi 1.5s cho chắc)
   if (state.currentCustomer) setTimeout(refreshCustomerData, 1500);
 }
 
@@ -564,29 +651,25 @@ function setAdminNavLink(link, admin) {
   link.setAttribute("href", admin ? "/admin.html" : "#reviews");
 }
 
-supabase.auth.onAuthStateChange(async (_event, session) => {
+supabase.auth.onAuthStateChange((_event, session) => {
   state.isAdmin = !!session;
   adminLogoutBtn.classList.toggle("hidden", !state.isAdmin);
   setAdminNavLink(adminNavLink, state.isAdmin);
   setAdminNavLink(adminMobileNavLink, state.isAdmin);
   adminOrdersBtn.classList.toggle("hidden", !state.isAdmin);
-
-  // Tải TUẦN TỰ (await) rồi mới bật realtime — tránh bắn nhiều truy vấn + kênh realtime
-  // cùng lúc ngay khi phiên vừa resolve, vốn gây DEADLOCK ~10s trong thư viện Supabase
-  // (nặng nhất khi reload lúc đang là admin — xem gotcha trong CLAUDE.md).
-  await loadProducts();
-  await loadHeroSlides();
-  await loadContactSettings();
-  await loadReviews();
-
-  setChatAdminMode(state.isAdmin);
-  if (state.isAdmin) {
-    startAdminOrdersRealtime();
-  } else {
-    stopAdminOrdersRealtime();
-    closeOrdersDrawer();
-    adminOrdersBadge.classList.add("hidden");
-  }
+  // Tải dữ liệu SONG SONG trước; CHỈ khi tất cả xong mới bật realtime (chat + đơn hàng).
+  // Bật realtime lúc query đang chạy làm thư viện Supabase deadlock (~10s, nặng khi admin
+  // reload). Đây là nơi khởi động realtime + tải dữ liệu DUY NHẤT lúc vào trang.
+  Promise.allSettled([loadProducts(), loadHeroSlides(), loadContactSettings(), loadReviews()]).then(() => {
+    setChatAdminMode(state.isAdmin);
+    if (state.isAdmin) {
+      startAdminOrdersRealtime();
+    } else {
+      stopAdminOrdersRealtime();
+      closeOrdersDrawer();
+      adminOrdersBadge.classList.add("hidden");
+    }
+  });
 });
 
 // ── Products ──
@@ -1291,6 +1374,17 @@ async function loadContactSettings() {
     cycle: parseInt(data.reward_cycle_orders) || 10,
     percent: parseInt(data.reward_percent) || 20,
   };
+
+  // Cấu hình hạng khách & voucher (tier_config jsonb + các cột int). Fallback = mặc định.
+  const tc = Array.isArray(data.tier_config) ? data.tier_config
+    : (typeof data.tier_config === "string" && data.tier_config ? JSON.parse(data.tier_config) : null);
+  state.tierConfig = (tc && tc.length ? tc : DEFAULT_TIERS)
+    .map((t) => ({ name: t.name, min_spend: Number(t.min_spend) || 0, monthly_count: Number(t.monthly_count) || 0, percent: Number(t.percent) || 0 }))
+    .sort((a, b) => a.min_spend - b.min_spend);
+  state.birthdayPercent = parseInt(data.birthday_voucher_percent) || 0;
+  state.maxVouchersPerOrder = parseInt(data.max_vouchers_per_order) || 2;
+  state.maxDiscountAmount = parseInt(data.max_discount_amount) || 0;
+
   updateLoyaltyHint();
   if (state.currentCustomer) refreshCustomerData();
 
@@ -1311,6 +1405,35 @@ document.getElementById("about-image-edit").addEventListener("click", () => {
 document.getElementById("custom-image-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
+
+// Bảng sửa 4 hạng trong modal cài đặt (tên hạng cố định; sửa mốc chi / SL voucher / %).
+function renderTierConfigRows(tiers) {
+  const box = document.getElementById("tier-config-rows");
+  const rows = tiers && tiers.length ? tiers : DEFAULT_TIERS;
+  box.innerHTML = rows
+    .map(
+      (t, i) => `
+      <div class="grid grid-cols-[1.1fr_1fr_0.75fr_0.75fr] items-center gap-2">
+        <span class="text-xs font-medium text-ink">${t.name}</span>
+        <input data-tier="${i}" data-field="min_spend" type="number" min="0" step="100000" value="${t.min_spend}" class="w-full border border-earth/60 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-ink" />
+        <input data-tier="${i}" data-field="monthly_count" type="number" min="0" value="${t.monthly_count}" class="w-full border border-earth/60 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-ink" />
+        <input data-tier="${i}" data-field="percent" type="number" min="0" max="100" value="${t.percent}" class="w-full border border-earth/60 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-ink" />
+      </div>`
+    )
+    .join("");
+}
+
+// Đọc lại 4 hạng từ input trong modal → mảng jsonb để lưu (giữ tên hạng theo cấu hình gốc).
+function readTierConfigRows() {
+  const box = document.getElementById("tier-config-rows");
+  const base = state.tierConfig && state.tierConfig.length ? state.tierConfig : DEFAULT_TIERS;
+  return base.map((t, i) => ({
+    name: t.name,
+    min_spend: parseInt(box.querySelector(`[data-tier="${i}"][data-field="min_spend"]`)?.value) || 0,
+    monthly_count: parseInt(box.querySelector(`[data-tier="${i}"][data-field="monthly_count"]`)?.value) || 0,
+    percent: parseInt(box.querySelector(`[data-tier="${i}"][data-field="percent"]`)?.value) || 0,
+  }));
+}
 
 contactEditBtn.addEventListener("click", async () => {
   const { data } = await supabase.from("site_settings").select("*").single();
@@ -1333,6 +1456,10 @@ contactEditBtn.addEventListener("click", async () => {
     contactForm.elements.chat_auto_reply.value = data.chat_auto_reply || "";
     contactForm.elements.reward_cycle_orders.value = data.reward_cycle_orders || "";
     contactForm.elements.reward_percent.value = data.reward_percent || "";
+    contactForm.elements.birthday_voucher_percent.value = data.birthday_voucher_percent ?? "";
+    contactForm.elements.max_vouchers_per_order.value = data.max_vouchers_per_order ?? "";
+    contactForm.elements.max_discount_amount.value = data.max_discount_amount ?? "";
+    renderTierConfigRows(state.tierConfig);
     const preview = document.getElementById("current-logo-preview");
     const previewImg = document.getElementById("logo-preview-img");
     if (data.logo_image_url) {
@@ -1433,6 +1560,10 @@ contactForm.addEventListener("submit", async (e) => {
     chat_auto_reply: form.get("chat_auto_reply") || null,
     reward_cycle_orders: form.get("reward_cycle_orders") ? parseInt(form.get("reward_cycle_orders")) : null,
     reward_percent: form.get("reward_percent") ? parseInt(form.get("reward_percent")) : null,
+    tier_config: readTierConfigRows(),
+    birthday_voucher_percent: form.get("birthday_voucher_percent") ? parseInt(form.get("birthday_voucher_percent")) : null,
+    max_vouchers_per_order: form.get("max_vouchers_per_order") ? parseInt(form.get("max_vouchers_per_order")) : null,
+    max_discount_amount: form.get("max_discount_amount") ? parseInt(form.get("max_discount_amount")) : null,
   };
   if (logo_image_url) row.logo_image_url = logo_image_url;
   if (about_image_url) row.about_image_url = about_image_url;
@@ -1687,12 +1818,6 @@ const customerLoginForm = document.getElementById("customer-login-form");
 const customerPanel = document.getElementById("customer-panel");
 const customerLoginError = document.getElementById("customer-login-error");
 
-function availableVouchers(c) {
-  if (!c) return 0;
-  const earned = Math.floor((c.points || 0) / state.rewardConfig.cycle);
-  return Math.max(0, earned - (c.vouchers_used || 0));
-}
-
 function openCustomerModal() {
   if (state.currentCustomer) {
     customerLoginForm.classList.add("hidden");
@@ -1905,52 +2030,156 @@ function renderCustomerPanel() {
   }
   document.getElementById("customer-name-display").textContent = c.name || "Khách nomnom";
   document.getElementById("customer-phone-display").textContent = c.phone;
-  document.getElementById("customer-points").textContent = c.points || 0;
 
-  const cycle = state.rewardConfig.cycle;
-  const intoCycle = (c.points || 0) % cycle;
-  const remain = cycle - intoCycle;
-  document.getElementById("customer-progress").style.width = `${(intoCycle / cycle) * 100}%`;
-  document.getElementById("customer-progress-text").textContent =
-    `Còn ${remain} đơn nữa để nhận ưu đãi giảm ${state.rewardConfig.percent}%`;
+  // Hạng thành viên (khung sang trọng + ladder trượt theo tổng chi 6 tháng)
+  const tierBox = document.getElementById("customer-tier");
+  tierBox.innerHTML = tierHeroHtml(state.loyalty?.period_spend || 0, state.tierConfig);
+  activateLadders(tierBox);
 
-  const vouchers = availableVouchers(c);
-  const voucherBox = document.getElementById("customer-voucher");
-  if (vouchers > 0) {
-    voucherBox.classList.remove("hidden");
-    document.getElementById("customer-voucher-text").textContent =
-      `${vouchers} ưu đãi giảm ${state.rewardConfig.percent}% — tự áp dụng khi thanh toán.`;
-  } else {
-    voucherBox.classList.add("hidden");
-  }
+  renderCustomerVouchers();
+  renderBirthdayField();
 
   document.getElementById("customer-edit-name").value = c.name || "";
   document.getElementById("customer-edit-address").value = c.address || "";
 }
 
+// Kho voucher active của khách (mỗi thẻ có nút Tặng).
+function renderCustomerVouchers() {
+  const box = document.getElementById("customer-vouchers");
+  const empty = document.getElementById("customer-vouchers-empty");
+  const list = state.myVouchers || [];
+  if (!list.length) {
+    box.innerHTML = "";
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+  box.innerHTML = list.map(voucherCardHtml).join("");
+  box.querySelectorAll("[data-gift-code]").forEach((btn) =>
+    btn.addEventListener("click", () => openGiftModal(btn.dataset.giftCode))
+  );
+}
+
+// Ô ngày sinh: nhập nếu chưa có; read-only nếu đã set (trigger DB khoá không cho đổi).
+function renderBirthdayField() {
+  const area = document.getElementById("customer-birthday-area");
+  const bday = state.currentCustomer?.birthday;
+  if (bday) {
+    const d = new Date(bday);
+    const txt = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+    area.innerHTML = `<input type="text" value="${txt}" readonly class="border border-earth/60 bg-earth/20 px-3 py-2 text-sm text-ash" /> <span class="text-xs font-medium text-green-700">✓ Đã lưu &amp; khoá</span>`;
+  } else {
+    area.innerHTML = `<input id="customer-birthday-input" type="date" class="border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" /> <button id="customer-birthday-save" type="button" class="bg-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90">Lưu ngày sinh</button>`;
+    document.getElementById("customer-birthday-save").addEventListener("click", saveBirthday);
+  }
+}
+
+async function saveBirthday() {
+  const input = document.getElementById("customer-birthday-input");
+  if (!input || !input.value || !state.currentCustomer) return;
+  const { data, error } = await supabase
+    .from("customers")
+    .update({ birthday: input.value })
+    .eq("phone", state.currentCustomer.phone)
+    .select()
+    .maybeSingle();
+  if (error) { alert("Lỗi lưu ngày sinh: " + error.message); return; }
+  if (data) {
+    state.currentCustomer.birthday = data.birthday;
+    state.currentCustomer.birthday_set_at = data.birthday_set_at;
+    localStorage.setItem("nomnom_customer", JSON.stringify(state.currentCustomer));
+  }
+  await issueAndLoadVouchers();   // cấp voucher sinh nhật ngay nếu đúng tháng sinh
+  renderBirthdayField();
+  renderCustomerVouchers();
+}
+
+// Cấp voucher (idempotent) + tải kho voucher active & thông tin hạng. Gọi on-login + khi mở tài khoản.
+async function issueAndLoadVouchers() {
+  if (!state.currentCustomer) return;
+  const phone = state.currentCustomer.phone;
+  await supabase.rpc("issue_vouchers", { p_phone: phone });
+  const [{ data: vs }, { data: loy }] = await Promise.all([
+    supabase
+      .from("vouchers")
+      .select("code, percent, source, expires_at, issued_at")
+      .eq("customer_phone", phone)
+      .eq("status", "active")
+      .order("issued_at", { ascending: false }),
+    supabase.rpc("customer_loyalty", { p_phone: phone }),
+  ]);
+  const now = Date.now();
+  state.myVouchers = (vs || []).filter((v) => !v.expires_at || new Date(v.expires_at).getTime() > now);
+  if (loy && loy.length) {
+    state.loyalty = { paid_orders: loy[0].paid_orders || 0, period_spend: Number(loy[0].period_spend) || 0 };
+  }
+}
+
 async function refreshCustomerData() {
   if (!state.currentCustomer) return;
-  // hồ sơ (tên/địa chỉ/avatar)
+  // hồ sơ (tên/địa chỉ/avatar/ngày sinh)
   const { data } = await supabase
     .from("customers")
     .select("*")
     .eq("phone", state.currentCustomer.phone)
     .maybeSingle();
-  if (data) state.currentCustomer = { ...state.currentCustomer, ...data };
-
-  // điểm tính động từ đơn đã thanh toán/đã giao — đúng với MỌI cách thanh toán
-  const { data: stats } = await supabase.rpc("customer_stats", {
-    p_phone: state.currentCustomer.phone,
-  });
-  if (stats && stats.length) {
-    state.currentCustomer.points = stats[0].points || 0;
-    state.currentCustomer.vouchers_used = stats[0].vouchers_used || 0;
+  if (data) {
+    const { cart: _ignoredCart, ...profile } = data;
+    state.currentCustomer = { ...state.currentCustomer, ...profile };
   }
-
+  await issueAndLoadVouchers();
   localStorage.setItem("nomnom_customer", JSON.stringify(state.currentCustomer));
   updateAccountLabel();
   if (!customerPanel.classList.contains("hidden")) renderCustomerPanel();
 }
+
+// ── Tặng voucher cho khách khác: đổi chủ nếu SĐT đã đăng ký / copy tay nếu chưa ──
+let giftCode = null;
+function openGiftModal(code) {
+  giftCode = code;
+  document.getElementById("gift-phone").value = "";
+  document.getElementById("gift-result").innerHTML = "";
+  document.getElementById("gift-go").style.display = "";
+  const m = document.getElementById("gift-modal");
+  m.classList.remove("hidden");
+  m.classList.add("flex");
+}
+function closeGiftModal() {
+  const m = document.getElementById("gift-modal");
+  m.classList.add("hidden");
+  m.classList.remove("flex");
+}
+document.getElementById("gift-cancel").addEventListener("click", closeGiftModal);
+document.getElementById("gift-modal").addEventListener("click", (e) => { if (e.target.id === "gift-modal") closeGiftModal(); });
+document.getElementById("gift-go").addEventListener("click", async () => {
+  const phone = document.getElementById("gift-phone").value.trim();
+  const res = document.getElementById("gift-result");
+  if (!/^0\d{8,10}$/.test(phone)) { res.innerHTML = `<p class="mt-2 text-xs text-[#7a0c1f]">SĐT không hợp lệ.</p>`; return; }
+  if (state.currentCustomer && phone === state.currentCustomer.phone) { res.innerHTML = `<p class="mt-2 text-xs text-[#7a0c1f]">Không thể tự tặng cho chính mình.</p>`; return; }
+  const { data, error } = await supabase.rpc("gift_voucher", { p_code: giftCode, p_to_phone: phone });
+  if (error) {
+    if (/chưa có tài khoản/i.test(error.message)) {
+      res.innerHTML = `
+        <p class="mt-2 text-xs text-ash">SĐT này chưa có tài khoản nomnom. Copy mã dưới đây gửi cho bạn của bạn — mã vẫn ở kho tới khi được dùng.</p>
+        <div class="mt-2 flex items-center gap-2 rounded-lg border border-dashed border-[#7a0c1f] bg-[#7a0c1f]/5 px-3 py-2">
+          <span class="flex-1 font-mono text-sm font-bold tracking-wider">${giftCode}</span>
+          <button type="button" id="gift-copy" class="border border-earth px-3 py-1.5 text-xs hover:border-ink">Copy</button>
+        </div>`;
+      document.getElementById("gift-copy").addEventListener("click", (e) => {
+        navigator.clipboard?.writeText(giftCode);
+        e.target.textContent = "Đã copy ✓";
+      });
+    } else {
+      res.innerHTML = `<p class="mt-2 text-xs text-[#7a0c1f]">${error.message}</p>`;
+    }
+    document.getElementById("gift-go").style.display = "none";
+    return;
+  }
+  res.innerHTML = `<p class="mt-2 text-xs text-green-700">✓ Đã chuyển mã ${giftCode} sang <b>${data}</b> (${phone}). Mã đã rời kho của bạn.</p>`;
+  document.getElementById("gift-go").style.display = "none";
+  await issueAndLoadVouchers();
+  renderCustomerVouchers();
+});
 
 // ── Đồng bộ giỏ hàng theo tài khoản (đăng nhập lại / đổi thiết bị vẫn còn giỏ) ──
 
@@ -2052,10 +2281,9 @@ document.getElementById("customer-save").addEventListener("click", async () => {
     .select()
     .maybeSingle();
   if (data) {
-    // `points`/`vouchers_used` là điểm tính ĐỘNG qua RPC customer_stats — cột cùng tên
-    // trong bảng customers luôn = 0 (không dùng). Phải loại chúng khỏi row trước khi merge,
-    // nếu không sẽ đè điểm đang hiển thị về 0 cho tới lần refresh sau.
-    const { points, vouchers_used, cart: _ignoredCart, ...profile } = data;
+    // `points`/`vouchers_used` là cột legacy (=0, không còn dùng sau khi chuyển sang voucher-có-mã);
+    // `cart` là dữ liệu giỏ. Loại khỏi row trước khi merge để không đè state hiển thị.
+    const { points: _p, vouchers_used: _vu, cart: _ignoredCart, ...profile } = data;
     state.currentCustomer = { ...state.currentCustomer, ...profile };
     localStorage.setItem("nomnom_customer", JSON.stringify(state.currentCustomer));
     updateAccountLabel();
@@ -2155,10 +2383,11 @@ document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el))
 updateCartCount();
 updateAccountLabel();
 if (state.currentCustomer) syncCartWithAccount(state.currentCustomer);
+// Chỉ GẮN listener + dựng khung ở đây. Việc TẢI DỮ LIỆU (products/hero/settings/reviews)
+// và bật realtime do handler onAuthStateChange lo (chạy 1 lần khi phiên vừa resolve), để
+// tải đúng trạng thái admin/khách, không tải 2 lần và không deadlock Supabase.
 initChat();
-loadProducts();
 initHero();
-loadContactSettings();
 initReviews();
 initMiniNav();
 initNavSpy();

@@ -524,6 +524,6 @@ export function initChat() {
     if (error) alert("Lỗi gửi tin nhắn: " + error.message);
   });
 
-  restartChatWatcher();
-  startPresence();
+  // KHÔNG bật realtime ở đây: handler auth (onAuthStateChange) sẽ gọi setChatAdminMode()
+  // để bật chat/presence SAU khi các truy vấn tải xong — tránh deadlock Supabase lúc init.
 }

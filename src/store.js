@@ -18,4 +18,19 @@ export const state = {
   rewardConfig: { cycle: 10, percent: 20 },
   freeShipThreshold: 0,
   chatAutoReply: "",
+  // ── Voucher & hạng khách (nạp từ site_settings + RPC) ──
+  tierConfig: [],            // [{name,min_spend,monthly_count,percent}] — 4 hạng, admin sửa
+  birthdayPercent: 0,        // % voucher sinh nhật
+  maxVouchersPerOrder: 2,    // số voucher tối đa mỗi đơn
+  maxDiscountAmount: 0,      // trần giảm theo tiền/đơn (0 = không giới hạn)
+  myVouchers: [],            // kho voucher active của khách đang đăng nhập
+  loyalty: { paid_orders: 0, period_spend: 0 }, // số đơn + tổng chi 6 tháng (RPC customer_loyalty)
 };
+
+// Mặc định 4 hạng khi site_settings chưa có tier_config (admin sửa được).
+export const DEFAULT_TIERS = [
+  { name: "Đồng", min_spend: 0, monthly_count: 3, percent: 5 },
+  { name: "Bạc", min_spend: 500000, monthly_count: 5, percent: 10 },
+  { name: "Vàng", min_spend: 1200000, monthly_count: 5, percent: 15 },
+  { name: "Kim cương", min_spend: 2500000, monthly_count: 5, percent: 20 },
+];

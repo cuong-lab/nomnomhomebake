@@ -466,3 +466,137 @@ body {
     animation: none;
   }
 }
+
+/* ============================================================
+   Voucher & Hạng khách (port 1:1 từ demo-voucher.html)
+   Dùng ở bảng tài khoản khách (#customer-panel) + checkout.
+   ============================================================ */
+
+/* ── Khung hạng sang trọng, tràn viền 2 bên trong modal ── */
+.tier-hero {
+  position: relative;
+  overflow: hidden;
+  margin: 1.15rem -1.5rem 0;
+  padding: 1.6rem 1.9rem;
+  background: linear-gradient(152deg, #1d1811, #2b2118 52%, #141210);
+  border-top: 1px solid rgba(216, 171, 80, 0.32);
+  border-bottom: 1px solid rgba(216, 171, 80, 0.32);
+  color: #f4ede1;
+  box-shadow: 0 9px 18px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+@media (min-width: 768px) {
+  .tier-hero { margin-left: -2rem; margin-right: -2rem; }
+}
+.tier-hero::before {
+  content: "";
+  position: absolute;
+  top: -55%;
+  right: -8%;
+  width: 60%;
+  height: 180%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(246, 221, 142, 0.28), transparent 62%);
+}
+.tier-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.05) 50%, transparent 60%);
+}
+.th-dong { --metal: linear-gradient(135deg, #e8bd93, #b07a34 46%, #7a4e22); --accent: #e8bd93; }
+.th-bac  { --metal: linear-gradient(135deg, #eef1f5, #b6bcc4 46%, #868c96); --accent: #dfe4ea; }
+.th-vang { --metal: linear-gradient(135deg, #f6dd8e, #d8ab50 45%, #a1702a); --accent: #f6dd8e; }
+.th-kc   { --metal: linear-gradient(135deg, #c3f1fb, #5ec6dc 46%, #2f8fa8); --accent: #a9e8f5; }
+.tier-hero__main { position: relative; z-index: 1; display: flex; align-items: center; gap: 1.15rem; flex-wrap: wrap; }
+.tier-medal {
+  width: 58px; height: 58px; border-radius: 999px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--metal);
+  box-shadow: 0 8px 22px -6px rgba(216, 171, 80, 0.55), inset 0 1px 3px rgba(255, 255, 255, 0.6);
+}
+.tier-medal svg { width: 31px; height: 31px; color: #3a2a10; }
+.tier-hero__eyebrow { font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.24em; color: rgba(244, 237, 225, 0.6); }
+.tier-hero__name {
+  font-family: "Playfair Display", serif; font-weight: 700; font-size: 1.95rem; line-height: 1.22; padding-bottom: 0.06em;
+  background: var(--metal); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.tier-hero__spend { font-size: 0.84rem; color: rgba(244, 237, 225, 0.72); margin-top: 0.35rem; }
+.tier-hero__spend b { color: #fff; }
+.tier-hero__perk { margin-left: auto; text-align: right; padding-left: 1rem; }
+.tier-hero__perk-num {
+  display: block; font-family: "Playfair Display", serif; font-weight: 600; font-size: 1.55rem; white-space: nowrap;
+  background: var(--metal); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.tier-hero__perk-lbl { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.14em; color: rgba(244, 237, 225, 0.6); }
+
+/* ── Ladder 4 hạng: rail + fill + viên trace + puck vị trí trượt ── */
+.tier-ladder { position: relative; z-index: 1; margin: 1.6rem 0.9rem 0; }
+.tl-track { position: relative; height: 50px; }
+.tl-rail { position: absolute; top: 9px; left: 0; right: 0; height: 2px; border-radius: 999px; background: rgba(244, 237, 225, 0.16); }
+.tl-fill {
+  position: absolute; top: 9px; left: 0; height: 2px; border-radius: 999px; background: var(--metal);
+  box-shadow: 0 0 10px rgba(216, 171, 80, 0.55); transition: width 1.15s cubic-bezier(0.5, 0.05, 0.1, 1);
+}
+.tl-trace {
+  position: absolute; top: 6.5px; width: 7px; height: 7px; border-radius: 999px; transform: translateX(-50%);
+  background: rgba(244, 237, 225, 0.2); transition: background 0.35s ease, box-shadow 0.35s ease;
+}
+.tl-trace.lit { background: var(--accent); box-shadow: 0 0 7px rgba(216, 171, 80, 0.6); }
+.tl-node {
+  position: absolute; top: 1px; width: 60px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  font-size: 0.7rem; color: rgba(244, 237, 225, 0.5); letter-spacing: 0.02em;
+}
+.tl-node .dot { width: 18px; height: 18px; border-radius: 999px; background: #241d16; border: 2px solid rgba(244, 237, 225, 0.3); }
+.tl-node .lbl { margin-top: 0.5rem; white-space: nowrap; }
+.tl-node.done .dot { background: var(--metal); border-color: transparent; }
+.tl-node.done { color: rgba(244, 237, 225, 0.85); }
+.tl-marker {
+  position: absolute; top: -1px; width: 22px; height: 22px; border-radius: 999px; transform: translateX(-50%); z-index: 3;
+  background: var(--metal); border: 2px solid #fff3d6;
+  box-shadow: 0 0 0 5px rgba(216, 171, 80, 0.2), 0 4px 14px rgba(216, 171, 80, 0.6);
+  transition: left 1.15s cubic-bezier(0.5, 0.05, 0.1, 1);
+}
+.tl-marker::after { content: ""; position: absolute; inset: 3px; border-radius: 999px; background: rgba(255, 255, 255, 0.35); }
+
+/* ── Thanh tiến trình dưới ladder ── */
+.tier-progress { position: relative; z-index: 1; margin-top: 1.4rem; }
+.tier-progress .bar { height: 0.55rem; border-radius: 999px; background: rgba(244, 237, 225, 0.14); overflow: hidden; }
+.tier-progress .bar-fill { height: 100%; border-radius: 999px; background: var(--metal); box-shadow: 0 0 12px rgba(216, 171, 80, 0.55); transition: width 1.15s cubic-bezier(0.5, 0.05, 0.1, 1); }
+.tier-progress .lbl { margin-top: 0.6rem; font-size: 0.82rem; color: rgba(244, 237, 225, 0.72); }
+.tier-progress .lbl b { color: var(--accent); }
+
+/* ── Thẻ voucher (kho tài khoản + checkout) ── */
+.vlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.7rem; margin-top: 0.9rem; }
+.vcard {
+  position: relative; border: 1px solid rgba(122, 12, 31, 0.22); border-radius: 0.9rem; padding: 0.9rem 1rem;
+  background: rgba(122, 12, 31, 0.04); overflow: hidden; transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.vcard:hover { transform: translateY(-4px); box-shadow: 0 16px 28px -16px rgba(122, 12, 31, 0.55); }
+.vcard.gone { opacity: 0; transform: scale(0.9); pointer-events: none; transition: 0.25s; }
+.vcard::before, .vcard::after { content: ""; position: absolute; width: 14px; height: 14px; background: #fdfbf7; border-radius: 999px; top: 50%; transform: translateY(-50%); }
+.vcard::before { left: -8px; }
+.vcard::after { right: -8px; }
+.vcard .pct { font-family: "Playfair Display", serif; font-size: 1.7rem; font-weight: 600; color: #7a0c1f; line-height: 1; }
+.vcard .code { margin-top: 0.35rem; font-family: ui-monospace, monospace; font-size: 0.9rem; font-weight: 600; letter-spacing: 0.05em; }
+.vcard .meta { margin-top: 0.3rem; font-size: 0.75rem; color: #6b6b6b; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+.v-src { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.12rem 0.45rem; border-radius: 999px; }
+.v-src-tier { background: rgba(216, 171, 80, 0.2); color: #8a6410; }
+.v-src-cycle { background: rgba(122, 12, 31, 0.12); color: #7a0c1f; }
+.v-src-birthday { background: rgba(94, 198, 220, 0.2); color: #1f7f96; }
+.v-src-gift, .v-src-manual { background: rgba(107, 107, 107, 0.15); color: #6b6b6b; }
+.v-gift {
+  position: absolute; top: 0.6rem; right: 0.7rem; font-family: inherit; font-size: 0.68rem; font-weight: 600;
+  border: none; background: #0a0a0a; color: #fff; border-radius: 999px; padding: 0.28rem 0.7rem; cursor: pointer; transition: 0.15s;
+}
+.v-gift:hover { background: #000; transform: scale(1.05); }
+
+/* ── Ô chọn voucher ở checkout ── */
+.co-v { display: flex; align-items: center; gap: 0.7rem; border: 1px solid rgba(212, 197, 185, 0.7); border-radius: 0.7rem; padding: 0.6rem 0.8rem; cursor: pointer; transition: 0.15s; }
+.co-v:hover { border-color: #7a0c1f; }
+.co-v.on { border-color: #7a0c1f; background: rgba(122, 12, 31, 0.05); }
+.co-v.disabled { opacity: 0.45; cursor: not-allowed; }
+.co-v .pct { font-family: "Playfair Display", serif; font-size: 1.1rem; color: #7a0c1f; font-weight: 600; min-width: 2.6rem; }
+.co-v .code { font-family: ui-monospace, monospace; font-size: 0.8rem; font-weight: 600; }
+.co-v .v-src { margin-left: auto; }
