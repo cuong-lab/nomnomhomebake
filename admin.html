@@ -248,7 +248,34 @@
           </section>
 
           <section id="view-customers" class="admin-view hidden">
-            <div class="admin-toolbar">
+            <section class="admin-panel">
+              <div class="admin-panel-head">
+                <div>
+                  <h2 class="admin-panel-title">Hạng khách &amp; Voucher</h2>
+                  <p class="admin-panel-subtitle">Hạng theo tổng chi 6 tháng; mỗi hạng cấp số voucher %/tháng. Chỉnh xong bấm Lưu.</p>
+                </div>
+              </div>
+              <div class="mt-4 grid grid-cols-[1.1fr_1fr_0.8fr_0.8fr] gap-2 text-[11px] font-medium uppercase tracking-wide text-ash">
+                <span>Hạng</span><span>Mốc chi từ (đ)</span><span>SL/tháng</span><span>Giảm %</span>
+              </div>
+              <div id="tier-config-rows" class="mt-1 space-y-2"></div>
+              <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label class="text-sm text-ash">% voucher sinh nhật
+                  <input id="cfg-birthday-percent" type="number" min="0" max="100" class="admin-search-input mt-1 w-full" />
+                </label>
+                <label class="text-sm text-ash">Voucher tối đa / đơn
+                  <input id="cfg-max-vouchers" type="number" min="1" max="5" class="admin-search-input mt-1 w-full" />
+                </label>
+                <label class="text-sm text-ash">Trần giảm / đơn (đ, 0 = không giới hạn)
+                  <input id="cfg-max-discount" type="number" min="0" step="10000" class="admin-search-input mt-1 w-full" />
+                </label>
+              </div>
+              <div class="mt-4 flex items-center gap-3">
+                <button id="tier-config-save" type="button" class="bg-ink px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90">Lưu cấu hình</button>
+                <span id="tier-config-msg" class="text-sm text-ash"></span>
+              </div>
+            </section>
+            <div class="admin-toolbar mt-4">
               <input id="customers-search" type="search" placeholder="Tìm tên, số điện thoại, địa chỉ..." class="admin-search-input" />
             </div>
             <section class="admin-panel mt-4">

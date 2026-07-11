@@ -602,7 +602,7 @@
 
     <!-- ===== Customer Account Modal ===== -->
     <div id="customer-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-ink/50">
-      <div class="w-full max-w-sm bg-cream p-6 mx-4 max-h-[88vh] overflow-y-auto overflow-x-hidden md:mx-auto md:p-8">
+      <div class="no-scrollbar w-full max-w-sm md:max-w-xl bg-cream p-6 mx-4 max-h-[88vh] overflow-y-auto overflow-x-hidden overscroll-contain rounded-3xl md:mx-auto md:p-8">
         <!-- Form đăng nhập / đăng ký -->
         <form id="customer-login-form">
           <h2 class="font-serif text-2xl text-ink">Đăng nhập nomnom</h2>
@@ -634,10 +634,14 @@
 
           <div class="mt-4 flex gap-5 border-b border-earth/40 text-sm font-medium">
             <button type="button" data-customer-tab="overview" class="customer-tab-btn border-b-2 border-ink pb-2 text-ink">Tổng quan</button>
+            <button type="button" data-customer-tab="membership" class="customer-tab-btn border-b-2 border-transparent pb-2 text-ash">Hạng thành viên</button>
             <button type="button" data-customer-tab="orders" class="customer-tab-btn border-b-2 border-transparent pb-2 text-ash">Đơn đã mua</button>
           </div>
 
-          <div id="customer-tab-overview" class="customer-tab-panel">
+          <div class="customer-tab-viewport">
+            <div id="customer-tab-track" class="customer-tab-track" data-index="0">
+
+          <div id="customer-tab-overview" class="customer-tab-slide">
             <div class="mt-4 flex items-center gap-3">
               <button type="button" id="customer-avatar" title="Bấm hoặc kéo thả ảnh để đổi ảnh đại diện"
                 class="group relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-earth/30 font-serif text-lg text-ink cursor-pointer transition-shadow">
@@ -653,21 +657,14 @@
                 <p id="customer-phone-display" class="text-sm text-ash"></p>
               </div>
             </div>
-            <!-- Hạng thành viên (khung sang trọng, tràn viền) -->
-            <div id="customer-tier"></div>
-
-            <!-- Kho voucher của khách -->
-            <div class="mt-6">
-              <span class="text-xs font-medium uppercase tracking-wider text-ash">Kho voucher của bạn</span>
-              <div id="customer-vouchers" class="vlist"></div>
-              <p id="customer-vouchers-empty" class="mt-3 hidden text-sm text-ash">Chưa có voucher nào. Mua đủ đơn hoặc lên hạng để nhận ưu đãi nhé!</p>
-            </div>
-
-            <!-- Ngày sinh (voucher sinh nhật) -->
-            <div class="mt-6 border-t border-dashed border-earth pt-4">
-              <span class="text-xs font-medium uppercase tracking-wider text-ash">Ngày sinh (để nhận voucher sinh nhật)</span>
-              <div id="customer-birthday-area" class="mt-2 flex flex-wrap items-center gap-2"></div>
-              <p class="mt-2 text-xs text-ash">🔒 Sau khi lưu, ngày sinh sẽ bị <b>khoá</b>, không tự đổi được (chống lạm dụng voucher sinh nhật). Muốn sửa phải nhờ shop.</p>
+            <!-- Đếm đơn tích luỹ -->
+            <div class="mt-6 rounded-2xl bg-ink px-5 py-5 text-cream">
+              <p class="text-xs uppercase tracking-wider text-cream/60">Đơn đã tích luỹ</p>
+              <p class="mt-1 font-serif text-3xl"><span id="customer-points">0</span> <span class="text-base font-sans text-cream/70">đơn</span></p>
+              <div class="mt-4 h-2 w-full overflow-hidden rounded-full bg-cream/20">
+                <div id="customer-progress" class="h-full bg-cream transition-all" style="width:0%"></div>
+              </div>
+              <p id="customer-progress-text" class="mt-2 text-xs text-cream/70"></p>
             </div>
 
             <label class="mt-6 block">
@@ -680,8 +677,28 @@
             </div>
           </div>
 
-          <div id="customer-tab-orders" class="customer-tab-panel hidden mt-4 max-h-[55vh] space-y-3 overflow-y-auto">
+          <div id="customer-tab-membership" class="customer-tab-slide">
+            <!-- Hạng thành viên (khung sang trọng, bo góc) -->
+            <div id="customer-tier"></div>
+
+            <div class="mt-6">
+              <span class="text-xs font-medium uppercase tracking-wider text-ash">Kho voucher của bạn</span>
+              <div id="customer-vouchers" class="vlist"></div>
+              <p id="customer-vouchers-empty" class="mt-3 hidden text-sm text-ash">Chưa có voucher nào. Mua đủ đơn hoặc lên hạng để nhận ưu đãi nhé!</p>
+            </div>
+
+            <div class="mt-6 border-t border-dashed border-earth pt-4">
+              <span class="text-xs font-medium uppercase tracking-wider text-ash">Ngày sinh (để nhận voucher sinh nhật)</span>
+              <div id="customer-birthday-area" class="mt-2 flex flex-wrap items-center gap-2"></div>
+              <p class="mt-2 text-xs text-ash">🔒 Sau khi lưu, ngày sinh sẽ bị <b>khoá</b> Khách Nomnom muốn sửa sinh nhật thì liên hệ với shop nhé ạ.</p>
+            </div>
+          </div>
+
+          <div id="customer-tab-orders" class="customer-tab-slide space-y-3">
             <p class="py-8 text-center text-sm text-ash">Đang tải đơn hàng…</p>
+          </div>
+
+            </div>
           </div>
 
           <div class="mt-6 border-t border-dashed border-earth pt-4">
@@ -940,23 +957,7 @@
           type="number" name="reward_percent" placeholder="VD: 20" min="1" max="100"
           class="mt-1 w-full border border-earth/60 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
         />
-        <p class="mt-5 text-xs font-medium uppercase tracking-wider text-ash">Hạng khách &amp; voucher</p>
-        <p class="mt-1 text-xs text-ash">Hạng theo tổng chi 6 tháng; mỗi hạng được cấp số voucher %/tháng như dưới (giữ song song ưu đãi "đủ đơn" ở trên).</p>
-        <div class="mt-2 grid grid-cols-[1.1fr_1fr_0.75fr_0.75fr] gap-2 text-[10px] font-medium uppercase tracking-wide text-ash">
-          <span>Hạng</span><span>Mốc chi từ (đ)</span><span>SL/tháng</span><span>Giảm %</span>
-        </div>
-        <div id="tier-config-rows" class="mt-1 space-y-1.5"></div>
-        <div class="mt-3 grid grid-cols-2 gap-3">
-          <label class="block text-sm text-ash">% voucher sinh nhật
-            <input type="number" name="birthday_voucher_percent" min="0" max="100" placeholder="VD: 25" class="mt-1 w-full border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
-          </label>
-          <label class="block text-sm text-ash">Voucher tối đa / đơn
-            <input type="number" name="max_vouchers_per_order" min="1" max="5" placeholder="VD: 2" class="mt-1 w-full border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
-          </label>
-          <label class="col-span-2 block text-sm text-ash">Trần giảm mỗi đơn (đ) — 0 = không giới hạn
-            <input type="number" name="max_discount_amount" min="0" step="10000" placeholder="VD: 100000" class="mt-1 w-full border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
-          </label>
-        </div>
+        <p class="mt-5 rounded-lg bg-earth/15 px-3 py-2 text-xs text-ash">⚙️ Cấu hình <b>Hạng khách &amp; Voucher</b> (mốc chi, số voucher/tháng, sinh nhật, trần giảm) đã chuyển vào <b>trang quản trị → Khách hàng</b> cho gọn.</p>
         <p id="contact-error" class="mt-2 text-xs text-red-600 hidden"></p>
         <div class="mt-6 flex items-center gap-3">
           <button type="submit" class="bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90">Lưu</button>
