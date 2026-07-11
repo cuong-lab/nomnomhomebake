@@ -564,12 +564,22 @@ function setAdminNavLink(link, admin) {
   link.setAttribute("href", admin ? "/admin.html" : "#reviews");
 }
 
-supabase.auth.onAuthStateChange((_event, session) => {
+supabase.auth.onAuthStateChange(async (_event, session) => {
   state.isAdmin = !!session;
   adminLogoutBtn.classList.toggle("hidden", !state.isAdmin);
   setAdminNavLink(adminNavLink, state.isAdmin);
   setAdminNavLink(adminMobileNavLink, state.isAdmin);
   adminOrdersBtn.classList.toggle("hidden", !state.isAdmin);
+
+  // Tải TUẦN TỰ (await) rồi mới bật realtime — tránh bắn nhiều truy vấn + kênh realtime
+  // cùng lúc ngay khi phiên vừa resolve, vốn gây DEADLOCK ~10s trong thư viện Supabase
+  // (nặng nhất khi reload lúc đang là admin — xem gotcha trong CLAUDE.md).
+  await loadProducts();
+  await loadHeroSlides();
+  await loadContactSettings();
+  await loadReviews();
+
+  setChatAdminMode(state.isAdmin);
   if (state.isAdmin) {
     startAdminOrdersRealtime();
   } else {
@@ -577,11 +587,6 @@ supabase.auth.onAuthStateChange((_event, session) => {
     closeOrdersDrawer();
     adminOrdersBadge.classList.add("hidden");
   }
-  setChatAdminMode(state.isAdmin);
-  loadProducts();
-  loadHeroSlides();
-  loadContactSettings();
-  loadReviews();
 });
 
 // ── Products ──
