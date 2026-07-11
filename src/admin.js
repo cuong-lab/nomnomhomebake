@@ -275,6 +275,7 @@ function renderAll() {
   renderOrders();
   renderCustomers();
   renderTierConfig();
+  renderVoucherSender();
   renderTraffic();
 }
 
@@ -857,27 +858,119 @@ function renderCustomers() {
       </table>
     `;
     customersTableEl.querySelectorAll("[data-gift-voucher]").forEach((btn) =>
-      btn.addEventListener("click", () => adminGiftVoucher(btn.dataset.giftVoucher, btn.dataset.giftName))
+      btn.addEventListener("click", () => selectCustomerForVoucher(btn.dataset.giftVoucher))
     );
   }
 }
 
-// Admin tạo voucher tặng khách (RPC admin_create_voucher, chỉ cấp cho tài khoản đã đăng nhập Supabase).
-async function adminGiftVoucher(phone, name) {
-  const who = name || phone;
-  const pctStr = prompt(`Tặng voucher cho ${who}\nGiảm bao nhiêu %? (1–100)`);
-  if (pctStr === null) return;
-  const percent = parseInt(pctStr, 10);
-  if (!percent || percent < 1 || percent > 100) { showToast("Phần trăm không hợp lệ (1–100)."); return; }
-  const daysStr = prompt("Hết hạn sau bao nhiêu ngày? (để trống = không hết hạn)");
-  if (daysStr === null) return;
-  const days = daysStr.trim() ? parseInt(daysStr, 10) : null;
-  const { data, error } = await supabase.rpc("admin_create_voucher", { p_phone: phone, p_percent: percent, p_days: days });
-  if (error) { showToast("Lỗi tạo voucher: " + error.message); return; }
-  showToast(`Đã tạo voucher ${data} (−${percent}%) cho ${who}.`);
+document.getElementById("customers-search")?.addEventListener("input", renderCustomers);
+
+// ── Tạo & gửi voucher cho khách (panel "Tạo & gửi voucher" trong route Khách hàng) ──
+// Mỗi khách nhận 1 mã riêng (schema khoá code duy nhất + dùng 1 lần). Gửi tất cả hoặc chọn lẻ.
+let gvSelected = new Set();     // SĐT khách được chọn ở chế độ "chọn khách"
+let gvPendingConfirm = false;   // xác nhận 2 bước (tránh hộp thoại native)
+
+function gvMode() {
+  return document.querySelector('input[name="gv-mode"]:checked')?.value || "all";
+}
+function gvResetConfirm() {
+  gvPendingConfirm = false;
 }
 
-document.getElementById("customers-search")?.addEventListener("input", renderCustomers);
+function renderVoucherSender() {
+  const allCount = document.getElementById("gv-all-count");
+  if (allCount) allCount.textContent = customers.filter((c) => c.phone).length;
+  renderVoucherList();
+}
+
+function renderVoucherList() {
+  const box = document.getElementById("gv-list");
+  if (!box) return;
+  const q = (document.getElementById("gv-search")?.value || "").trim().toLowerCase();
+  const list = customers
+    .filter((c) => c.phone)
+    .filter((c) => !q || [c.name, c.phone].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)));
+  box.innerHTML =
+    list
+      .map(
+        (c) => `<label class="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-earth/10">
+        <input type="checkbox" value="${c.phone}" ${gvSelected.has(c.phone) ? "checked" : ""} class="accent-[#7a0c1f]" />
+        <span class="font-medium text-ink">${c.name || "Khách nomnom"}</span>
+        <span class="text-xs text-ash">${c.phone}</span>
+      </label>`
+      )
+      .join("") || `<p class="px-2 py-1 text-sm text-ash">Không tìm thấy khách.</p>`;
+  box.querySelectorAll('input[type="checkbox"]').forEach((cb) =>
+    cb.addEventListener("change", () => {
+      if (cb.checked) gvSelected.add(cb.value);
+      else gvSelected.delete(cb.value);
+      gvResetConfirm();
+      updateGvSelectedCount();
+    })
+  );
+  updateGvSelectedCount();
+}
+
+function updateGvSelectedCount() {
+  const el = document.getElementById("gv-selected-count");
+  if (el) el.textContent = gvSelected.size;
+}
+
+// Nút "Tặng ↗" ở bảng khách → chuyển panel sang "chọn khách", tick khách đó, kéo lên panel.
+function selectCustomerForVoucher(phone) {
+  const selectRadio = document.querySelector('input[name="gv-mode"][value="select"]');
+  if (selectRadio) selectRadio.checked = true;
+  document.getElementById("gv-recipients")?.classList.remove("hidden");
+  gvSelected.add(phone);
+  const search = document.getElementById("gv-search");
+  if (search) search.value = "";
+  gvResetConfirm();
+  renderVoucherList();
+  const pct = document.getElementById("gv-percent");
+  pct?.scrollIntoView({ behavior: "smooth", block: "center" });
+  pct?.focus();
+}
+
+async function sendVouchers() {
+  const msg = document.getElementById("gv-msg");
+  const setMsg = (t, err) => { if (msg) { msg.textContent = t; msg.style.color = err ? "#b91c1c" : ""; } };
+  const percent = parseInt(document.getElementById("gv-percent").value, 10);
+  const daysRaw = document.getElementById("gv-days").value.trim();
+  const days = daysRaw ? parseInt(daysRaw, 10) : null;
+  if (!percent || percent < 1 || percent > 100) { setMsg("Nhập mức giảm 1–100%.", true); return; }
+
+  const phones = gvMode() === "all" ? customers.filter((c) => c.phone).map((c) => c.phone) : [...gvSelected];
+  if (!phones.length) { setMsg("Chưa có khách nào để gửi.", true); return; }
+
+  // Xác nhận 2 bước inline (không dùng confirm() native)
+  if (!gvPendingConfirm) {
+    gvPendingConfirm = true;
+    setMsg(`Sẽ tạo voucher −${percent}% cho ${phones.length} khách. Bấm "Tạo & gửi" lần nữa để xác nhận.`, false);
+    return;
+  }
+  gvPendingConfirm = false;
+
+  const { data, error } = await supabase.rpc("admin_create_vouchers_bulk", { p_phones: phones, p_percent: percent, p_days: days });
+  if (error) { setMsg("Lỗi: " + error.message, true); showToast("Lỗi tạo voucher: " + error.message); return; }
+  const n = data ?? phones.length;
+  setMsg(`✓ Đã gửi ${n} voucher −${percent}%.`, false);
+  showToast(`Đã gửi voucher −${percent}% cho ${n} khách.`);
+  gvSelected.clear();
+  document.getElementById("gv-percent").value = "";
+  document.getElementById("gv-days").value = "";
+  renderVoucherList();
+}
+
+document.querySelectorAll('input[name="gv-mode"]').forEach((r) =>
+  r.addEventListener("change", () => {
+    gvResetConfirm();
+    document.getElementById("gv-recipients")?.classList.toggle("hidden", gvMode() !== "select");
+  })
+);
+document.getElementById("gv-search")?.addEventListener("input", renderVoucherList);
+document.getElementById("gv-percent")?.addEventListener("input", gvResetConfirm);
+document.getElementById("gv-days")?.addEventListener("input", gvResetConfirm);
+document.getElementById("gv-send")?.addEventListener("click", sendVouchers);
 
 function renderTraffic() {
   const state = document.getElementById("traffic-state");
