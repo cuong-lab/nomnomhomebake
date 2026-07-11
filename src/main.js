@@ -140,12 +140,14 @@ function openCart() {
   document.getElementById("cart-success").classList.add("hidden");
   document.getElementById("cart-customer").classList.add("hidden");
   cartItems.classList.remove("hidden");
+  document.body.classList.add("overflow-hidden"); // khoá cuộn trang nền khi mở giỏ
   renderCart();
 }
 
 function closeCart() {
   cartDrawer.classList.remove("cart-open");
   cartOverlay.classList.add("hidden");
+  document.body.classList.remove("overflow-hidden");
   cancelPendingOrder();
 }
 
