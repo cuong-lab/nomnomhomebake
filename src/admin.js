@@ -17,6 +17,7 @@ const toast = document.getElementById("admin-toast");
 
 let orders = [];
 let customers = [];
+let siteSettings = null;
 let trafficEvents = [];
 let trafficReady = false;
 let activeRoute = "overview";
@@ -221,6 +222,7 @@ async function loadBackoffice() {
       { data: orderData, error: orderError },
       { data: customerData, error: customerError },
       { data: trafficData, error: trafficError },
+      { data: settingsData },
     ] = await Promise.race([
       Promise.all([
         supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
@@ -232,6 +234,7 @@ async function loadBackoffice() {
           .lt("created_at", end.toISOString())
           .order("created_at", { ascending: false })
           .limit(1000),
+        supabase.from("site_settings").select("*").single(),
       ]),
       timeoutAfter(30000),
     ]);
@@ -251,6 +254,7 @@ async function loadBackoffice() {
 
     orders = orderData || [];
     customers = customerData || [];
+    if (settingsData) siteSettings = settingsData;
     trafficReady = !trafficError;
     trafficEvents = trafficData || [];
     saveCache();
@@ -270,8 +274,74 @@ function renderAll() {
   renderOverview();
   renderOrders();
   renderCustomers();
+  renderTierConfig();
   renderTraffic();
 }
+
+// ── Cấu hình Hạng khách & Voucher (site_settings.tier_config + các cột int) ──
+const DEFAULT_TIERS = [
+  { name: "Đồng", min_spend: 0, monthly_count: 3, percent: 5 },
+  { name: "Bạc", min_spend: 500000, monthly_count: 5, percent: 10 },
+  { name: "Vàng", min_spend: 1200000, monthly_count: 5, percent: 15 },
+  { name: "Kim cương", min_spend: 2500000, monthly_count: 5, percent: 20 },
+];
+
+function currentTiers() {
+  const tc = siteSettings?.tier_config;
+  const arr = Array.isArray(tc) ? tc : typeof tc === "string" && tc ? JSON.parse(tc) : null;
+  return (arr && arr.length ? arr : DEFAULT_TIERS).slice().sort((a, b) => a.min_spend - b.min_spend);
+}
+
+function renderTierConfig() {
+  const box = document.getElementById("tier-config-rows");
+  if (!box) return;
+  box.innerHTML = currentTiers()
+    .map(
+      (t, i) => `
+      <div class="grid grid-cols-[1.1fr_1fr_0.8fr_0.8fr] items-center gap-2">
+        <span class="text-sm font-semibold text-ink">${t.name}</span>
+        <input data-tier="${i}" data-field="min_spend" type="number" min="0" step="100000" value="${t.min_spend}" class="admin-search-input w-full" />
+        <input data-tier="${i}" data-field="monthly_count" type="number" min="0" value="${t.monthly_count}" class="admin-search-input w-full" />
+        <input data-tier="${i}" data-field="percent" type="number" min="0" max="100" value="${t.percent}" class="admin-search-input w-full" />
+      </div>`
+    )
+    .join("");
+  const bp = document.getElementById("cfg-birthday-percent");
+  const mv = document.getElementById("cfg-max-vouchers");
+  const md = document.getElementById("cfg-max-discount");
+  if (bp) bp.value = siteSettings?.birthday_voucher_percent ?? 25;
+  if (mv) mv.value = siteSettings?.max_vouchers_per_order ?? 2;
+  if (md) md.value = siteSettings?.max_discount_amount ?? 0;
+}
+
+async function saveTierConfig() {
+  const box = document.getElementById("tier-config-rows");
+  if (!box) return;
+  const tier_config = currentTiers().map((t, i) => ({
+    name: t.name,
+    min_spend: parseInt(box.querySelector(`[data-tier="${i}"][data-field="min_spend"]`)?.value, 10) || 0,
+    monthly_count: parseInt(box.querySelector(`[data-tier="${i}"][data-field="monthly_count"]`)?.value, 10) || 0,
+    percent: parseInt(box.querySelector(`[data-tier="${i}"][data-field="percent"]`)?.value, 10) || 0,
+  }));
+  const row = {
+    tier_config,
+    birthday_voucher_percent: parseInt(document.getElementById("cfg-birthday-percent").value, 10) || 0,
+    max_vouchers_per_order: parseInt(document.getElementById("cfg-max-vouchers").value, 10) || 2,
+    max_discount_amount: parseInt(document.getElementById("cfg-max-discount").value, 10) || 0,
+  };
+  const msg = document.getElementById("tier-config-msg");
+  const { error } = await supabase.from("site_settings").update(row).eq("id", 1);
+  if (error) {
+    if (msg) msg.textContent = "Lỗi: " + error.message;
+    showToast("Lỗi lưu cấu hình: " + error.message);
+    return;
+  }
+  siteSettings = { ...(siteSettings || {}), ...row };
+  if (msg) { msg.textContent = "✓ Đã lưu"; setTimeout(() => (msg.textContent = ""), 2500); }
+  showToast("Đã lưu cấu hình hạng & voucher");
+}
+
+document.getElementById("tier-config-save")?.addEventListener("click", saveTierConfig);
 
 function renderActiveView() {
   if (activeRoute === "overview") renderOverview();
@@ -761,6 +831,7 @@ function renderCustomers() {
             <th>Số đơn</th>
             <th>Tổng chi tiêu</th>
             <th>Lần cuối</th>
+            <th>Voucher</th>
           </tr>
         </thead>
         <tbody>
@@ -777,6 +848,7 @@ function renderCustomers() {
                   <td class="font-semibold text-ink">${customer.sales.orders}</td>
                   <td class="font-semibold text-ink">${formatCurrency(customer.sales.spend)}</td>
                   <td>${customer.sales.lastOrder ? formatDateTime(customer.sales.lastOrder) : "--"}</td>
+                  <td>${customer.phone ? `<button type="button" class="rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-white hover:opacity-90" data-gift-voucher="${customer.phone}" data-gift-name="${(customer.name || "").replace(/"/g, "&quot;")}">Tặng ↗</button>` : "--"}</td>
                 </tr>
               `
             )
@@ -784,7 +856,25 @@ function renderCustomers() {
         </tbody>
       </table>
     `;
+    customersTableEl.querySelectorAll("[data-gift-voucher]").forEach((btn) =>
+      btn.addEventListener("click", () => adminGiftVoucher(btn.dataset.giftVoucher, btn.dataset.giftName))
+    );
   }
+}
+
+// Admin tạo voucher tặng khách (RPC admin_create_voucher, chỉ cấp cho tài khoản đã đăng nhập Supabase).
+async function adminGiftVoucher(phone, name) {
+  const who = name || phone;
+  const pctStr = prompt(`Tặng voucher cho ${who}\nGiảm bao nhiêu %? (1–100)`);
+  if (pctStr === null) return;
+  const percent = parseInt(pctStr, 10);
+  if (!percent || percent < 1 || percent > 100) { showToast("Phần trăm không hợp lệ (1–100)."); return; }
+  const daysStr = prompt("Hết hạn sau bao nhiêu ngày? (để trống = không hết hạn)");
+  if (daysStr === null) return;
+  const days = daysStr.trim() ? parseInt(daysStr, 10) : null;
+  const { data, error } = await supabase.rpc("admin_create_voucher", { p_phone: phone, p_percent: percent, p_days: days });
+  if (error) { showToast("Lỗi tạo voucher: " + error.message); return; }
+  showToast(`Đã tạo voucher ${data} (−${percent}%) cho ${who}.`);
 }
 
 document.getElementById("customers-search")?.addEventListener("input", renderCustomers);

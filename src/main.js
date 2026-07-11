@@ -1406,34 +1406,7 @@ document.getElementById("custom-image-edit").addEventListener("click", () => {
   contactEditBtn.click();
 });
 
-// Bảng sửa 4 hạng trong modal cài đặt (tên hạng cố định; sửa mốc chi / SL voucher / %).
-function renderTierConfigRows(tiers) {
-  const box = document.getElementById("tier-config-rows");
-  const rows = tiers && tiers.length ? tiers : DEFAULT_TIERS;
-  box.innerHTML = rows
-    .map(
-      (t, i) => `
-      <div class="grid grid-cols-[1.1fr_1fr_0.75fr_0.75fr] items-center gap-2">
-        <span class="text-xs font-medium text-ink">${t.name}</span>
-        <input data-tier="${i}" data-field="min_spend" type="number" min="0" step="100000" value="${t.min_spend}" class="w-full border border-earth/60 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-ink" />
-        <input data-tier="${i}" data-field="monthly_count" type="number" min="0" value="${t.monthly_count}" class="w-full border border-earth/60 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-ink" />
-        <input data-tier="${i}" data-field="percent" type="number" min="0" max="100" value="${t.percent}" class="w-full border border-earth/60 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-ink" />
-      </div>`
-    )
-    .join("");
-}
-
-// Đọc lại 4 hạng từ input trong modal → mảng jsonb để lưu (giữ tên hạng theo cấu hình gốc).
-function readTierConfigRows() {
-  const box = document.getElementById("tier-config-rows");
-  const base = state.tierConfig && state.tierConfig.length ? state.tierConfig : DEFAULT_TIERS;
-  return base.map((t, i) => ({
-    name: t.name,
-    min_spend: parseInt(box.querySelector(`[data-tier="${i}"][data-field="min_spend"]`)?.value) || 0,
-    monthly_count: parseInt(box.querySelector(`[data-tier="${i}"][data-field="monthly_count"]`)?.value) || 0,
-    percent: parseInt(box.querySelector(`[data-tier="${i}"][data-field="percent"]`)?.value) || 0,
-  }));
-}
+// (Cấu hình Hạng & Voucher đã chuyển sang trang quản trị admin.js — route Khách hàng.)
 
 contactEditBtn.addEventListener("click", async () => {
   const { data } = await supabase.from("site_settings").select("*").single();
@@ -1456,10 +1429,6 @@ contactEditBtn.addEventListener("click", async () => {
     contactForm.elements.chat_auto_reply.value = data.chat_auto_reply || "";
     contactForm.elements.reward_cycle_orders.value = data.reward_cycle_orders || "";
     contactForm.elements.reward_percent.value = data.reward_percent || "";
-    contactForm.elements.birthday_voucher_percent.value = data.birthday_voucher_percent ?? "";
-    contactForm.elements.max_vouchers_per_order.value = data.max_vouchers_per_order ?? "";
-    contactForm.elements.max_discount_amount.value = data.max_discount_amount ?? "";
-    renderTierConfigRows(state.tierConfig);
     const preview = document.getElementById("current-logo-preview");
     const previewImg = document.getElementById("logo-preview-img");
     if (data.logo_image_url) {
@@ -1560,10 +1529,6 @@ contactForm.addEventListener("submit", async (e) => {
     chat_auto_reply: form.get("chat_auto_reply") || null,
     reward_cycle_orders: form.get("reward_cycle_orders") ? parseInt(form.get("reward_cycle_orders")) : null,
     reward_percent: form.get("reward_percent") ? parseInt(form.get("reward_percent")) : null,
-    tier_config: readTierConfigRows(),
-    birthday_voucher_percent: form.get("birthday_voucher_percent") ? parseInt(form.get("birthday_voucher_percent")) : null,
-    max_vouchers_per_order: form.get("max_vouchers_per_order") ? parseInt(form.get("max_vouchers_per_order")) : null,
-    max_discount_amount: form.get("max_discount_amount") ? parseInt(form.get("max_discount_amount")) : null,
   };
   if (logo_image_url) row.logo_image_url = logo_image_url;
   if (about_image_url) row.about_image_url = about_image_url;
@@ -1832,11 +1797,13 @@ function openCustomerModal() {
   }
   customerModal.classList.remove("hidden");
   customerModal.classList.add("flex");
+  document.body.classList.add("overflow-hidden"); // khoá cuộn trang nền khi mở panel
 }
 
 function closeCustomerModal() {
   customerModal.classList.add("hidden");
   customerModal.classList.remove("flex");
+  document.body.classList.remove("overflow-hidden");
 }
 
 // ── Tab "Tổng quan" / "Đơn đã mua" trong tài khoản khách ──
@@ -1845,6 +1812,7 @@ document.querySelectorAll("[data-customer-tab]").forEach((btn) =>
   btn.addEventListener("click", () => switchCustomerTab(btn.dataset.customerTab))
 );
 
+const CUSTOMER_TAB_INDEX = { overview: 0, membership: 1, orders: 2 };
 function switchCustomerTab(tab) {
   document.querySelectorAll("[data-customer-tab]").forEach((btn) => {
     const on = btn.dataset.customerTab === tab;
@@ -1853,9 +1821,12 @@ function switchCustomerTab(tab) {
     btn.classList.toggle("border-transparent", !on);
     btn.classList.toggle("text-ash", !on);
   });
-  document.getElementById("customer-tab-overview").classList.toggle("hidden", tab !== "overview");
-  document.getElementById("customer-tab-orders").classList.toggle("hidden", tab !== "orders");
+  // Trượt cả khối tới slide tương ứng (không ẩn/hiện → cao cố định, không nhảy).
+  const track = document.getElementById("customer-tab-track");
+  if (track) track.dataset.index = CUSTOMER_TAB_INDEX[tab] ?? 0;
   if (tab === "orders") loadCustomerOrders();
+  // Ladder animate khi tab hạng vừa hiện (lúc render nền track có thể chưa nhìn thấy)
+  if (tab === "membership") activateLadders(document.getElementById("customer-tab-membership"));
 }
 
 async function loadCustomerOrders() {
@@ -2030,6 +2001,15 @@ function renderCustomerPanel() {
   }
   document.getElementById("customer-name-display").textContent = c.name || "Khách nomnom";
   document.getElementById("customer-phone-display").textContent = c.phone;
+
+  // Đếm đơn tích luỹ (tab Tổng quan) — số đơn đã thanh toán trong kỳ, từ RPC customer_loyalty.
+  const paidOrders = state.loyalty?.paid_orders || 0;
+  const cycle = state.rewardConfig.cycle || 10;
+  const intoCycle = paidOrders % cycle;
+  document.getElementById("customer-points").textContent = paidOrders;
+  document.getElementById("customer-progress").style.width = `${(intoCycle / cycle) * 100}%`;
+  document.getElementById("customer-progress-text").textContent =
+    `Còn ${cycle - intoCycle} đơn nữa để nhận ưu đãi giảm ${state.rewardConfig.percent}%`;
 
   // Hạng thành viên (khung sang trọng + ladder trượt theo tổng chi 6 tháng)
   const tierBox = document.getElementById("customer-tier");

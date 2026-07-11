@@ -472,37 +472,42 @@ body {
    Dùng ở bảng tài khoản khách (#customer-panel) + checkout.
    ============================================================ */
 
-/* ── Khung hạng sang trọng, tràn viền 2 bên trong modal ── */
+/* ── Carousel tab tài khoản: cao cố định + trượt cả khối ── */
+.customer-tab-viewport { overflow: hidden; margin-top: 1rem; height: 56vh; }
+.customer-tab-track {
+  display: flex; width: 100%; height: 100%;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.customer-tab-slide { flex: 0 0 100%; height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 0.25rem 0.3rem 0.5rem; scrollbar-width: none; -ms-overflow-style: none; }
+.customer-tab-slide::-webkit-scrollbar { width: 0; height: 0; }
+/* Ẩn scrollbar nhưng vẫn cuộn (dùng cho modal + slide) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { width: 0; height: 0; }
+.customer-tab-track[data-index="1"] { transform: translateX(-100%); }
+.customer-tab-track[data-index="2"] { transform: translateX(-200%); }
+
+/* ── Khung hạng sang trọng (card bo góc) ── */
+/* Nền = 1 vầng sáng ấm góc trên-phải tan đều vào đen (không tạo vệt/đường chia đôi). */
 .tier-hero {
   position: relative;
   overflow: hidden;
-  margin: 1.15rem -1.5rem 0;
-  padding: 1.6rem 1.9rem;
-  background: linear-gradient(152deg, #1d1811, #2b2118 52%, #141210);
-  border-top: 1px solid rgba(216, 171, 80, 0.32);
-  border-bottom: 1px solid rgba(216, 171, 80, 0.32);
+  margin: 0.25rem 0 0;
+  padding: 1.5rem 1.6rem;
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(125% 135% at 82% 6%, rgba(246, 221, 142, 0.15), rgba(246, 221, 142, 0) 46%),
+    linear-gradient(145deg, #241c14 0%, #191108 100%);
+  border: 1px solid rgba(216, 171, 80, 0.3);
   color: #f4ede1;
-  box-shadow: 0 9px 18px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 14px 26px -16px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 @media (min-width: 768px) {
-  .tier-hero { margin-left: -2rem; margin-right: -2rem; }
+  /* Desktop: modal rộng → khung nằm ngang, main-row không xuống dòng */
+  .tier-hero { padding: 1.8rem 2.2rem; }
 }
-.tier-hero::before {
-  content: "";
-  position: absolute;
-  top: -55%;
-  right: -8%;
-  width: 60%;
-  height: 180%;
-  pointer-events: none;
-  background: radial-gradient(circle, rgba(246, 221, 142, 0.28), transparent 62%);
-}
-.tier-hero::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.05) 50%, transparent 60%);
+@media (max-width: 400px) {
+  /* Điện thoại hẹp: co lại cho gọn, giữ khung dọc */
+  .tier-hero { padding: 1.25rem; }
 }
 .th-dong { --metal: linear-gradient(135deg, #e8bd93, #b07a34 46%, #7a4e22); --accent: #e8bd93; }
 .th-bac  { --metal: linear-gradient(135deg, #eef1f5, #b6bcc4 46%, #868c96); --accent: #dfe4ea; }
@@ -529,6 +534,12 @@ body {
   background: var(--metal); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .tier-hero__perk-lbl { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.14em; color: rgba(244, 237, 225, 0.6); }
+/* Điện thoại hẹp: quyền lợi xuống dòng riêng, canh trái cho gọn thay vì dồn phải */
+@media (max-width: 400px) {
+  .tier-hero__name { font-size: 1.6rem; }
+  .tier-hero__perk { margin-left: 0; padding-left: 0; text-align: left; width: 100%; margin-top: 0.5rem; }
+  .tier-hero__perk-num { font-size: 1.3rem; }
+}
 
 /* ── Ladder 4 hạng: rail + fill + viên trace + puck vị trí trượt ── */
 .tier-ladder { position: relative; z-index: 1; margin: 1.6rem 0.9rem 0; }
