@@ -275,6 +275,38 @@
                 <span id="tier-config-msg" class="text-sm text-ash"></span>
               </div>
             </section>
+            <section class="admin-panel mt-4">
+              <div class="admin-panel-head">
+                <div>
+                  <h2 class="admin-panel-title">Tạo &amp; gửi voucher</h2>
+                  <p class="admin-panel-subtitle">Tạo voucher giảm giá rồi gửi cho tất cả khách hoặc chọn khách cụ thể. Mỗi khách nhận một mã riêng vào kho (vẫn tặng/chuyển nhượng được).</p>
+                </div>
+              </div>
+              <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label class="text-sm text-ash">Mức giảm (%)
+                  <input id="gv-percent" type="number" min="1" max="100" placeholder="VD: 15" class="admin-search-input mt-1 w-full" />
+                </label>
+                <label class="text-sm text-ash">Hạn dùng (số ngày — để trống = không hết hạn)
+                  <input id="gv-days" type="number" min="1" placeholder="VD: 30" class="admin-search-input mt-1 w-full" />
+                </label>
+              </div>
+              <div class="mt-4">
+                <span class="text-sm text-ash">Gửi tới</span>
+                <div class="mt-2 flex flex-wrap gap-5">
+                  <label class="flex items-center gap-2 text-sm text-ink"><input type="radio" name="gv-mode" value="all" checked class="accent-[#7a0c1f]" /> Tất cả khách (<span id="gv-all-count">0</span>)</label>
+                  <label class="flex items-center gap-2 text-sm text-ink"><input type="radio" name="gv-mode" value="select" class="accent-[#7a0c1f]" /> Chọn khách cụ thể</label>
+                </div>
+              </div>
+              <div id="gv-recipients" class="mt-3 hidden">
+                <input id="gv-search" type="search" placeholder="Tìm khách theo tên / SĐT..." class="admin-search-input w-full" />
+                <div id="gv-list" class="mt-2 max-h-56 space-y-1 overflow-y-auto overscroll-contain rounded-lg border border-earth/40 p-2"></div>
+                <p class="mt-1 text-xs text-ash"><span id="gv-selected-count">0</span> khách được chọn</p>
+              </div>
+              <div class="mt-4 flex items-center gap-3">
+                <button id="gv-send" type="button" class="bg-ink px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90">Tạo &amp; gửi voucher</button>
+                <span id="gv-msg" class="text-sm text-ash"></span>
+              </div>
+            </section>
             <div class="admin-toolbar mt-4">
               <input id="customers-search" type="search" placeholder="Tìm tên, số điện thoại, địa chỉ..." class="admin-search-input" />
             </div>
