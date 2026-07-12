@@ -227,7 +227,7 @@ function showLoadingSkeletons() {
   if (traffic) traffic.innerHTML = skeletonRows(4);
 }
 
-async function loadBackoffice() {
+async function loadBackoffice({ skipTraffic = false } = {}) {
   // Khoá chống gọi chồng: nếu đang có 1 lần loadBackoffice() chạy dở thì bỏ qua lần
   // gọi mới — gọi Supabase chồng lên nhau ngay lúc phiên đăng nhập đang xử lý từng
   // gây treo (deadlock) bên trong thư viện Supabase, bất kể nguyên nhân gọi chồng là gì
@@ -249,31 +249,44 @@ async function loadBackoffice() {
   // Lưới an toàn chống treo: thư viện Supabase thỉnh thoảng deadlock khi bắn nhiều
   // truy vấn cùng lúc lúc phiên đăng nhập vừa mở (xem CLAUDE.md). Để 30s cho rộng —
   // tải bình thường luôn xong trước đó nên người dùng gần như không bao giờ thấy nó.
+  // Huỷ hẳn các truy vấn Supabase nếu quá thời gian, thay vì để chúng chạy mồ côi ở nền.
+  const controller = new AbortController();
+  let timeoutHandle;
   const timeoutAfter = (ms) =>
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Kết nối tới Supabase quá lâu — bấm Làm mới để thử lại.")), ms));
+    new Promise((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        controller.abort();
+        reject(new Error("Kết nối tới Supabase quá lâu — bấm Làm mới để thử lại."));
+      }, ms);
+    });
 
   try {
     const { start, end } = todayRange();
-    const [
-      { data: orderData, error: orderError },
-      { data: customerData, error: customerError },
-      { data: trafficData, error: trafficError },
-      { data: settingsData },
-    ] = await Promise.race([
-      Promise.all([
-        supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250),
-        supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250),
+    // skipTraffic=true (do realtime đơn/khách gọi): KHÔNG kéo lại 1000 dòng analytics_events
+    // mỗi lần có đơn thay đổi. Traffic chỉ tải ở lần mount đầu + khi bấm Làm mới.
+    const queries = [
+      supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250).abortSignal(controller.signal),
+      supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250).abortSignal(controller.signal),
+    ];
+    if (!skipTraffic) {
+      queries.push(
         supabase
           .from("analytics_events")
           .select("*")
           .gte("created_at", start.toISOString())
           .lt("created_at", end.toISOString())
           .order("created_at", { ascending: false })
-          .limit(1000),
-        supabase.from("site_settings").select("*").single(),
-      ]),
-      timeoutAfter(30000),
-    ]);
+          .limit(1000)
+          .abortSignal(controller.signal)
+      );
+    }
+    queries.push(supabase.from("site_settings").select("*").single().abortSignal(controller.signal));
+
+    const results = await Promise.race([Promise.all(queries), timeoutAfter(30000)]);
+    const { data: orderData, error: orderError } = results[0];
+    const { data: customerData, error: customerError } = results[1];
+    const { data: trafficData, error: trafficError } = skipTraffic ? {} : results[2];
+    const { data: settingsData } = skipTraffic ? results[2] : results[3];
 
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
     if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
@@ -291,8 +304,10 @@ async function loadBackoffice() {
     orders = orderData || [];
     customers = customerData || [];
     if (settingsData) siteSettings = settingsData;
-    trafficReady = !trafficError;
-    trafficEvents = trafficData || [];
+    if (!skipTraffic) {
+      trafficReady = !trafficError;
+      trafficEvents = trafficData || [];
+    }
     saveCache();
     renderAll();
   } catch (catchErr) {
@@ -301,6 +316,7 @@ async function loadBackoffice() {
     // thì im lặng, tránh toast gây hiểu lầm dù màn hình vẫn đang hiển thị bình thường.
     if (!orders.length) showToast(catchErr?.message || "Lỗi kết nối tới Supabase");
   } finally {
+    clearTimeout(timeoutHandle); // tránh timeout bắn muộn gọi abort() thừa sau khi đã xong
     isLoadingBackoffice = false;
     finishProgress(); // dữ liệu đã về (hoặc lỗi) → thanh đầy 100% rồi mờ đi
   }
@@ -1237,9 +1253,9 @@ function startRealtime() {
     .channel("admin-orders-changes")
     .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
       if (payload.eventType === "INSERT") notifyNewOrder(payload.new);
-      loadBackoffice();
+      loadBackoffice({ skipTraffic: true });
     })
-    .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => loadBackoffice())
+    .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => loadBackoffice({ skipTraffic: true }))
     .subscribe();
 
   // Kênh riêng cho tin nhắn — tách khỏi kênh đơn hàng để realtime của chat ổn định,

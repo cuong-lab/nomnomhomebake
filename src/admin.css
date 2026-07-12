@@ -321,6 +321,11 @@
 .admin-stat-card,
 .admin-panel {
   position: relative;
+  /* Là item của grid/flex → mặc định min-width:auto khiến panel KHÔNG co dưới bề rộng
+     nội dung, làm các khối overflow-x-auto bên trong (bảng hạng, bảng khách) đội cả cột
+     rộng hơn màn hình rồi bị main{overflow-x:clip} cắt cụt. min-width:0 cho phép panel co
+     đúng bề rộng máy, để phần cuộn ngang nằm gọn trong khung riêng của từng bảng. */
+  min-width: 0;
   border: 1px solid transparent;
   border-radius: 18px;
   background: var(--glass-2);

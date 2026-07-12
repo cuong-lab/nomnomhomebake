@@ -22,7 +22,8 @@ let selectedVoucherCodes = [];   // mã voucher đang chọn (tối đa maxVouch
 function saveCart() {
   localStorage.setItem("nomnom-cart", JSON.stringify(cart));
   updateCartCount();
-  if (state.currentCustomer) pushCartToAccount(state.currentCustomer.phone);
+  // localStorage + UI cập nhật tức thì; ghi DB thì debounce (xem schedulePushCart).
+  if (state.currentCustomer) schedulePushCart(state.currentCustomer.phone);
 }
 
 function updateCartCount() {
@@ -246,6 +247,7 @@ const cartCustomer = document.getElementById("cart-customer");
 const custError = document.getElementById("cust-error");
 
 document.getElementById("cart-checkout-step").addEventListener("click", () => {
+  flushPushCart(); // đảm bảo giỏ mới nhất đã lên tài khoản trước khi thanh toán
   // không cho chọn ngày trong quá khứ
   document.getElementById("cust-date").min = new Date().toISOString().split("T")[0];
   cartItems.classList.add("hidden");
@@ -1230,8 +1232,17 @@ function updateHeroContent(data) {
     editableFields.forEach(({ id, col }) => {
       const el = document.getElementById(id);
       el.setAttribute("contenteditable", "true");
+      el.removeEventListener("focus", el._focusHandler);
       el.removeEventListener("blur", el._saveHandler);
-      el._saveHandler = () => saveField(col, el.textContent.trim());
+      // Dirty-check: nhớ nội dung lúc focus, blur mà không sửa gì thì KHÔNG ghi DB.
+      el._focusHandler = () => { el._initialText = el.textContent.trim(); };
+      el._saveHandler = () => {
+        const val = el.textContent.trim();
+        if (val === el._initialText) return;
+        saveField(col, val);
+        el._initialText = val;
+      };
+      el.addEventListener("focus", el._focusHandler);
       el.addEventListener("blur", el._saveHandler);
     });
   } else {
@@ -1266,7 +1277,14 @@ function renderMarquee(text) {
   if (state.isAdmin) {
     el.innerHTML = `<div id="marquee-edit" class="nn-marquee-edit" contenteditable="true" spellcheck="false" title="Gõ các cụm cách nhau bằng dấu ✦">${escapeHtml(raw)}</div>`;
     const edit = document.getElementById("marquee-edit");
-    edit.addEventListener("blur", () => saveField("marquee_text", edit.textContent.trim()));
+    let marqueeInitial = edit.textContent.trim();
+    edit.addEventListener("focus", () => { marqueeInitial = edit.textContent.trim(); });
+    edit.addEventListener("blur", () => {
+      const val = edit.textContent.trim();
+      if (val === marqueeInitial) return; // không sửa gì → không ghi DB
+      saveField("marquee_text", val);
+      marqueeInitial = val;
+    });
   } else {
     const group = `<span class="nn-marquee-group"><span class="nn-marquee-item">${escapeHtml(raw).replace(/✦/g, "<i>✦</i>")}</span></span>`;
     el.innerHTML = `<div class="nn-marquee-track">${group}${group.replace('class="nn-marquee-group"', 'class="nn-marquee-group" aria-hidden="true"')}</div>`;
@@ -2165,6 +2183,34 @@ document.getElementById("gift-go").addEventListener("click", async () => {
 });
 
 // ── Đồng bộ giỏ hàng theo tài khoản (đăng nhập lại / đổi thiết bị vẫn còn giỏ) ──
+
+let pushCartTimer = null;
+let pushCartPhone = null;
+
+// Debounce ghi giỏ lên tài khoản: gộp nhiều lần đổi giỏ (bấm +/- liên tục) thành 1 UPDATE
+// sau ~1s, thay vì bắn 1 UPDATE mỗi lần bấm.
+function schedulePushCart(phone) {
+  pushCartPhone = phone;
+  clearTimeout(pushCartTimer);
+  pushCartTimer = setTimeout(() => {
+    pushCartTimer = null;
+    pushCartToAccount(pushCartPhone);
+  }, 1000);
+}
+
+// Ghi ngay lần chờ cuối (đóng tab / rời trang / trước khi thanh toán). Không có bước này,
+// khách đóng tab trong vòng 1s sau khi đổi giỏ sẽ mất lần ghi đó khi mở ở thiết bị khác.
+function flushPushCart() {
+  if (!pushCartTimer) return;
+  clearTimeout(pushCartTimer);
+  pushCartTimer = null;
+  if (pushCartPhone) pushCartToAccount(pushCartPhone);
+}
+
+window.addEventListener("pagehide", flushPushCart);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") flushPushCart();
+});
 
 async function pushCartToAccount(phone) {
   await supabase.from("customers").update({ cart }).eq("phone", phone);
