@@ -177,13 +177,14 @@
 
 /* ── Sidebar (full-height, glass). Giữ nguyên position:fixed do Tailwind cấp — KHÔNG set position ở đây. ── */
 #admin-sidebar {
-  /* Đục hơn một chút để trông "đặc" mà KHÔNG cần blur (phía sau chỉ là nền gradient tĩnh) */
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.56));
+  /* ĐẶC 100% (không alpha): trên mobile sidebar là drawer trượt ĐÈ lên nội dung → phải đục hẳn
+     để chữ không đè chữ. Trên desktop nổi trên nền tĩnh nên đục vẫn đẹp. Grain overlay vẫn phủ. */
+  background: linear-gradient(135deg, #faf5ee, #f4ede1);
   border-right: 1px solid transparent;
   box-shadow: var(--glass-shadow);
 }
 .admin-body[data-theme="dark"] #admin-sidebar {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.055));
+  background: linear-gradient(135deg, #221b15, #1b1510);
 }
 #admin-sidebar::before {
   content: "";
@@ -216,6 +217,17 @@
 }
 .admin-body[data-theme="dark"] .admin-header {
   background: linear-gradient(135deg, rgba(33, 26, 21, 0.96), rgba(27, 21, 16, 0.94));
+}
+/* Nút menu (hamburger) trên mobile — theo theme (trước dùng bg-white cứng, xấu ở dark) */
+.admin-menu-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--color-ink);
+}
+.admin-body[data-theme="dark"] .admin-menu-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 .admin-header::before {
   content: "";

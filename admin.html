@@ -94,20 +94,20 @@
 
       <div class="min-h-screen lg:pl-[18.5rem]">
         <header class="admin-header">
-          <div class="flex min-h-[4.75rem] items-center justify-between gap-4 px-4 py-3 md:px-7">
-            <div class="flex items-center gap-3">
-              <button id="admin-menu-toggle" type="button" class="flex h-10 w-10 items-center justify-center border border-earth/70 bg-white text-ink lg:hidden" aria-label="Mở menu">
+          <div class="flex min-h-[4.75rem] items-center justify-between gap-2 px-4 py-3 md:gap-4 md:px-7">
+            <div class="flex min-w-0 items-center gap-2 md:gap-3">
+              <button id="admin-menu-toggle" type="button" class="admin-menu-toggle flex h-10 w-10 flex-none items-center justify-center lg:hidden" aria-label="Mở menu">
                 <span class="block h-0.5 w-5 bg-current before:block before:h-0.5 before:w-5 before:-translate-y-1.5 before:bg-current after:block after:h-0.5 after:w-5 after:translate-y-1 after:bg-current"></span>
               </button>
               <div>
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="rounded-full bg-[#7a0c1f] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white">Live</span>
-                  <span class="text-sm font-medium text-ash">nomnom sales operations</span>
+                  <span class="hidden text-sm font-medium text-ash sm:inline">nomnom sales operations</span>
                 </div>
                 <h1 id="admin-page-title" class="mt-1 font-serif text-2xl text-ink md:text-3xl">Tổng quan bán hàng</h1>
               </div>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-none items-center gap-2 sm:gap-3">
               <div id="admin-theme-toggle" class="admin-theme-toggle" role="group" aria-label="Chọn giao diện">
                 <span class="admin-tt-thumb"></span>
                 <button type="button" class="admin-tt-seg" data-set-theme="morning" title="Morning — bản sáng" aria-label="Giao diện sáng">
@@ -120,9 +120,9 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
                 </button>
               </div>
-              <button id="admin-enable-notify" type="button" class="admin-btn-red-soft hidden sm:text-sm">
+              <button id="admin-enable-notify" type="button" class="admin-btn-red-soft hidden whitespace-nowrap sm:text-sm">
                 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>
-                Bật thông báo đơn mới
+                <span class="hidden sm:inline">Bật thông báo đơn mới</span>
               </button>
               <button id="admin-refresh" type="button" class="admin-btn-ghost hidden md:inline-flex">
                 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
@@ -269,10 +269,14 @@
                   <p class="admin-panel-subtitle">Hạng theo tổng chi 6 tháng; mỗi hạng cấp số voucher %/tháng. Chỉnh xong bấm Lưu.</p>
                 </div>
               </div>
-              <div class="mt-4 grid grid-cols-[1.1fr_1fr_0.8fr_0.8fr] gap-2 text-[11px] font-medium uppercase tracking-wide text-ash">
-                <span>Hạng</span><span>Mốc chi từ (đ)</span><span>SL/tháng</span><span>Giảm %</span>
+              <div class="mt-4 overflow-x-auto">
+                <div class="min-w-[27rem]">
+                  <div class="grid grid-cols-[1.1fr_1fr_0.8fr_0.8fr] gap-2 text-[11px] font-medium uppercase tracking-wide text-ash">
+                    <span>Hạng</span><span>Mốc chi từ (đ)</span><span>SL/tháng</span><span>Giảm %</span>
+                  </div>
+                  <div id="tier-config-rows" class="mt-1 space-y-2"></div>
+                </div>
               </div>
-              <div id="tier-config-rows" class="mt-1 space-y-2"></div>
               <div class="admin-field-grid mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1">
                 <label class="text-sm text-ash">% voucher sinh nhật
                   <div class="admin-num mt-1">

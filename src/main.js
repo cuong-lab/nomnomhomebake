@@ -8,6 +8,7 @@ import { initReviews, loadReviews } from "./storefront/reviews.js";
 import { initHero, loadHeroSlides } from "./storefront/hero.js";
 import { initChat, restartChatWatcher, startPresence, setChatAdminMode } from "./storefront/chat.js";
 import { tierHeroHtml, activateLadders, voucherCardHtml, coVoucherHtml } from "./storefront/vouchers.js";
+import { initAnalytics } from "./storefront/analytics.js";
 
 const yearEl = document.querySelector("[data-year]");
 if (yearEl) yearEl.textContent = new Date().getFullYear();
@@ -2373,3 +2374,4 @@ initHero();
 initReviews();
 initMiniNav();
 initNavSpy();
+initAnalytics(); // ghi page_view cho view Traffic của admin (không chặn, tự nuốt lỗi)

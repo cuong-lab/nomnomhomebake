@@ -1300,10 +1300,10 @@ function updateNotifyButton() {
   const bellIcon = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>`;
   const bellOffIcon = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></svg>`;
   if (Notification.permission === "denied") {
-    btn.innerHTML = `${bellOffIcon}<span>Trình duyệt đang chặn thông báo</span>`;
+    btn.innerHTML = `${bellOffIcon}<span class="hidden sm:inline">Trình duyệt đang chặn thông báo</span>`;
     btn.disabled = true;
   } else {
-    btn.innerHTML = `${bellIcon}<span>Bật thông báo đơn mới</span>`;
+    btn.innerHTML = `${bellIcon}<span class="hidden sm:inline">Bật thông báo đơn mới</span>`;
     btn.disabled = false;
   }
 }
