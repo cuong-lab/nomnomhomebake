@@ -18,7 +18,7 @@
   </head>
   <body class="admin-body">
     <div id="admin-login" class="hidden min-h-screen items-center justify-center px-5">
-      <form id="admin-login-form" class="w-full max-w-sm border border-earth/60 bg-cream/90 p-6 shadow-[0_24px_70px_-42px_rgba(10,10,10,0.55)] md:p-8">
+      <form id="admin-login-form" class="admin-login-card w-full max-w-sm p-6 md:p-8">
         <p class="text-xs font-semibold uppercase tracking-[0.22em] text-ash">nomnom backoffice</p>
         <h1 class="mt-3 font-serif text-3xl text-ink">Đăng nhập admin</h1>
        
@@ -30,17 +30,17 @@
           name="email"
           placeholder="Email"
           required
-          class="mt-6 w-full border border-earth/70 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+          class="admin-input mt-6 w-full"
         />
         <input
           type="password"
           name="password"
           placeholder="Mật khẩu"
           required
-          class="mt-3 w-full border border-earth/70 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-ink"
+          class="admin-input mt-3 w-full"
         />
         <p id="admin-login-error" class="mt-3 hidden text-xs text-red-600"></p>
-        <button type="submit" class="mt-6 w-full bg-ink px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90">
+        <button type="submit" class="admin-btn-primary mt-6 w-full">
           Vào backoffice
         </button>
         <a href="/" class="mt-4 inline-block text-sm text-ash transition-colors hover:text-ink">Về website</a>
@@ -48,8 +48,8 @@
     </div>
 
     <div id="admin-app" class="hidden min-h-screen">
-      <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-40 flex w-[18.5rem] -translate-x-full flex-col border-r border-earth/70 bg-[#fbf3ea]/95 transition-transform duration-300 lg:translate-x-0">
-        <div class="border-b border-dashed border-earth px-6 py-5">
+      <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-40 flex w-[18.5rem] -translate-x-full flex-col transition-transform duration-300 lg:m-3.5 lg:translate-x-0 lg:rounded-[1.5rem]">
+        <div class="border-b border-white/25 px-6 py-5">
           <a href="/" class="font-serif text-2xl text-ink">nomnom</a>
           <p class="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-ash">Backoffice</p>
         </div>
@@ -58,48 +58,41 @@
           <p class="px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-ash">Bán hàng</p>
           <div class="mt-3 space-y-1">
             <button class="admin-nav-item is-active" data-route="overview" type="button">
-              <span class="admin-nav-icon">01</span>
+              <span class="admin-nav-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>
               Tổng quan
             </button>
             <button class="admin-nav-item" data-route="orders" type="button">
-              <span class="admin-nav-icon">02</span>
+              <span class="admin-nav-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
               Đơn hàng
               <span id="nav-orders-count" class="ml-auto hidden rounded-full bg-[#7a0c1f] px-2 py-0.5 text-[10px] text-white">0</span>
             </button>
-            
+
             <button class="admin-nav-item" data-route="customers" type="button">
-              <span class="admin-nav-icon">03</span>
+              <span class="admin-nav-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
               Khách hàng
             </button>
             <button class="admin-nav-item" data-route="traffic" type="button">
-              <span class="admin-nav-icon">04</span>
+              <span class="admin-nav-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
               Traffic
             </button>
             <button class="admin-nav-item" data-route="messages" type="button">
-              <span class="admin-nav-icon">05</span>
+              <span class="admin-nav-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
               Tin nhắn
               <span id="nav-messages-count" class="ml-auto hidden rounded-full bg-[#7a0c1f] px-2 py-0.5 text-[10px] text-white">0</span>
             </button>
           </div>
-
-          <div class="mt-8 rounded-lg border border-dashed border-earth/80 bg-white/45 p-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-ash">Nguồn dữ liệu</p>
-            <p class="mt-2 text-sm leading-relaxed text-ink">
-              Đơn hàng từ <span class="font-semibold">orders</span>, khách hàng từ <span class="font-semibold">customers</span>, traffic từ <span class="font-semibold">analytics_events</span>.
-            </p>
-          </div>
         </nav>
 
-        <div class="border-t border-dashed border-earth px-4 py-4">
+        <div class="border-t border-white/25 px-4 py-4">
           <a href="/" target="_blank" rel="noopener" class="admin-secondary-link">Mở website</a>
-          <button id="admin-signout" type="button" class="admin-secondary-link mt-2 w-full text-left">Đăng xuất</button>
+          <button id="admin-signout" type="button" class="admin-secondary-link mt-2 w-full">Đăng xuất</button>
         </div>
       </aside>
 
       <div id="admin-sidebar-overlay" class="fixed inset-0 z-30 hidden bg-ink/40 lg:hidden"></div>
 
       <div class="min-h-screen lg:pl-[18.5rem]">
-        <header class="sticky top-0 z-20 border-b border-earth/60 bg-[#fdfaf5]/90 backdrop-blur">
+        <header class="admin-header">
           <div class="flex min-h-[4.75rem] items-center justify-between gap-4 px-4 py-3 md:px-7">
             <div class="flex items-center gap-3">
               <button id="admin-menu-toggle" type="button" class="flex h-10 w-10 items-center justify-center border border-earth/70 bg-white text-ink lg:hidden" aria-label="Mở menu">
@@ -114,10 +107,24 @@
               </div>
             </div>
             <div class="flex items-center gap-3">
-              <button id="admin-enable-notify" type="button" class="hidden border border-[#7a0c1f] bg-white px-3 py-2 text-xs font-semibold text-[#7a0c1f] transition-colors hover:bg-[#7a0c1f]/5 sm:text-sm">
-                🔔 Bật thông báo đơn mới
+              <div id="admin-theme-toggle" class="admin-theme-toggle" role="group" aria-label="Chọn giao diện">
+                <span class="admin-tt-thumb"></span>
+                <button type="button" class="admin-tt-seg" data-set-theme="morning" title="Morning — bản sáng" aria-label="Giao diện sáng">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v8"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h2"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M22 22H2"/><path d="m8 6 4-4 4 4"/><path d="M16 18a4 4 0 0 0-8 0"/></svg>
+                </button>
+                <button type="button" class="admin-tt-seg" data-set-theme="noon" title="Noon — bản trưa" aria-label="Giao diện trưa">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                </button>
+                <button type="button" class="admin-tt-seg" data-set-theme="dark" title="Dark — bản tối" aria-label="Giao diện tối">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                </button>
+              </div>
+              <button id="admin-enable-notify" type="button" class="admin-btn-red-soft hidden sm:text-sm">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>
+                Bật thông báo đơn mới
               </button>
-              <button id="admin-refresh" type="button" class="hidden border border-earth/70 bg-white px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-ink md:inline-flex">
+              <button id="admin-refresh" type="button" class="admin-btn-ghost hidden md:inline-flex">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
                 Làm mới
               </button>
               <div class="hidden text-right sm:block">
@@ -130,6 +137,10 @@
         </header>
 
         <main class="px-4 py-6 md:px-7 md:py-8">
+          <div id="admin-progress" aria-hidden="true">
+            <p class="admin-progress-label">Đang tải dữ liệu…</p>
+            <div class="admin-progress-track"></div>
+          </div>
           <section id="view-overview" class="admin-view">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <article class="admin-stat-card">
@@ -215,12 +226,12 @@
               
               <div class="flex items-center gap-2">
                 <label for="orders-date-start" class="text-xs text-ash font-medium">Từ:</label>
-                <input id="orders-date-start" type="date" class="border border-earth/70 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink rounded-none" />
+                <input id="orders-date-start" type="date" class="admin-input" style="max-width:11rem" />
               </div>
 
               <div class="flex items-center gap-2">
                 <label for="orders-date-end" class="text-xs text-ash font-medium">Đến:</label>
-                <input id="orders-date-end" type="date" class="border border-earth/70 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink rounded-none" />
+                <input id="orders-date-end" type="date" class="admin-input" style="max-width:11rem" />
               </div>
 
               <select id="orders-status-filter" class="admin-select min-w-[140px]">
@@ -231,7 +242,8 @@
                 <option value="cancelled">Đã hủy</option>
               </select>
 
-              <button id="orders-export" type="button" class="bg-[#107c41] text-white px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 flex items-center gap-2 whitespace-nowrap">
+              <button id="orders-export" type="button" class="admin-btn-excel">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                 Xuất Excel
               </button>
             </div>
@@ -248,6 +260,7 @@
           </section>
 
           <section id="view-customers" class="admin-view hidden">
+            <div class="grid gap-4 xl:grid-cols-2">
             <section class="admin-panel">
               <div class="admin-panel-head">
                 <div>
@@ -259,7 +272,7 @@
                 <span>Hạng</span><span>Mốc chi từ (đ)</span><span>SL/tháng</span><span>Giảm %</span>
               </div>
               <div id="tier-config-rows" class="mt-1 space-y-2"></div>
-              <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div class="admin-field-grid mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1">
                 <label class="text-sm text-ash">% voucher sinh nhật
                   <input id="cfg-birthday-percent" type="number" min="0" max="100" class="admin-search-input mt-1 w-full" />
                 </label>
@@ -271,18 +284,18 @@
                 </label>
               </div>
               <div class="mt-4 flex items-center gap-3">
-                <button id="tier-config-save" type="button" class="bg-ink px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90">Lưu cấu hình</button>
+                <button id="tier-config-save" type="button" class="admin-btn-primary">Lưu cấu hình</button>
                 <span id="tier-config-msg" class="text-sm text-ash"></span>
               </div>
             </section>
-            <section class="admin-panel mt-4">
+            <section class="admin-panel flex flex-col">
               <div class="admin-panel-head">
                 <div>
                   <h2 class="admin-panel-title">Tạo &amp; gửi voucher</h2>
                   <p class="admin-panel-subtitle">Tạo voucher giảm giá rồi gửi cho tất cả khách hoặc chọn khách cụ thể. Mỗi khách nhận một mã riêng vào kho (vẫn tặng/chuyển nhượng được).</p>
                 </div>
               </div>
-              <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div class="admin-field-grid mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label class="text-sm text-ash">Mức giảm (%)
                   <input id="gv-percent" type="number" min="1" max="100" placeholder="VD: 15" class="admin-search-input mt-1 w-full" />
                 </label>
@@ -291,22 +304,21 @@
                 </label>
               </div>
               <div class="mt-4">
-                <span class="text-sm text-ash">Gửi tới</span>
-                <div class="mt-2 flex flex-wrap gap-5">
-                  <label class="flex items-center gap-2 text-sm text-ink"><input type="radio" name="gv-mode" value="all" checked class="accent-[#7a0c1f]" /> Tất cả khách (<span id="gv-all-count">0</span>)</label>
-                  <label class="flex items-center gap-2 text-sm text-ink"><input type="radio" name="gv-mode" value="select" class="accent-[#7a0c1f]" /> Chọn khách cụ thể</label>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <span class="text-sm text-ash">Gửi tới — bỏ tích khách không muốn gửi</span>
+                  <label class="flex items-center gap-2 text-sm font-medium text-ink"><input type="checkbox" id="gv-select-all" class="accent-[#7a0c1f]" /> Chọn tất cả (<span id="gv-all-count">0</span>)</label>
                 </div>
-              </div>
-              <div id="gv-recipients" class="mt-3 hidden">
-                <input id="gv-search" type="search" placeholder="Tìm khách theo tên / SĐT..." class="admin-search-input w-full" />
-                <div id="gv-list" class="mt-2 max-h-56 space-y-1 overflow-y-auto overscroll-contain rounded-lg border border-earth/40 p-2"></div>
+                <input id="gv-search" type="search" placeholder="Tìm khách theo tên / SĐT..." class="admin-search-input mt-3 w-full" />
+                <div id="gv-list" class="gv-list mt-2 space-y-1 overflow-y-auto overscroll-contain rounded-lg border border-earth/40 p-2"></div>
+                <div id="gv-pager"></div>
                 <p class="mt-1 text-xs text-ash"><span id="gv-selected-count">0</span> khách được chọn</p>
               </div>
-              <div class="mt-4 flex items-center gap-3">
-                <button id="gv-send" type="button" class="bg-ink px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90">Tạo &amp; gửi voucher</button>
+              <div class="mt-auto flex items-center gap-3 pt-4">
+                <button id="gv-send" type="button" class="admin-btn-primary">Tạo &amp; gửi voucher</button>
                 <span id="gv-msg" class="text-sm text-ash"></span>
               </div>
             </section>
+            </div>
             <div class="admin-toolbar mt-4">
               <input id="customers-search" type="search" placeholder="Tìm tên, số điện thoại, địa chỉ..." class="admin-search-input" />
             </div>
@@ -373,7 +385,10 @@
                 <div id="chat-thread-messages" class="mt-4 flex-1 space-y-2 overflow-y-auto" style="max-height:55vh; min-height:200px;"></div>
                 <form id="chat-reply-form" class="mt-4 hidden items-center gap-2">
                   <input id="chat-reply-input" type="text" placeholder="Nhập tin nhắn trả lời..." class="admin-search-input flex-1" autocomplete="off" />
-                  <button type="submit" class="bg-ink px-4 py-2 text-sm font-semibold text-white hover:opacity-90">Gửi</button>
+                  <button type="submit" class="admin-btn-primary">
+                    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+                    Gửi
+                  </button>
                 </form>
               </section>
             </div>
