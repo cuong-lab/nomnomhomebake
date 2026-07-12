@@ -181,6 +181,52 @@ function saveCache() {
 
 let isLoadingBackoffice = false;
 
+// ── Thanh tiến trình "power bar" (kiểu trickle) ──
+// KHÔNG thể đoán trước mạng nhanh/chậm để canh thanh đầy đúng lúc data về. Cách chuẩn
+// (NProgress / GitHub / YouTube): thanh tiến nhanh lúc đầu rồi CHẬM DẦN tới ~90%, và chỉ
+// SNAP 100% đúng khoảnh khắc dữ liệu thật sự về (finishProgress gọi trong finally bên dưới).
+const progressBar = document.getElementById("admin-progress");
+let progressTimer = null;
+let progressVal = 0;
+function setProgress(v) {
+  progressVal = v;
+  progressBar?.style.setProperty("--admin-progress", v + "%");
+}
+function startProgress() {
+  if (!progressBar) return;
+  clearInterval(progressTimer);
+  progressBar.classList.add("is-active");
+  setProgress(8);
+  progressTimer = setInterval(() => {
+    const step = Math.max(0.4, (90 - progressVal) * 0.09); // càng gần 90% càng bò chậm
+    setProgress(Math.min(90, progressVal + step));
+  }, 220);
+}
+function finishProgress() {
+  if (!progressBar) return;
+  clearInterval(progressTimer);
+  setProgress(100);
+  setTimeout(() => {
+    progressBar.classList.remove("is-active");
+    setTimeout(() => setProgress(0), 380);
+  }, 300);
+}
+
+// Khung xám nhấp nháy (skeleton) giữ chỗ khi bảng chưa có dữ liệu → tránh "trang chết / trống trơn"
+function skeletonRows(n = 6) {
+  return `<div class="mt-2 space-y-2">${Array.from({ length: n })
+    .map(() => `<div class="skeleton h-11 w-full rounded-lg"></div>`)
+    .join("")}</div>`;
+}
+function showLoadingSkeletons() {
+  ["orders-table", "customers-table"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = skeletonRows(6);
+  });
+  const traffic = document.getElementById("traffic-state");
+  if (traffic) traffic.innerHTML = skeletonRows(4);
+}
+
 async function loadBackoffice() {
   // Khoá chống gọi chồng: nếu đang có 1 lần loadBackoffice() chạy dở thì bỏ qua lần
   // gọi mới — gọi Supabase chồng lên nhau ngay lúc phiên đăng nhập đang xử lý từng
@@ -195,20 +241,10 @@ async function loadBackoffice() {
     return;
   }
 
-  // Nếu chưa có gì để hiện (kể cả cache rỗng), báo cho cô chủ biết là đang tải.
-  if (!orders.length) {
-    const ordersTableEl = document.getElementById("orders-table");
-    if (ordersTableEl) {
-      ordersTableEl.innerHTML = `
-        <div class="admin-empty">nomnom đang tải dữ liệu, đừng vội nhé, không nhanh hơn được đâu 🧁</div>
-        <div class="mt-4 space-y-2">
-          <div class="skeleton h-12 w-full rounded"></div>
-          <div class="skeleton h-12 w-full rounded"></div>
-          <div class="skeleton h-12 w-full rounded"></div>
-          <div class="skeleton h-12 w-full rounded"></div>
-        </div>`;
-    }
-  }
+  startProgress(); // thanh tiến trình chạy suốt lúc gọi Supabase
+
+  // Chưa có gì để hiện (kể cả cache rỗng) → khung skeleton giữ chỗ ở các bảng, tránh "trang chết".
+  if (!orders.length) showLoadingSkeletons();
 
   // Lưới an toàn chống treo: thư viện Supabase thỉnh thoảng deadlock khi bắn nhiều
   // truy vấn cùng lúc lúc phiên đăng nhập vừa mở (xem CLAUDE.md). Để 30s cho rộng —
@@ -266,6 +302,7 @@ async function loadBackoffice() {
     if (!orders.length) showToast(catchErr?.message || "Lỗi kết nối tới Supabase");
   } finally {
     isLoadingBackoffice = false;
+    finishProgress(); // dữ liệu đã về (hoặc lỗi) → thanh đầy 100% rồi mờ đi
   }
 }
 
@@ -462,7 +499,7 @@ function renderOverview() {
 
 function renderPulseRow(label, value) {
   return `
-    <div class="flex items-center justify-between border border-earth/40 bg-white/50 px-4 py-3">
+    <div class="admin-pulse-row">
       <span class="text-sm text-ash">${label}</span>
       <span class="font-serif text-xl text-ink">${value}</span>
     </div>
@@ -543,8 +580,8 @@ function renderRevenueChart() {
         <g class="ov-bar" data-tip="${escapeHtml(tip)}" data-cx="${cx.toFixed(1)}" data-top="${y.toFixed(1)}" style="opacity:${isToday ? 1 : 0.78}">
           <rect x="${(padX + slot * i).toFixed(1)}" y="${padTop}" width="${slot.toFixed(1)}" height="${plotH}" fill="transparent"></rect>
           <rect class="ov-bar-fill" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="4" fill="${CHART_ACCENT}"></rect>
-          ${showValue ? `<text x="${cx.toFixed(1)}" y="${(y - 6).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="600" fill="${CHART_ACCENT}">${compactCurrency(d.revenue)}</text>` : ""}
-          <text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="12" fill="${isToday ? "#0A0A0A" : "#6B6B6B"}" font-weight="${isToday ? 700 : 400}">${label}</text>
+          ${showValue ? `<text x="${cx.toFixed(1)}" y="${(y - 6).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="600" class="ov-bar-value">${compactCurrency(d.revenue)}</text>` : ""}
+          <text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="12" font-weight="${isToday ? 700 : 400}" class="ov-bar-day${isToday ? " is-today" : ""}">${label}</text>
         </g>`;
     })
     .join("");
@@ -658,16 +695,39 @@ function getFilteredOrders() {
   return list;
 }
 
+let ordersPage = 1;
+
 function renderOrders() {
   const list = getFilteredOrders();
   const ordersTableEl = document.getElementById("orders-table");
-  if (ordersTableEl) ordersTableEl.innerHTML = renderOrderTable(list);
+  if (!ordersTableEl) return;
+
+  // Phân trang: 8 dòng/trang
+  const PAGE_SIZE = 8;
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (ordersPage > totalPages) ordersPage = totalPages;
+  if (ordersPage < 1) ordersPage = 1;
+  const pageStart = (ordersPage - 1) * PAGE_SIZE;
+  const pageList = list.slice(pageStart, pageStart + PAGE_SIZE);
+
+  ordersTableEl.innerHTML = renderOrderTable(pageList) + pagerHtml(ordersPage, totalPages, "data-order-page");
+  ordersTableEl.querySelectorAll("[data-order-page]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      ordersPage = Number(btn.dataset.orderPage);
+      renderOrders();
+    })
+  );
 }
 
-document.getElementById("orders-search")?.addEventListener("input", renderOrders);
-document.getElementById("orders-status-filter")?.addEventListener("change", renderOrders);
-document.getElementById("orders-date-start")?.addEventListener("change", renderOrders);
-document.getElementById("orders-date-end")?.addEventListener("change", renderOrders);
+// Đổi bộ lọc (tìm kiếm / trạng thái / ngày) → luôn về trang 1
+const resetOrdersPageAndRender = () => {
+  ordersPage = 1;
+  renderOrders();
+};
+document.getElementById("orders-search")?.addEventListener("input", resetOrdersPageAndRender);
+document.getElementById("orders-status-filter")?.addEventListener("change", resetOrdersPageAndRender);
+document.getElementById("orders-date-start")?.addEventListener("change", resetOrdersPageAndRender);
+document.getElementById("orders-date-end")?.addEventListener("change", resetOrdersPageAndRender);
 
 document.getElementById("orders-export")?.addEventListener("click", () => {
   const list = getFilteredOrders();
@@ -712,7 +772,16 @@ function renderOrderTable(list, options = {}) {
   }
 
   return `
-    <table class="admin-table">
+    <table class="admin-table${options.compact ? "" : " admin-table--fixed"}">
+      ${options.compact ? "" : `<colgroup>
+        <col style="width:8rem" />
+        <col style="width:9rem" />
+        <col style="width:14rem" />
+        <col style="width:12rem" />
+        <col style="width:6rem" />
+        <col style="width:7rem" />
+        <col style="width:13rem" />
+      </colgroup>`}
       <thead>
         <tr>
           <th>Đơn</th>
@@ -800,6 +869,28 @@ function customerStatsByPhone() {
   return map;
 }
 
+let customersPage = 1;
+
+// Thanh phân trang dùng chung: trang đầu/cuối + cửa sổ quanh trang hiện tại, chèn "…" khi cách quãng.
+// pageAttr = tên data-attribute gắn số trang (vd "data-cust-page", "data-order-page").
+function pagerHtml(current, total, pageAttr) {
+  if (total <= 1) return "";
+  const item = (p, label, opts = {}) =>
+    `<button type="button" class="admin-pager-btn${opts.active ? " is-active" : ""}"${opts.disabled ? " disabled" : ` ${pageAttr}="${p}"`}>${label}</button>`;
+  const nums = new Set([1, total, current]);
+  for (let i = current - 1; i <= current + 1; i++) if (i >= 1 && i <= total) nums.add(i);
+  const sorted = [...nums].sort((a, b) => a - b);
+  let html = item(current - 1, "‹", { disabled: current === 1 });
+  let prev = 0;
+  for (const p of sorted) {
+    if (prev && p - prev > 1) html += `<span class="admin-pager-gap">…</span>`;
+    html += item(p, String(p), { active: p === current });
+    prev = p;
+  }
+  html += item(current + 1, "›", { disabled: current === total });
+  return `<div class="admin-pager">${html}</div>`;
+}
+
 function renderCustomers() {
   const search = document.getElementById("customers-search")?.value.trim().toLowerCase() || "";
   const stats = customerStatsByPhone();
@@ -821,6 +912,14 @@ function renderCustomers() {
     return;
   }
 
+  // Phân trang: 8 dòng/trang
+  const PAGE_SIZE = 8;
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (customersPage > totalPages) customersPage = totalPages;
+  if (customersPage < 1) customersPage = 1;
+  const pageStart = (customersPage - 1) * PAGE_SIZE;
+  const pageList = list.slice(pageStart, pageStart + PAGE_SIZE);
+
   if (customersTableEl) {
     customersTableEl.innerHTML = `
       <table class="admin-table">
@@ -836,7 +935,7 @@ function renderCustomers() {
           </tr>
         </thead>
         <tbody>
-          ${list
+          ${pageList
             .map(
               (customer) => `
                 <tr>
@@ -849,37 +948,52 @@ function renderCustomers() {
                   <td class="font-semibold text-ink">${customer.sales.orders}</td>
                   <td class="font-semibold text-ink">${formatCurrency(customer.sales.spend)}</td>
                   <td>${customer.sales.lastOrder ? formatDateTime(customer.sales.lastOrder) : "--"}</td>
-                  <td>${customer.phone ? `<button type="button" class="rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-white hover:opacity-90" data-gift-voucher="${customer.phone}" data-gift-name="${(customer.name || "").replace(/"/g, "&quot;")}">Tặng ↗</button>` : "--"}</td>
+                  <td>${customer.phone ? `<button type="button" class="admin-gift-btn" data-gift-voucher="${customer.phone}" data-gift-name="${(customer.name || "").replace(/"/g, "&quot;")}">Tặng ↗</button>` : "--"}</td>
                 </tr>
               `
             )
             .join("")}
         </tbody>
       </table>
+      ${pagerHtml(customersPage, totalPages, "data-cust-page")}
     `;
     customersTableEl.querySelectorAll("[data-gift-voucher]").forEach((btn) =>
       btn.addEventListener("click", () => selectCustomerForVoucher(btn.dataset.giftVoucher))
     );
+    customersTableEl.querySelectorAll("[data-cust-page]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        customersPage = Number(btn.dataset.custPage);
+        renderCustomers();
+      })
+    );
   }
 }
 
-document.getElementById("customers-search")?.addEventListener("input", renderCustomers);
+document.getElementById("customers-search")?.addEventListener("input", () => {
+  customersPage = 1;
+  renderCustomers();
+});
 
 // ── Tạo & gửi voucher cho khách (panel "Tạo & gửi voucher" trong route Khách hàng) ──
 // Mỗi khách nhận 1 mã riêng (schema khoá code duy nhất + dùng 1 lần). Gửi tất cả hoặc chọn lẻ.
 let gvSelected = new Set();     // SĐT khách được chọn ở chế độ "chọn khách"
 let gvPendingConfirm = false;   // xác nhận 2 bước (tránh hộp thoại native)
+let gvPage = 1;                 // trang hiện tại của danh sách khách
+let gvInitialized = false;      // đã mặc-định-chọn-tất-cả lần đầu chưa
 
-function gvMode() {
-  return document.querySelector('input[name="gv-mode"]:checked')?.value || "all";
-}
 function gvResetConfirm() {
   gvPendingConfirm = false;
 }
 
 function renderVoucherSender() {
+  const withPhone = customers.filter((c) => c.phone);
   const allCount = document.getElementById("gv-all-count");
-  if (allCount) allCount.textContent = customers.filter((c) => c.phone).length;
+  if (allCount) allCount.textContent = withPhone.length;
+  // Mặc định CHỌN TẤT CẢ khách (lần đầu có dữ liệu) → cô chủ chỉ việc bỏ tích khách không gửi
+  if (!gvInitialized && withPhone.length > 0) {
+    gvSelected = new Set(withPhone.map((c) => c.phone));
+    gvInitialized = true;
+  }
   renderVoucherList();
 }
 
@@ -890,8 +1004,16 @@ function renderVoucherList() {
   const list = customers
     .filter((c) => c.phone)
     .filter((c) => !q || [c.name, c.phone].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)));
+
+  // Phân trang danh sách khách: 6/trang
+  const PAGE_SIZE = 6;
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (gvPage > totalPages) gvPage = totalPages;
+  if (gvPage < 1) gvPage = 1;
+  const pageList = list.slice((gvPage - 1) * PAGE_SIZE, gvPage * PAGE_SIZE);
+
   box.innerHTML =
-    list
+    pageList
       .map(
         (c) => `<label class="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-earth/10">
         <input type="checkbox" value="${c.phone}" ${gvSelected.has(c.phone) ? "checked" : ""} class="accent-[#7a0c1f]" />
@@ -900,6 +1022,17 @@ function renderVoucherList() {
       </label>`
       )
       .join("") || `<p class="px-2 py-1 text-sm text-ash">Không tìm thấy khách.</p>`;
+
+  const pagerEl = document.getElementById("gv-pager");
+  if (pagerEl) {
+    pagerEl.innerHTML = pagerHtml(gvPage, totalPages, "data-gv-page");
+    pagerEl.querySelectorAll("[data-gv-page]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        gvPage = Number(btn.dataset.gvPage);
+        renderVoucherList();
+      })
+    );
+  }
   box.querySelectorAll('input[type="checkbox"]').forEach((cb) =>
     cb.addEventListener("change", () => {
       if (cb.checked) gvSelected.add(cb.value);
@@ -914,16 +1047,23 @@ function renderVoucherList() {
 function updateGvSelectedCount() {
   const el = document.getElementById("gv-selected-count");
   if (el) el.textContent = gvSelected.size;
+  // Đồng bộ ô "Chọn tất cả": tick khi chọn hết, gạch ngang (indeterminate) khi chọn 1 phần
+  const total = customers.filter((c) => c.phone).length;
+  const selectAll = document.getElementById("gv-select-all");
+  if (selectAll) {
+    selectAll.checked = total > 0 && gvSelected.size >= total;
+    selectAll.indeterminate = gvSelected.size > 0 && gvSelected.size < total;
+  }
 }
 
 // Nút "Tặng ↗" ở bảng khách → chuyển panel sang "chọn khách", tick khách đó, kéo lên panel.
 function selectCustomerForVoucher(phone) {
-  const selectRadio = document.querySelector('input[name="gv-mode"][value="select"]');
-  if (selectRadio) selectRadio.checked = true;
-  document.getElementById("gv-recipients")?.classList.remove("hidden");
-  gvSelected.add(phone);
+  // "Tặng ↗" từ bảng khách → chỉ gửi cho đúng khách này: bỏ chọn tất cả, chỉ chọn khách đó.
+  gvInitialized = true;
+  gvSelected = new Set([phone]);
   const search = document.getElementById("gv-search");
   if (search) search.value = "";
+  gvPage = 1;
   gvResetConfirm();
   renderVoucherList();
   const pct = document.getElementById("gv-percent");
@@ -939,8 +1079,8 @@ async function sendVouchers() {
   const days = daysRaw ? parseInt(daysRaw, 10) : null;
   if (!percent || percent < 1 || percent > 100) { setMsg("Nhập mức giảm 1–100%.", true); return; }
 
-  const phones = gvMode() === "all" ? customers.filter((c) => c.phone).map((c) => c.phone) : [...gvSelected];
-  if (!phones.length) { setMsg("Chưa có khách nào để gửi.", true); return; }
+  const phones = [...gvSelected];
+  if (!phones.length) { setMsg("Chưa chọn khách nào để gửi (tích ít nhất 1 khách).", true); return; }
 
   // Xác nhận 2 bước inline (không dùng confirm() native)
   if (!gvPendingConfirm) {
@@ -961,13 +1101,18 @@ async function sendVouchers() {
   renderVoucherList();
 }
 
-document.querySelectorAll('input[name="gv-mode"]').forEach((r) =>
-  r.addEventListener("change", () => {
-    gvResetConfirm();
-    document.getElementById("gv-recipients")?.classList.toggle("hidden", gvMode() !== "select");
-  })
-);
-document.getElementById("gv-search")?.addEventListener("input", renderVoucherList);
+document.getElementById("gv-select-all")?.addEventListener("change", (e) => {
+  gvInitialized = true;
+  gvResetConfirm();
+  gvSelected = e.target.checked
+    ? new Set(customers.filter((c) => c.phone).map((c) => c.phone))
+    : new Set();
+  renderVoucherList();
+});
+document.getElementById("gv-search")?.addEventListener("input", () => {
+  gvPage = 1;
+  renderVoucherList();
+});
 document.getElementById("gv-percent")?.addEventListener("input", gvResetConfirm);
 document.getElementById("gv-days")?.addEventListener("input", gvResetConfirm);
 document.getElementById("gv-send")?.addEventListener("click", sendVouchers);
@@ -1097,14 +1242,38 @@ function updateNotifyButton() {
     return;
   }
   btn.classList.remove("hidden");
+  const bellIcon = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>`;
+  const bellOffIcon = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></svg>`;
   if (Notification.permission === "denied") {
-    btn.textContent = "🔕 Trình duyệt đang chặn thông báo";
+    btn.innerHTML = `${bellOffIcon}<span>Trình duyệt đang chặn thông báo</span>`;
     btn.disabled = true;
   } else {
-    btn.textContent = "🔔 Bật thông báo đơn mới";
+    btn.innerHTML = `${bellIcon}<span>Bật thông báo đơn mới</span>`;
     btn.disabled = false;
   }
 }
+
+// ── Theme switcher 3 nấc (Morning/Noon/Dark) — cross-fade qua View Transitions ──
+(() => {
+  const tt = document.getElementById("admin-theme-toggle");
+  if (!tt) return;
+  const THEMES = ["morning", "noon", "dark"];
+  const apply = (theme) => {
+    document.body.setAttribute("data-theme", THEMES.includes(theme) ? theme : "morning");
+  };
+  apply(localStorage.getItem("nn-admin-theme") || "morning");
+  tt.querySelectorAll("[data-set-theme]").forEach((seg) => {
+    seg.addEventListener("click", () => {
+      const theme = seg.getAttribute("data-set-theme");
+      const commit = () => {
+        apply(theme);
+        localStorage.setItem("nn-admin-theme", theme);
+      };
+      if (document.startViewTransition) document.startViewTransition(commit);
+      else commit();
+    });
+  });
+})();
 
 document.getElementById("admin-enable-notify")?.addEventListener("click", () => {
   if (!("Notification" in window)) return;
@@ -1217,7 +1386,7 @@ function renderConversations() {
       const statusText = onlineStatusText(c.conversationId);
       return `
       <button type="button" data-conversation="${c.conversationId}"
-        class="flex w-full items-start gap-3 border px-3 py-2.5 text-left transition-colors ${c.conversationId === activeConversationId ? "border-ink bg-earth/10" : "border-earth/40 bg-white hover:border-ink"}">
+        class="admin-conv-item flex w-full items-start gap-3 px-3 py-2.5 text-left${c.conversationId === activeConversationId ? " is-active" : ""}">
         ${avatarHtml(c.customerName || c.conversationId, online)}
         <div class="min-w-0 flex-1">
           <div class="flex items-center justify-between gap-2">

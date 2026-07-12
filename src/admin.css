@@ -1,92 +1,334 @@
+/* ============================================================
+   nomnom admin — Glassmorphism (giữ nguyên class .admin-* nên
+   toàn bộ markup do admin.js sinh ra tự động ăn style mới).
+   Chỉ đổi lớp trình bày; logic/JS không đổi.
+   Token màu (--color-ink/ash/earth…) & --ease-soft đến từ style.css.
+   ============================================================ */
+
+/* ── Design tokens của admin (đặt trên .admin-body để bật/tắt dark dễ) ── */
 .admin-body {
+  --red: #7a0c1f;
+  --glass-2: linear-gradient(135deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.24));
+  --glass-3: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.4));
+  --glass-shadow: 0 14px 40px rgba(31, 20, 12, 0.12),
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.32), inset 0 -1px 1px rgba(120, 80, 40, 0.04);
+  /* Blur vừa phải, KHÔNG saturate (saturate cao dễ gây vỡ màu/banding) */
+  --glass-blur: blur(20px);
+  --gedge: linear-gradient(140deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.04) 40%, rgba(255, 255, 255, 0) 64%, rgba(255, 255, 255, 0.16));
+
   min-height: 100vh;
+  background-color: #f7efe3; /* fallback; nền thật nằm ở lớp ::before cố định bên dưới */
 }
 
+/* Nền gradient đặt trên 1 lớp CỐ ĐỊNH riêng — KHÔNG dùng background-attachment:fixed
+   (fixed-attachment + backdrop-filter là nguyên nhân gây "smear/lỗi màu" trên Chromium
+   khi rê chuột ra ngoài trang). Đổi theme = đổi gradient của lớp ::before này. */
+.admin-body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  /* MORNING (mặc định) — giấy kem sáng, airy */
+  background-color: #f7efe3;
+  background-image:
+    radial-gradient(130% 100% at 12% -10%, #fffdf9 0%, rgba(255, 253, 249, 0) 55%),
+    linear-gradient(150deg, #fdfaf5 0%, #fbf5ec 32%, #f6ead9 54%, #efddc9 78%, #e9d3bd 100%);
+}
+
+/* Hạt grain — lớp cố định riêng, KHÔNG mix-blend-mode (blend mode + backdrop-filter gây lỗi màu) */
+/* Lớp grain phủ TRÊN toàn UI (z-index cao) → hạt giấy hiện cả trên panel đã blur,
+   cho cảm giác "giấy kính" thật. pointer-events:none nên không chặn thao tác. */
+.admin-body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+}
+.admin-body[data-theme="dark"]::after {
+  opacity: 0.06;
+}
+
+/* Animation trượt khi đổi mục sidebar (slide-in / enter transition) */
+.admin-view {
+  animation: adminViewIn 0.34s var(--ease-soft) both;
+}
+@keyframes adminViewIn {
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.admin-body main {
+  overflow-x: clip; /* chặn thanh cuộn ngang chớp lên khi view trượt vào */
+}
+
+/* View Transitions: cross-fade toàn trang khi đổi theme (êm, không giật).
+   Cố ý KHÔNG gate theo prefers-reduced-motion vì chủ tiệm muốn giữ hiệu ứng này. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.55s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Thanh tiến trình "power bar" — đặt ở ĐẦU vùng nội dung, bo tròn, có nhãn;
+   tải xong tự thu gọn (max-height→0) và biến mất. ── */
+#admin-progress {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+  /* CHỈ animate opacity — KHÔNG animate chiều cao. Animate max-height gây reflow nhiều frame
+     → đẩy các panel dịch chuyển → nháy viền lúc load xong. Đổi chiều cao tức thì (1 reflow). */
+  transition: opacity 0.3s var(--ease-soft);
+}
+#admin-progress.is-active {
+  max-height: 5rem;
+  opacity: 1;
+  margin-bottom: 1.1rem;
+}
+.admin-progress-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-ash);
+  margin-bottom: 0.45rem;
+}
+#admin-progress.is-active .admin-progress-label {
+  animation: adminLabelPulse 1.4s ease-in-out infinite;
+}
+@keyframes adminLabelPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.admin-progress-track {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(122, 12, 31, 0.12);
+  overflow: hidden;
+}
+.admin-progress-track::before {
+  content: "";
+  display: block;
+  height: 100%;
+  width: var(--admin-progress, 0%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7a0c1f, #c65b6e);
+  box-shadow: 0 0 10px rgba(122, 12, 31, 0.45);
+  transition: width 0.3s var(--ease-soft);
+}
+.admin-body[data-theme="dark"] .admin-progress-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Icon system: Lucide (line icon, nét mảnh, ăn theo currentColor) ── */
+.ic {
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
+  vertical-align: -0.16em;
+}
+
+/* ── Viền hairline chuyển sắc (bắt/khúc xạ ánh sáng) dùng chung cho mọi khối kính ── */
+.admin-glass-edge {
+  position: relative;
+}
+.admin-glass-edge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 1;
+  background: var(--gedge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.admin-body[data-theme="dark"] {
+  --gedge: linear-gradient(140deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.02) 42%, rgba(255, 255, 255, 0) 64%, rgba(255, 255, 255, 0.07));
+}
+
+/* ── Sidebar (full-height, glass). Giữ nguyên position:fixed do Tailwind cấp — KHÔNG set position ở đây. ── */
+#admin-sidebar {
+  background: var(--glass-2);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-right: 1px solid transparent;
+  box-shadow: var(--glass-shadow);
+}
+#admin-sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  padding: 1px;
+  background: var(--gedge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+#admin-sidebar > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Header (sticky, glass; nổi bo góc trên desktop cho khớp demo) ── */
+.admin-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--glass-2);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+}
+.admin-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 1;
+  background: var(--gedge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+@media (min-width: 1024px) {
+  .admin-header {
+    top: 14px;
+    margin: 14px 28px 0;
+    border-radius: 20px;
+  }
+}
+
+/* ── Nav items ── */
 .admin-nav-item {
   display: flex;
   width: 100%;
   align-items: center;
   gap: 0.75rem;
   border: 1px solid transparent;
-  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  padding: 0.72rem 0.8rem;
   text-align: left;
   font-size: 0.92rem;
   font-weight: 600;
   color: var(--color-ink);
-  transition: border-color 0.2s var(--ease-soft), background 0.2s var(--ease-soft), color 0.2s var(--ease-soft);
+  background: transparent;
+  transition: border-color 0.2s var(--ease-soft), background 0.2s var(--ease-soft),
+    color 0.2s var(--ease-soft), box-shadow 0.2s var(--ease-soft);
 }
-
 .admin-nav-item:hover {
-  border-color: var(--color-earth);
-  background: rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.3);
 }
-
 .admin-nav-item.is-active {
-  border-color: #7a0c1f;
-  background: #7a0c1f;
-  color: white;
-  box-shadow: 0 16px 28px -22px rgba(122, 12, 31, 0.85);
+  color: #fff;
+  border-color: rgba(122, 12, 31, 0.5);
+  background: linear-gradient(135deg, rgba(122, 12, 31, 0.92), rgba(122, 12, 31, 0.78));
+  box-shadow: 0 14px 26px -16px rgba(122, 12, 31, 0.9);
 }
 
+/* Icon sidebar — thay số 01..05, muted khi thường / trắng khi active */
 .admin-nav-icon {
   display: flex;
-  height: 1.7rem;
-  width: 1.7rem;
+  height: 1.25rem;
+  width: 1.25rem;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  font-size: 0.62rem;
-  font-weight: 700;
+  color: var(--color-ash);
+}
+.admin-nav-icon .ic {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.admin-nav-item:hover .admin-nav-icon {
+  color: var(--color-ink);
+}
+.admin-nav-item.is-active .admin-nav-icon {
+  color: #fff;
 }
 
 .admin-secondary-link {
   display: block;
-  border: 1px solid var(--color-earth);
-  background: rgba(255, 255, 255, 0.45);
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.34);
   padding: 0.75rem 0.85rem;
   font-size: 0.86rem;
   font-weight: 600;
   color: var(--color-ink);
   transition: border-color 0.2s var(--ease-soft), background 0.2s var(--ease-soft);
 }
-
 .admin-secondary-link:hover {
-  border-color: var(--color-ink);
-  background: white;
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.6);
 }
 
+/* ── Stat cards & panels (kính) ── */
 .admin-stat-card,
 .admin-panel {
-  border: 1px solid rgba(212, 197, 185, 0.78);
-  background: rgba(255, 255, 255, 0.56);
-  box-shadow: 0 18px 45px -34px rgba(10, 10, 10, 0.55);
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: var(--glass-2);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+}
+.admin-stat-card::before,
+.admin-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 1;
+  background: var(--gedge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
 }
 
 .admin-stat-card {
   min-height: 9.75rem;
   padding: 1.25rem;
+  transition: box-shadow 0.3s var(--ease-soft), background 0.3s var(--ease-soft);
 }
-
-.admin-stat-card.is-warm {
-  background: linear-gradient(180deg, rgba(122, 12, 31, 0.08), rgba(255, 255, 255, 0.62));
-  border-color: rgba(122, 12, 31, 0.26);
+.admin-stat-card:hover {
+  background: var(--glass-3);
+  box-shadow: 0 22px 48px rgba(31, 20, 12, 0.16),
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.4), inset 0 -1px 1px rgba(120, 80, 40, 0.04);
 }
-
-.admin-stat-card.is-green {
-  background: linear-gradient(180deg, rgba(52, 199, 89, 0.13), rgba(255, 255, 255, 0.62));
-  border-color: rgba(52, 199, 89, 0.24);
-}
+/* Stat card đồng nhất một tông kính — bỏ tint đỏ/xanh cho sạch, không lạc quẻ.
+   Vẫn giữ class .is-warm/.is-green trong HTML (no-op) để không phải sửa markup. */
 
 .admin-stat-label {
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--color-ash);
 }
-
 .admin-stat-value {
   margin-top: 1.1rem;
   font-family: var(--font-serif);
@@ -94,58 +336,147 @@
   line-height: 1;
   color: var(--color-ink);
 }
-
 .admin-stat-note {
   margin-top: 0.9rem;
   font-size: 0.84rem;
   color: var(--color-ash);
 }
-
 .admin-stat-delta {
   margin-top: 0.6rem;
   font-size: 0.8rem;
   font-weight: 700;
 }
-
 .admin-stat-delta:empty {
   display: none;
 }
-
 .admin-stat-delta.is-up {
   color: #16783a;
 }
-
 .admin-stat-delta.is-down {
   color: rgb(185, 28, 28);
 }
-
 .admin-stat-delta.is-flat {
   color: var(--color-ash);
   font-weight: 600;
 }
 
-/* Cột biểu đồ doanh thu — mờ nhẹ, hover nổi rõ */
+.admin-panel {
+  padding: 1rem;
+}
+@media (min-width: 48rem) {
+  .admin-panel {
+    padding: 1.25rem;
+  }
+}
+.admin-panel-head {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.admin-panel-title {
+  font-family: var(--font-serif);
+  font-size: 1.45rem;
+  line-height: 1.2;
+  color: var(--color-ink);
+}
+.admin-panel-subtitle {
+  margin-top: 0.35rem;
+  max-width: 42rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--color-ash);
+}
+
+/* Hàng "Nhịp bán trong ngày" — pill kính theo theme (trước dùng bg-white/50 cứng, ở dark bị đục khó đọc) */
+.admin-pulse-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.42);
+  padding: 0.75rem 1rem;
+}
+.admin-body[data-theme="dark"] .admin-pulse-row {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Nút "Tặng ↗" (cột Voucher) — pill đỏ chữ trắng, đồng bộ cả 2 theme (không dùng bg-ink bị đảo màu ở dark) */
+.admin-gift-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7a0c1f, #a3324a);
+  color: #fff;
+  padding: 0.36rem 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px -12px rgba(122, 12, 31, 0.9);
+  transition: filter 0.2s var(--ease-soft);
+}
+.admin-gift-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* Nhãn số trên cột biểu đồ + nhãn thứ (T2…CN) — màu theo theme (dark: vàng sáng cho tương phản) */
+.ov-bar-value {
+  fill: #7a0c1f;
+}
+.ov-bar-day {
+  fill: #6b6b6b;
+}
+.ov-bar-day.is-today {
+  fill: #0a0a0a;
+}
+.admin-body[data-theme="dark"] .ov-bar-value {
+  fill: #ffd24a;
+}
+.admin-body[data-theme="dark"] .ov-bar-day {
+  fill: #a89d8c;
+}
+.admin-body[data-theme="dark"] .ov-bar-day.is-today {
+  fill: #f2e9dc;
+}
+
+/* ── Biểu đồ doanh thu — cột mọc lên (scaleY, lệch pha) ── */
+.ov-chart-wrap {
+  position: relative;
+}
 .ov-bar {
   transition: opacity 0.15s var(--ease-soft);
   cursor: pointer;
 }
-
 .ov-bar:hover {
   opacity: 1 !important;
 }
-
 .ov-bar-fill {
   transition: filter 0.15s var(--ease-soft);
+  transform-origin: bottom;
+  transform-box: fill-box;
+  animation: ovBarGrow 0.85s var(--ease-soft) both;
 }
-
 .ov-bar:hover .ov-bar-fill {
   filter: brightness(1.15);
 }
-
-/* Tooltip tùy biến cho biểu đồ doanh thu */
-.ov-chart-wrap {
-  position: relative;
+@keyframes ovBarGrow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
 }
+.ov-bar:nth-child(1) .ov-bar-fill { animation-delay: 0.05s; }
+.ov-bar:nth-child(2) .ov-bar-fill { animation-delay: 0.11s; }
+.ov-bar:nth-child(3) .ov-bar-fill { animation-delay: 0.17s; }
+.ov-bar:nth-child(4) .ov-bar-fill { animation-delay: 0.23s; }
+.ov-bar:nth-child(5) .ov-bar-fill { animation-delay: 0.29s; }
+.ov-bar:nth-child(6) .ov-bar-fill { animation-delay: 0.35s; }
+.ov-bar:nth-child(7) .ov-bar-fill { animation-delay: 0.41s; }
 
 .ov-tooltip {
   position: absolute;
@@ -161,12 +492,11 @@
   z-index: 5;
   box-shadow: 0 10px 24px -10px rgba(10, 10, 10, 0.6);
 }
-
 .ov-tooltip[hidden] {
   display: none;
 }
 
-/* Hàng top bán chạy — hover đổi nền + thanh sáng hơn */
+/* ── Top bán chạy — thanh chạy ngang (scaleX, lệch pha) ── */
 .ov-seller {
   border-radius: 0.5rem;
   padding: 0.5rem 0.6rem;
@@ -174,136 +504,256 @@
   transition: background 0.15s var(--ease-soft);
   cursor: default;
 }
-
 .ov-seller:hover {
   background: rgba(122, 12, 31, 0.06);
 }
-
 .ov-seller-fill {
   transition: filter 0.15s var(--ease-soft);
+  transform-origin: left;
+  animation: ovFillGrow 0.9s var(--ease-soft) both;
 }
-
 .ov-seller:hover .ov-seller-fill {
   filter: brightness(1.12);
 }
-
-/* Thẻ số — hover nhấc nhẹ cho cảm giác hiện đại */
-.admin-stat-card {
-  transition: transform 0.2s var(--ease-soft), box-shadow 0.2s var(--ease-soft);
-}
-
-.admin-stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 24px 55px -30px rgba(10, 10, 10, 0.6);
-}
-
-.admin-panel {
-  padding: 1rem;
-}
-
-@media (min-width: 48rem) {
-  .admin-panel {
-    padding: 1.25rem;
+@keyframes ovFillGrow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
   }
 }
+.ov-seller:nth-child(1) .ov-seller-fill { animation-delay: 0.1s; }
+.ov-seller:nth-child(2) .ov-seller-fill { animation-delay: 0.18s; }
+.ov-seller:nth-child(3) .ov-seller-fill { animation-delay: 0.26s; }
+.ov-seller:nth-child(4) .ov-seller-fill { animation-delay: 0.34s; }
+.ov-seller:nth-child(5) .ov-seller-fill { animation-delay: 0.42s; }
 
-.admin-panel-head {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.admin-panel-title {
-  font-family: var(--font-serif);
-  font-size: 1.45rem;
-  line-height: 1.2;
-  color: var(--color-ink);
-}
-
-.admin-panel-subtitle {
-  margin-top: 0.35rem;
-  max-width: 42rem;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--color-ash);
-}
-
+/* ── Toolbar / inputs ── */
 .admin-toolbar {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
-
 @media (min-width: 48rem) {
   .admin-toolbar {
     flex-direction: row;
     align-items: center;
   }
 }
-
 .admin-search-input,
-.admin-select {
+.admin-select,
+.admin-input {
   min-height: 2.85rem;
   width: 100%;
-  border: 1px solid rgba(212, 197, 185, 0.82);
-  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
   padding: 0 1rem;
   font-size: 0.92rem;
   color: var(--color-ink);
   outline: none;
+  transition: background 0.2s var(--ease-soft), border-color 0.2s var(--ease-soft),
+    box-shadow 0.2s var(--ease-soft);
 }
-
+.admin-search-input::placeholder,
+.admin-input::placeholder {
+  color: var(--color-ash);
+}
+.admin-search-input:hover,
+.admin-select:hover,
+.admin-input:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
 .admin-search-input:focus,
-.admin-select:focus {
+.admin-select:focus,
+.admin-input:focus {
+  background: rgba(255, 255, 255, 0.7);
   border-color: var(--color-ink);
+  box-shadow: 0 0 0 3px rgba(122, 12, 31, 0.1);
 }
-
 @media (min-width: 48rem) {
   .admin-select {
     max-width: 13rem;
   }
 }
 
+/* Ô cấu hình có nhãn dài/ngắn khác nhau → thu nhỏ nhãn + đẩy input xuống đáy ô
+   (margin-top:auto) để các input luôn thẳng hàng dù nhãn 1 hay 2 dòng. */
+.admin-field-grid > label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.admin-field-grid > label > input {
+  margin-top: auto;
+}
+
+/* Khối "chọn khách cụ thể" — thả xuống mượt (grid-rows 0fr→1fr, animate được chiều cao auto) */
+.gv-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: 0;
+  transition: grid-template-rows 0.32s var(--ease-soft), opacity 0.28s var(--ease-soft),
+    margin-top 0.32s var(--ease-soft);
+}
+.gv-collapse.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: 0.5rem;
+}
+.gv-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+/* Danh sách khách cao cố định (6 dòng/trang) → không giật khi đổi trang */
+.gv-list {
+  height: 13rem;
+}
+.admin-body[data-theme="dark"] .gv-list {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* MORNING: ô nhập + khung danh sách trắng sáng hơn hẳn (theo yêu cầu +3 tone) */
+.admin-body[data-theme="morning"] .admin-search-input,
+.admin-body[data-theme="morning"] .admin-select,
+.admin-body[data-theme="morning"] .admin-input {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+.admin-body[data-theme="morning"] .admin-search-input:hover,
+.admin-body[data-theme="morning"] .admin-select:hover,
+.admin-body[data-theme="morning"] .admin-input:hover {
+  background: rgba(255, 255, 255, 0.92);
+}
+.admin-body[data-theme="morning"] .admin-search-input:focus,
+.admin-body[data-theme="morning"] .admin-select:focus,
+.admin-body[data-theme="morning"] .admin-input:focus {
+  background: #fff;
+}
+.admin-body[data-theme="morning"] .gv-list {
+  background: rgba(255, 255, 255, 0.66);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+/* ── Buttons ── */
+.admin-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid rgba(122, 12, 31, 0.5);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(122, 12, 31, 0.95), rgba(122, 12, 31, 0.82));
+  color: #fff;
+  padding: 0.72rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 14px 26px -18px rgba(122, 12, 31, 0.9);
+  transition: filter 0.2s var(--ease-soft), box-shadow 0.2s var(--ease-soft);
+}
+.admin-btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.admin-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.34);
+  color: var(--color-ink);
+  padding: 0.55rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 0.2s var(--ease-soft), border-color 0.2s var(--ease-soft);
+}
+.admin-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: var(--color-ink);
+}
+
+.admin-btn-red-soft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid rgba(122, 12, 31, 0.4);
+  border-radius: 12px;
+  background: rgba(122, 12, 31, 0.1);
+  color: var(--red);
+  padding: 0.55rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: background 0.2s var(--ease-soft);
+}
+.admin-btn-red-soft:hover {
+  background: rgba(122, 12, 31, 0.18);
+}
+
+.admin-btn-excel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid rgba(16, 124, 65, 0.4);
+  border-radius: 12px;
+  background: rgba(16, 124, 65, 0.14);
+  color: #0d6b38;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background 0.2s var(--ease-soft);
+}
+.admin-btn-excel:hover {
+  background: rgba(16, 124, 65, 0.24);
+}
+
 .admin-light-button,
 .admin-row-button {
-  border: 1px solid var(--color-earth);
-  background: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.4);
   color: var(--color-ink);
   font-size: 0.82rem;
   font-weight: 700;
   transition: border-color 0.2s var(--ease-soft), background 0.2s var(--ease-soft);
 }
-
 .admin-light-button {
   padding: 0.68rem 0.9rem;
   white-space: nowrap;
 }
-
 .admin-row-button {
   padding: 0.48rem 0.65rem;
 }
-
 .admin-light-button:hover,
 .admin-row-button:hover {
   border-color: var(--color-ink);
-  background: var(--color-cream);
+  background: rgba(255, 255, 255, 0.7);
 }
-
 .admin-row-button.is-danger {
   border-color: rgba(239, 68, 68, 0.36);
   color: rgb(185, 28, 28);
 }
 
+/* ── Table ── */
 .admin-table {
   width: 100%;
   min-width: 56rem;
   border-collapse: collapse;
   font-size: 0.88rem;
 }
-
 .admin-table th {
-  border-bottom: 1px dashed var(--color-earth);
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.35);
   padding: 0.85rem 0.75rem;
   text-align: left;
   font-size: 0.72rem;
@@ -312,12 +762,17 @@
   text-transform: uppercase;
   color: var(--color-ash);
 }
-
 .admin-table td {
-  border-bottom: 1px solid rgba(212, 197, 185, 0.44);
+  border-bottom: 1px solid rgba(212, 197, 185, 0.34);
   padding: 0.9rem 0.75rem;
   vertical-align: middle;
   color: var(--color-ash);
+}
+.admin-table tbody tr {
+  transition: background 0.15s var(--ease-soft);
+}
+.admin-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .admin-status {
@@ -330,31 +785,327 @@
   font-weight: 800;
   white-space: nowrap;
 }
-
 .admin-status-green {
   background: rgba(52, 199, 89, 0.16);
   color: #16783a;
 }
-
 .admin-status-amber {
   background: rgba(245, 158, 11, 0.16);
   color: #9a5d00;
 }
-
 .admin-status-ash {
   background: rgba(107, 107, 107, 0.14);
   color: var(--color-ash);
 }
-
 .admin-status-red {
   background: rgba(239, 68, 68, 0.14);
   color: rgb(185, 28, 28);
 }
 
 .admin-empty {
-  border: 1px dashed var(--color-earth);
-  background: rgba(255, 255, 255, 0.5);
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.28);
   padding: 2rem;
   text-align: center;
   color: var(--color-ash);
 }
+
+/* ── Login card (glass) ── */
+.admin-login-card {
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: 22px;
+  background: var(--glass-2);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+}
+.admin-login-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 1;
+  background: var(--gedge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.admin-login-card > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Theme switcher 3 nấc: Morning · Noon · Dark (segmented, thumb trượt) ── */
+.admin-theme-toggle {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: var(--glass-2);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.admin-tt-seg {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--color-ash);
+  background: transparent;
+  transition: color 0.25s var(--ease-soft);
+}
+.admin-tt-seg svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.admin-tt-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fff, #f0e4d3);
+  box-shadow: 0 2px 6px rgba(60, 40, 25, 0.3);
+  transition: transform 0.3s var(--ease-soft), background 0.3s var(--ease-soft);
+}
+.admin-body[data-theme="morning"] .admin-tt-thumb { transform: translateX(0); }
+.admin-body[data-theme="noon"] .admin-tt-thumb { transform: translateX(28px); }
+.admin-body[data-theme="dark"] .admin-tt-thumb {
+  transform: translateX(56px);
+  background: linear-gradient(135deg, #3a2f27, #211a15);
+}
+.admin-body[data-theme="morning"] .admin-tt-seg[data-set-theme="morning"] { color: #d8952e; }
+.admin-body[data-theme="noon"] .admin-tt-seg[data-set-theme="noon"] { color: #e0891c; }
+.admin-body[data-theme="dark"] .admin-tt-seg[data-set-theme="dark"] { color: #f3d98a; }
+
+/* ── Danh sách hội thoại (glass, khớp bản demo) ── */
+.admin-conv-item {
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.34);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: background 0.2s var(--ease-soft), border-color 0.2s var(--ease-soft),
+    box-shadow 0.2s var(--ease-soft);
+}
+.admin-conv-item:hover {
+  background: rgba(255, 255, 255, 0.52);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.admin-conv-item.is-active {
+  border-color: rgba(122, 12, 31, 0.4);
+  background: linear-gradient(135deg, rgba(122, 12, 31, 0.1), rgba(255, 255, 255, 0.42));
+  box-shadow: 0 12px 26px -20px rgba(122, 12, 31, 0.8);
+}
+
+/* ════════════════════════════════════════════════════════════
+   NOON (bản trưa) — be sáng trung tính (không vàng khè), đậm hơn morning một chút
+   ════════════════════════════════════════════════════════════ */
+.admin-body[data-theme="noon"]::before {
+  background-color: #e9e0d0;
+  background-image:
+    radial-gradient(130% 100% at 12% -10%, #f7f1e7 0%, rgba(247, 241, 231, 0) 55%),
+    linear-gradient(150deg, #f1eadd 0%, #e7dccb 42%, #ddd0ba 72%, #d3c4aa 100%);
+}
+
+/* ════════════════════════════════════════════════════════════
+   DARK THEME (nâu ấm bakery, kính frosted tối)
+   ════════════════════════════════════════════════════════════ */
+.admin-body[data-theme="dark"] {
+  --glass-2: linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
+  --glass-3: linear-gradient(135deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.06));
+  --glass-shadow: 0 12px 34px rgba(0, 0, 0, 0.5), inset 0 1px 0.5px rgba(255, 255, 255, 0.14);
+  --color-ink: #f2e9dc;
+  --color-ash: #a89d8c;
+  background-color: #151110;
+}
+.admin-body[data-theme="dark"]::before {
+  background-color: #151110;
+  background-image:
+    radial-gradient(130% 100% at 10% -8%, #2c221a 0%, rgba(44, 34, 26, 0) 55%),
+    linear-gradient(150deg, #241c15 0%, #1d1712 40%, #16110d 70%, #100c0a 100%);
+}
+.admin-body[data-theme="dark"] .admin-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.admin-body[data-theme="dark"] .admin-secondary-link {
+  background: rgba(255, 255, 255, 0.06);
+}
+.admin-body[data-theme="dark"] .admin-secondary-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.admin-body[data-theme="dark"] .admin-search-input,
+.admin-body[data-theme="dark"] .admin-select,
+.admin-body[data-theme="dark"] .admin-input {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.admin-body[data-theme="dark"] .admin-search-input:hover,
+.admin-body[data-theme="dark"] .admin-select:hover,
+.admin-body[data-theme="dark"] .admin-input:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.admin-body[data-theme="dark"] .admin-search-input:focus,
+.admin-body[data-theme="dark"] .admin-select:focus,
+.admin-body[data-theme="dark"] .admin-input:focus {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 3px rgba(122, 12, 31, 0.25);
+}
+.admin-body[data-theme="dark"] .admin-btn-ghost,
+.admin-body[data-theme="dark"] .admin-light-button,
+.admin-body[data-theme="dark"] .admin-row-button {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.admin-body[data-theme="dark"] .admin-btn-ghost:hover,
+.admin-body[data-theme="dark"] .admin-light-button:hover,
+.admin-body[data-theme="dark"] .admin-row-button:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.admin-body[data-theme="dark"] .admin-btn-red-soft {
+  background: rgba(122, 12, 31, 0.32);
+  border-color: rgba(122, 12, 31, 0.55);
+  color: #f4aab4;
+}
+.admin-body[data-theme="dark"] .admin-btn-red-soft:hover {
+  background: rgba(122, 12, 31, 0.45);
+}
+.admin-body[data-theme="dark"] .admin-btn-excel {
+  background: rgba(16, 124, 65, 0.22);
+  border-color: rgba(16, 124, 65, 0.5);
+  color: #6fdc9c;
+}
+.admin-body[data-theme="dark"] .admin-btn-excel:hover {
+  background: rgba(16, 124, 65, 0.34);
+}
+.admin-body[data-theme="dark"] .admin-table th {
+  border-bottom-color: rgba(255, 255, 255, 0.14);
+}
+.admin-body[data-theme="dark"] .admin-table td {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+.admin-body[data-theme="dark"] .admin-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.admin-body[data-theme="dark"] .ov-seller:hover {
+  background: rgba(122, 12, 31, 0.14);
+}
+.admin-body[data-theme="dark"] .admin-status-green { color: #5cd98e; }
+.admin-body[data-theme="dark"] .admin-status-amber { color: #f0bd57; }
+.admin-body[data-theme="dark"] .admin-status-ash { color: #c9bfae; background: rgba(255, 255, 255, 0.1); }
+.admin-body[data-theme="dark"] .admin-empty {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+.admin-body[data-theme="dark"] .admin-conv-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.admin-body[data-theme="dark"] .admin-conv-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.admin-body[data-theme="dark"] .admin-conv-item.is-active {
+  border-color: rgba(122, 12, 31, 0.5);
+  background: linear-gradient(135deg, rgba(122, 12, 31, 0.28), rgba(255, 255, 255, 0.04));
+}
+
+/* ── Phân trang (khách hàng: 8 dòng/trang) ── */
+.admin-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 1.1rem;
+  flex-wrap: wrap;
+}
+.admin-pager-btn {
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.34);
+  color: var(--color-ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  backdrop-filter: blur(6px);
+  transition: background 0.2s var(--ease-soft), border-color 0.2s var(--ease-soft), color 0.2s var(--ease-soft);
+}
+.admin-pager-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: var(--color-ink);
+}
+.admin-pager-btn.is-active {
+  background: linear-gradient(135deg, rgba(122, 12, 31, 0.95), rgba(122, 12, 31, 0.82));
+  border-color: rgba(122, 12, 31, 0.5);
+  color: #fff;
+}
+.admin-pager-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.admin-pager-gap {
+  color: var(--color-ash);
+  padding: 0 0.2rem;
+}
+.admin-body[data-theme="dark"] .admin-pager-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.admin-body[data-theme="dark"] .admin-pager-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* Bảng đơn: layout cột CỐ ĐỊNH (table-layout:fixed) → cột không co giãn theo nội dung,
+   không còn "giật cục / thu gọn phóng to" khi đổi trang hoặc lọc. */
+.admin-table.admin-table--fixed {
+  table-layout: fixed;
+  min-width: 69rem;
+}
+
+/* Bảng đơn: từng dòng trượt lên & hiện xếp tầng từ trên xuống (staggered slide-in) */
+@keyframes orderRowIn {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+#view-orders .admin-table tbody tr {
+  animation: orderRowIn 0.4s var(--ease-soft) both;
+}
+#view-orders .admin-table tbody tr:nth-child(1) { animation-delay: 0s; }
+#view-orders .admin-table tbody tr:nth-child(2) { animation-delay: 0.07s; }
+#view-orders .admin-table tbody tr:nth-child(3) { animation-delay: 0.14s; }
+#view-orders .admin-table tbody tr:nth-child(4) { animation-delay: 0.21s; }
+#view-orders .admin-table tbody tr:nth-child(5) { animation-delay: 0.28s; }
+#view-orders .admin-table tbody tr:nth-child(6) { animation-delay: 0.35s; }
+#view-orders .admin-table tbody tr:nth-child(7) { animation-delay: 0.42s; }
+#view-orders .admin-table tbody tr:nth-child(8) { animation-delay: 0.49s; }
