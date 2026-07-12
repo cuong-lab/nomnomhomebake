@@ -8,12 +8,15 @@
 /* ── Design tokens của admin (đặt trên .admin-body để bật/tắt dark dễ) ── */
 .admin-body {
   --red: #7a0c1f;
-  --glass-2: linear-gradient(135deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.24));
-  --glass-3: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.4));
+  --glass-2: linear-gradient(135deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.42));
+  --glass-3: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.58));
   --glass-shadow: 0 14px 40px rgba(31, 20, 12, 0.12),
     inset 0 1px 0.5px rgba(255, 255, 255, 0.32), inset 0 -1px 1px rgba(120, 80, 40, 0.04);
-  /* Blur vừa phải, KHÔNG saturate (saturate cao dễ gây vỡ màu/banding) */
-  --glass-blur: blur(20px);
+  /* KHÔNG blur ở bất kỳ đâu. Đã test có hệ thống: MỌI bề mặt có backdrop-filter đều lóe khi có
+     tương tác/repaint gần đó — sidebar (hover nav), header (bấm nút), và panel/stat card (hover
+     panel → card lóe ~1s). Bug gốc Chromium, không fix được bằng CSS. Kính-giả = nền bán trong
+     suốt đục + lớp grain overlay phủ trên → chất "giấy kính" giữ nguyên mà MƯỢT TUYỆT ĐỐI. */
+  --glass-blur: none;
   --gedge: linear-gradient(140deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.04) 40%, rgba(255, 255, 255, 0) 64%, rgba(255, 255, 255, 0.16));
 
   min-height: 100vh;
@@ -46,10 +49,25 @@
   z-index: 100;
   pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  opacity: 0.05;
+  opacity: 0.1;
 }
 .admin-body[data-theme="dark"]::after {
-  opacity: 0.06;
+  opacity: 0.13;
+}
+
+/* Lớp grain "sương mờ" — cùng noise nhưng ĐÃ BLUR (filter, KHÔNG phải backdrop-filter → không lóe).
+   Chồng lên grain sắc để có cả hạt giấy rõ lẫn màn sương mềm. inset âm để mép blur tràn ra ngoài viewport. */
+#admin-grain-soft {
+  position: fixed;
+  inset: -12px;
+  z-index: 101;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  filter: blur(1.5px);
+  opacity: 0.07;
+}
+.admin-body[data-theme="dark"] #admin-grain-soft {
+  opacity: 0.1;
 }
 
 /* Animation trượt khi đổi mục sidebar (slide-in / enter transition) */
@@ -159,11 +177,13 @@
 
 /* ── Sidebar (full-height, glass). Giữ nguyên position:fixed do Tailwind cấp — KHÔNG set position ở đây. ── */
 #admin-sidebar {
-  background: var(--glass-2);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  /* Đục hơn một chút để trông "đặc" mà KHÔNG cần blur (phía sau chỉ là nền gradient tĩnh) */
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.56));
   border-right: 1px solid transparent;
   box-shadow: var(--glass-shadow);
+}
+.admin-body[data-theme="dark"] #admin-sidebar {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.055));
 }
 #admin-sidebar::before {
   content: "";
@@ -189,10 +209,13 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--glass-2);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  /* Nền ĐỤC (không blur) → nội dung cuộn không xuyên qua + KHÔNG lóe khi bấm nút bên trong header
+     (backdrop-filter re-sample mỗi lần nút con repaint). Grain overlay vẫn phủ lên giữ chất giấy. */
+  background: linear-gradient(135deg, rgba(250, 245, 237, 0.95), rgba(247, 241, 231, 0.93));
   box-shadow: var(--glass-shadow);
+}
+.admin-body[data-theme="dark"] .admin-header {
+  background: linear-gradient(135deg, rgba(33, 26, 21, 0.96), rgba(27, 21, 16, 0.94));
 }
 .admin-header::before {
   content: "";
@@ -572,6 +595,90 @@
   border-color: var(--color-ink);
   box-shadow: 0 0 0 3px rgba(122, 12, 31, 0.1);
 }
+
+/* Ẩn nút tăng/giảm mặc định của trình duyệt (mũi tên trắng xấu kiểu 2010) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Ô số kiểu PILL:  [−]  1.200.000  [+]  — đồng bộ style pill toàn admin */
+.admin-num {
+  display: flex;
+  align-items: stretch;
+  min-height: 2.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  transition: border-color 0.2s var(--ease-soft), box-shadow 0.2s var(--ease-soft),
+    background 0.2s var(--ease-soft);
+}
+.admin-num:focus-within {
+  border-color: var(--color-ink);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 0 3px rgba(122, 12, 31, 0.1);
+}
+.admin-num-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  padding: 0 0.3rem;
+}
+.admin-num-btn {
+  flex: 0 0 auto;
+  width: 2.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  background: rgba(122, 12, 31, 0.09);
+  color: var(--red);
+  transition: background 0.15s var(--ease-soft);
+}
+.admin-num-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+.admin-num-btn:hover {
+  background: rgba(122, 12, 31, 0.18);
+}
+.admin-num-btn:active {
+  background: rgba(122, 12, 31, 0.28);
+}
+.admin-body[data-theme="morning"] .admin-num {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+.admin-body[data-theme="dark"] .admin-num {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.admin-body[data-theme="dark"] .admin-num-btn {
+  background: rgba(122, 12, 31, 0.3);
+  color: #f4aab4;
+}
+.admin-body[data-theme="dark"] .admin-num-btn:hover {
+  background: rgba(122, 12, 31, 0.42);
+}
+/* Ô số gọn trong lưới hạng (không nút −/+) — bo pill, canh giữa cho đồng bộ */
+.admin-input-pill {
+  border-radius: 999px;
+  text-align: center;
+}
+
 @media (min-width: 48rem) {
   .admin-select {
     max-width: 13rem;
@@ -587,7 +694,8 @@
   font-size: 0.78rem;
   line-height: 1.35;
 }
-.admin-field-grid > label > input {
+.admin-field-grid > label > input,
+.admin-field-grid > label > .admin-num {
   margin-top: auto;
 }
 
@@ -898,9 +1006,7 @@
 .admin-conv-item {
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.34);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.5);
   transition: background 0.2s var(--ease-soft), border-color 0.2s var(--ease-soft),
     box-shadow 0.2s var(--ease-soft);
 }
@@ -922,6 +1028,35 @@
   background-image:
     radial-gradient(130% 100% at 12% -10%, #f7f1e7 0%, rgba(247, 241, 231, 0) 55%),
     linear-gradient(150deg, #f1eadd 0%, #e7dccb 42%, #ddd0ba 72%, #d3c4aa 100%);
+}
+
+/* Thanh cuộn mảnh, theo tông nomnom — thay thanh cuộn mặc định "quê" (bảng Đơn/Khách khi màn hẹp) */
+.admin-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(122, 12, 31, 0.35) transparent;
+}
+.admin-body ::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.admin-body ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-body ::-webkit-scrollbar-thumb {
+  background: rgba(122, 12, 31, 0.28);
+  border-radius: 999px;
+}
+.admin-body ::-webkit-scrollbar-thumb:hover {
+  background: rgba(122, 12, 31, 0.45);
+}
+.admin-body[data-theme="dark"] {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+.admin-body[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+.admin-body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.34);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1051,7 +1186,6 @@
   color: var(--color-ink);
   font-size: 0.82rem;
   font-weight: 700;
-  backdrop-filter: blur(6px);
   transition: background 0.2s var(--ease-soft), border-color 0.2s var(--ease-soft), color 0.2s var(--ease-soft);
 }
 .admin-pager-btn:hover:not(:disabled) {

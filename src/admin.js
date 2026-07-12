@@ -330,17 +330,72 @@ function currentTiers() {
   return (arr && arr.length ? arr : DEFAULT_TIERS).slice().sort((a, b) => a.min_spend - b.min_spend);
 }
 
+// ── Ô số kiểu pill (nút −/+) + định dạng phân cách nghìn cho tiền ──
+const ICON_MINUS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg>`;
+const ICON_PLUS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>`;
+
+function formatIntSep(n) {
+  const v = String(n ?? "").replace(/\D/g, "");
+  return v.replace(/\B(?=(\d{3})+(?!\d))/g, "."); // 1200000 → 1.200.000
+}
+function readNum(el) {
+  return parseInt(String(el?.value ?? "").replace(/\D/g, ""), 10) || 0;
+}
+// Ô pill có nút −/+ (dùng cho các trường số đứng riêng, đủ rộng)
+function stepperHtml({ id = "", value = 0, min = null, max = null, step = 1, money = false, extra = "" }) {
+  const display = value === "" || value == null ? "" : money ? formatIntSep(value) : String(value);
+  const attrs = [
+    id && `id="${id}"`,
+    min != null && `data-min="${min}"`,
+    max != null && `data-max="${max}"`,
+    `data-step="${step}"`,
+    money && `data-money="1"`,
+    extra,
+  ].filter(Boolean).join(" ");
+  return `<div class="admin-num">
+    <button type="button" class="admin-num-btn" data-num-step="-1" tabindex="-1" aria-label="Giảm">${ICON_MINUS}</button>
+    <input type="text" inputmode="numeric" class="admin-num-input" value="${display}" ${attrs} />
+    <button type="button" class="admin-num-btn" data-num-step="1" tabindex="-1" aria-label="Tăng">${ICON_PLUS}</button>
+  </div>`;
+}
+
+// Gõ vào ô có data-money → tự chèn dấu chấm phân cách nghìn (giữ con trỏ gần cuối)
+document.addEventListener("input", (e) => {
+  const el = e.target;
+  if (el.tagName !== "INPUT" || !el.dataset?.money) return;
+  const fromEnd = el.value.length - (el.selectionStart ?? el.value.length);
+  el.value = formatIntSep(el.value);
+  const pos = Math.max(0, el.value.length - fromEnd);
+  try { el.setSelectionRange(pos, pos); } catch {}
+});
+// Bấm nút −/+ của ô pill
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest?.("[data-num-step]");
+  if (!btn) return;
+  const input = btn.closest(".admin-num")?.querySelector(".admin-num-input");
+  if (!input) return;
+  const step = Number(input.dataset.step) || 1;
+  let val = readNum(input) + Number(btn.dataset.numStep) * step;
+  const min = input.dataset.min != null ? Number(input.dataset.min) : null;
+  const max = input.dataset.max != null ? Number(input.dataset.max) : null;
+  if (min != null && val < min) val = min;
+  if (max != null && val > max) val = max;
+  input.value = input.dataset.money ? formatIntSep(val) : String(val);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+
 function renderTierConfig() {
   const box = document.getElementById("tier-config-rows");
   if (!box) return;
+  // Ô trong lưới hạng dùng input pill gọn (không nút −/+ vì 4 cột hẹp); ô tiền có phân cách nghìn.
   box.innerHTML = currentTiers()
     .map(
       (t, i) => `
       <div class="grid grid-cols-[1.1fr_1fr_0.8fr_0.8fr] items-center gap-2">
         <span class="text-sm font-semibold text-ink">${t.name}</span>
-        <input data-tier="${i}" data-field="min_spend" type="number" min="0" step="100000" value="${t.min_spend}" class="admin-search-input w-full" />
-        <input data-tier="${i}" data-field="monthly_count" type="number" min="0" value="${t.monthly_count}" class="admin-search-input w-full" />
-        <input data-tier="${i}" data-field="percent" type="number" min="0" max="100" value="${t.percent}" class="admin-search-input w-full" />
+        <input data-tier="${i}" data-field="min_spend" data-money="1" type="text" inputmode="numeric" value="${formatIntSep(t.min_spend)}" class="admin-input admin-input-pill w-full" />
+        <input data-tier="${i}" data-field="monthly_count" type="text" inputmode="numeric" value="${t.monthly_count}" class="admin-input admin-input-pill w-full" />
+        <input data-tier="${i}" data-field="percent" type="text" inputmode="numeric" value="${t.percent}" class="admin-input admin-input-pill w-full" />
       </div>`
     )
     .join("");
@@ -349,7 +404,7 @@ function renderTierConfig() {
   const md = document.getElementById("cfg-max-discount");
   if (bp) bp.value = siteSettings?.birthday_voucher_percent ?? 25;
   if (mv) mv.value = siteSettings?.max_vouchers_per_order ?? 2;
-  if (md) md.value = siteSettings?.max_discount_amount ?? 0;
+  if (md) md.value = formatIntSep(siteSettings?.max_discount_amount ?? 0);
 }
 
 async function saveTierConfig() {
@@ -357,15 +412,15 @@ async function saveTierConfig() {
   if (!box) return;
   const tier_config = currentTiers().map((t, i) => ({
     name: t.name,
-    min_spend: parseInt(box.querySelector(`[data-tier="${i}"][data-field="min_spend"]`)?.value, 10) || 0,
-    monthly_count: parseInt(box.querySelector(`[data-tier="${i}"][data-field="monthly_count"]`)?.value, 10) || 0,
-    percent: parseInt(box.querySelector(`[data-tier="${i}"][data-field="percent"]`)?.value, 10) || 0,
+    min_spend: readNum(box.querySelector(`[data-tier="${i}"][data-field="min_spend"]`)),
+    monthly_count: readNum(box.querySelector(`[data-tier="${i}"][data-field="monthly_count"]`)),
+    percent: readNum(box.querySelector(`[data-tier="${i}"][data-field="percent"]`)),
   }));
   const row = {
     tier_config,
-    birthday_voucher_percent: parseInt(document.getElementById("cfg-birthday-percent").value, 10) || 0,
-    max_vouchers_per_order: parseInt(document.getElementById("cfg-max-vouchers").value, 10) || 2,
-    max_discount_amount: parseInt(document.getElementById("cfg-max-discount").value, 10) || 0,
+    birthday_voucher_percent: readNum(document.getElementById("cfg-birthday-percent")),
+    max_vouchers_per_order: readNum(document.getElementById("cfg-max-vouchers")) || 2,
+    max_discount_amount: readNum(document.getElementById("cfg-max-discount")),
   };
   const msg = document.getElementById("tier-config-msg");
   const { error } = await supabase.from("site_settings").update(row).eq("id", 1);
@@ -1074,8 +1129,8 @@ function selectCustomerForVoucher(phone) {
 async function sendVouchers() {
   const msg = document.getElementById("gv-msg");
   const setMsg = (t, err) => { if (msg) { msg.textContent = t; msg.style.color = err ? "#b91c1c" : ""; } };
-  const percent = parseInt(document.getElementById("gv-percent").value, 10);
-  const daysRaw = document.getElementById("gv-days").value.trim();
+  const percent = readNum(document.getElementById("gv-percent"));
+  const daysRaw = String(document.getElementById("gv-days").value || "").replace(/\D/g, "");
   const days = daysRaw ? parseInt(daysRaw, 10) : null;
   if (!percent || percent < 1 || percent > 100) { setMsg("Nhập mức giảm 1–100%.", true); return; }
 
@@ -1159,7 +1214,7 @@ function renderTraffic() {
   if (state) {
     state.innerHTML = `
       <div class="overflow-x-auto">
-        <table class="admin-table">
+        <table class="admin-table" style="min-width:0">
           <thead>
             <tr><th>Đường dẫn</th><th>Lượt xem</th></tr>
           </thead>
