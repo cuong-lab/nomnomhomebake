@@ -20,7 +20,7 @@ function loadImage(file) {
   });
 }
 
-export async function compressImage(file, { maxDim = 1600, quality = 0.82 } = {}) {
+export async function compressImage(file, { maxDim = 1200, quality = 0.74 } = {}) {
   // Không đụng tới: file rỗng, không phải ảnh, GIF (giữ animation), ảnh đã nhỏ sẵn.
   if (!file || !file.type || !file.type.startsWith("image/")) return file;
   if (file.type === "image/gif") return file;

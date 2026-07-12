@@ -1087,6 +1087,19 @@ input[type="number"] {
   --color-ash: #a89d8c;
   background-color: #151110;
 }
+
+/* Bong bóng chat ở dark theme: --color-ink bị lật thành sáng (#f2e9dc) → bong bóng khách
+   (bg-white text-ink) hoá chữ sáng trên nền trắng, bong bóng shop (bg-ink) cũng lật sáng.
+   Ghi đè màu riêng cho dark để đọc được. Không dùng backdrop-filter (theo quy ước admin). */
+.admin-body[data-theme="dark"] .chat-bubble--them {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #f2e9dc;
+}
+.admin-body[data-theme="dark"] .chat-bubble--mine {
+  background: #7a0c1f;
+  color: #fff;
+}
 .admin-body[data-theme="dark"]::before {
   background-color: #151110;
   background-image:

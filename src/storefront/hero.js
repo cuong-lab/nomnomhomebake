@@ -140,7 +140,7 @@ export function initHero() {
     const fileName = `hero-${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("product-images")
-      .upload(fileName, file);
+      .upload(fileName, file, { cacheControl: "31536000" });
 
     if (uploadError) {
       alert("Lỗi upload: " + uploadError.message);

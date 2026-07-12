@@ -138,7 +138,7 @@ export function initReviews() {
       const fileName = `review-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("product-images")
-        .upload(fileName, reviewC);
+        .upload(fileName, reviewC, { cacheControl: "31536000" });
 
       if (uploadError) {
         reviewError.textContent = "Lỗi upload ảnh: " + uploadError.message;

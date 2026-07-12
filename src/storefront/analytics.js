@@ -34,6 +34,13 @@ function persistedId(storage, key) {
 
 export async function initAnalytics() {
   try {
+    // KHÔNG đếm lượt của chính admin: chủ tiệm đăng nhập (Supabase Auth email/mật khẩu) để quản lý
+    // storefront ngay trên trang index → nếu không loại thì mỗi lần vào quản lý đều bị tính 1 page_view.
+    // Khách hàng đăng nhập bằng SĐT (KHÔNG tạo phiên Supabase Auth) nên không bị loại nhầm — chỉ admin
+    // mới có session. getSession() đọc từ localStorage, không gọi mạng nên không làm chậm trang.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) return;
+
     await supabase.from("analytics_events").insert({
       visitor_id: persistedId(localStorage, VISITOR_KEY),
       session_id: persistedId(sessionStorage, SESSION_KEY),

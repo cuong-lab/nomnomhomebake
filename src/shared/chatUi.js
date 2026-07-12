@@ -22,7 +22,7 @@ export function avatarHtml(name, online) {
 export function chatBubbleHtml(message, mine) {
   return `
     <div class="flex ${mine ? "justify-end" : "justify-start"}">
-      <div class="max-w-[75%] rounded-2xl px-3 py-2 ${mine ? "bg-ink text-white" : "border border-earth/40 bg-white text-ink"}">
+      <div class="chat-bubble ${mine ? "chat-bubble--mine bg-ink text-white" : "chat-bubble--them border border-earth/40 bg-white text-ink"} max-w-[75%] rounded-2xl px-3 py-2">
         <p class="whitespace-pre-wrap break-words text-sm">${escapeHtml(message.message)}</p>
       </div>
     </div>

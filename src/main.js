@@ -1070,7 +1070,9 @@ async function uploadProductImage(file, prefix) {
   const fileName = `${prefix}${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
   const { error: uploadError } = await supabase.storage
     .from("product-images")
-    .upload(fileName, file);
+    // Tên file là duy nhất (timestamp+random) → nội dung không bao giờ đổi, cache 1 năm
+    // để trình duyệt/CDN không tải lại cùng ảnh, giảm mạnh cached egress của Supabase.
+    .upload(fileName, file, { cacheControl: "31536000" });
   if (uploadError) throw uploadError;
   const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
   return urlData.publicUrl;
@@ -1485,7 +1487,7 @@ contactForm.addEventListener("submit", async (e) => {
     const fileName = `logo-${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("product-images")
-      .upload(fileName, logoC);
+      .upload(fileName, logoC, { cacheControl: "31536000" });
 
     if (uploadError) {
       contactError.textContent = "Lỗi upload logo: " + uploadError.message;
@@ -1504,7 +1506,7 @@ contactForm.addEventListener("submit", async (e) => {
     const aName = `about-${Date.now()}.${aboutC.name.split(".").pop()}`;
     const { error: aErr } = await supabase.storage
       .from("product-images")
-      .upload(aName, aboutC);
+      .upload(aName, aboutC, { cacheControl: "31536000" });
     if (aErr) {
       contactError.textContent = "Lỗi upload ảnh About: " + aErr.message;
       contactError.classList.remove("hidden");
@@ -1521,7 +1523,7 @@ contactForm.addEventListener("submit", async (e) => {
     const cName = `custom-${Date.now()}.${customC.name.split(".").pop()}`;
     const { error: cErr } = await supabase.storage
       .from("product-images")
-      .upload(cName, customC);
+      .upload(cName, customC, { cacheControl: "31536000" });
     if (cErr) {
       contactError.textContent = "Lỗi upload ảnh Bánh đặt riêng: " + cErr.message;
       contactError.classList.remove("hidden");
@@ -2362,7 +2364,7 @@ async function uploadAvatar(file) {
   const name = `avatar-${state.currentCustomer.phone}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage
     .from("product-images")
-    .upload(name, file, { upsert: true });
+    .upload(name, file, { upsert: true, cacheControl: "31536000" });
   if (error) {
     alert("Lỗi tải ảnh: " + error.message);
     return;
