@@ -17,6 +17,7 @@
     />
   </head>
   <body class="admin-body">
+    <div id="admin-grain-soft" aria-hidden="true"></div>
     <div id="admin-login" class="hidden min-h-screen items-center justify-center px-5">
       <form id="admin-login-form" class="admin-login-card w-full max-w-sm p-6 md:p-8">
         <p class="text-xs font-semibold uppercase tracking-[0.22em] text-ash">nomnom backoffice</p>
@@ -274,13 +275,25 @@
               <div id="tier-config-rows" class="mt-1 space-y-2"></div>
               <div class="admin-field-grid mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1">
                 <label class="text-sm text-ash">% voucher sinh nhật
-                  <input id="cfg-birthday-percent" type="number" min="0" max="100" class="admin-search-input mt-1 w-full" />
+                  <div class="admin-num mt-1">
+                    <button type="button" class="admin-num-btn" data-num-step="-1" tabindex="-1" aria-label="Giảm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+                    <input id="cfg-birthday-percent" type="text" inputmode="numeric" class="admin-num-input" data-min="0" data-max="100" data-step="1" />
+                    <button type="button" class="admin-num-btn" data-num-step="1" tabindex="-1" aria-label="Tăng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+                  </div>
                 </label>
                 <label class="text-sm text-ash">Voucher tối đa / đơn
-                  <input id="cfg-max-vouchers" type="number" min="1" max="5" class="admin-search-input mt-1 w-full" />
+                  <div class="admin-num mt-1">
+                    <button type="button" class="admin-num-btn" data-num-step="-1" tabindex="-1" aria-label="Giảm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+                    <input id="cfg-max-vouchers" type="text" inputmode="numeric" class="admin-num-input" data-min="1" data-max="5" data-step="1" />
+                    <button type="button" class="admin-num-btn" data-num-step="1" tabindex="-1" aria-label="Tăng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+                  </div>
                 </label>
                 <label class="text-sm text-ash">Trần giảm / đơn (đ, 0 = không giới hạn)
-                  <input id="cfg-max-discount" type="number" min="0" step="10000" class="admin-search-input mt-1 w-full" />
+                  <div class="admin-num mt-1">
+                    <button type="button" class="admin-num-btn" data-num-step="-1" tabindex="-1" aria-label="Giảm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+                    <input id="cfg-max-discount" type="text" inputmode="numeric" class="admin-num-input" data-min="0" data-step="10000" data-money="1" placeholder="0 = không giới hạn" />
+                    <button type="button" class="admin-num-btn" data-num-step="1" tabindex="-1" aria-label="Tăng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+                  </div>
                 </label>
               </div>
               <div class="mt-4 flex items-center gap-3">
@@ -297,10 +310,18 @@
               </div>
               <div class="admin-field-grid mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label class="text-sm text-ash">Mức giảm (%)
-                  <input id="gv-percent" type="number" min="1" max="100" placeholder="VD: 15" class="admin-search-input mt-1 w-full" />
+                  <div class="admin-num mt-1">
+                    <button type="button" class="admin-num-btn" data-num-step="-1" tabindex="-1" aria-label="Giảm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+                    <input id="gv-percent" type="text" inputmode="numeric" class="admin-num-input" data-min="1" data-max="100" data-step="1" placeholder="VD: 15" />
+                    <button type="button" class="admin-num-btn" data-num-step="1" tabindex="-1" aria-label="Tăng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+                  </div>
                 </label>
                 <label class="text-sm text-ash">Hạn dùng (số ngày — để trống = không hết hạn)
-                  <input id="gv-days" type="number" min="1" placeholder="VD: 30" class="admin-search-input mt-1 w-full" />
+                  <div class="admin-num mt-1">
+                    <button type="button" class="admin-num-btn" data-num-step="-1" tabindex="-1" aria-label="Giảm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+                    <input id="gv-days" type="text" inputmode="numeric" class="admin-num-input" data-min="1" data-step="1" placeholder="VD: 30 (trống = không hết hạn)" />
+                    <button type="button" class="admin-num-btn" data-num-step="1" tabindex="-1" aria-label="Tăng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+                  </div>
                 </label>
               </div>
               <div class="mt-4">
