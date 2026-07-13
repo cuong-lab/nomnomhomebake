@@ -622,29 +622,30 @@ body {
 .co-v .v-src { margin-left: auto; }
 
 /* ══ Nút TRƯỢT "kéo bánh vào giỏ" (chỉ mobile) — thay nút "Giỏ hàng" viên thuốc ══ */
-.nn-slide { position: relative; flex-shrink: 0; width: 6rem; height: 28px; border-radius: 999px;
+.nn-slide { position: relative; flex-shrink: 0; width: 7.8rem; height: 36px; border-radius: 999px;
   background: linear-gradient(180deg, #f4eee5, #e7ddce); border: 1px solid rgba(212, 197, 185, 0.9);
   box-shadow: inset 0 1px 3px -1px rgba(10, 10, 10, 0.16); touch-action: none; overflow: hidden;
-  user-select: none; -webkit-user-select: none; }
+  user-select: none; -webkit-user-select: none; cursor: grab; }
+.nn-slide:active { cursor: grabbing; }
 .nn-slide__fill { position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   background: #7a0c1f; clip-path: inset(0 100% 0 0); }
 /* icon giỏ = đích, phình nhẹ đón bánh (scale do JS đặt) */
-.nn-slide__target { position: absolute; top: 0; right: 0; height: 100%; width: 24px; display: flex;
+.nn-slide__target { position: absolute; top: 0; right: 0; height: 100%; width: 31px; display: flex;
   align-items: center; justify-content: center; color: #6b6b6b; z-index: 4; cursor: pointer;
   transform-origin: center; transition: color 0.18s; }
-.nn-slide__target svg { width: 14px; height: 14px; }
+.nn-slide__target svg { width: 18px; height: 18px; }
 .nn-slide.reached .nn-slide__target { color: #fdfbf7; }
 /* mũi hướng >> nhấp nháy ở giữa */
-.nn-slide__hint { position: absolute; inset: 0 20px 0 24px; display: flex; align-items: center;
+.nn-slide__hint { position: absolute; inset: 0 26px 0 31px; display: flex; align-items: center;
   justify-content: center; pointer-events: none; z-index: 1; }
-.nn-slide__hint svg { width: 15px; height: 15px; color: #d4c5b9; animation: nnChev 1.4s ease-in-out infinite; }
-@keyframes nnChev { 0%, 100% { transform: translateX(0); opacity: 0.55; } 50% { transform: translateX(2px); opacity: 1; } }
+.nn-slide__hint svg { width: 19px; height: 19px; color: #d4c5b9; animation: nnChev 1.4s ease-in-out infinite; }
+@keyframes nnChev { 0%, 100% { transform: translateX(0); opacity: 0.55; } 50% { transform: translateX(3px); opacity: 1; } }
 /* núm bánh kéo được (co giãn + teo dần về giỏ do JS đặt) */
-.nn-slide__knob { position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 999px;
+.nn-slide__knob { position: absolute; top: 3px; left: 3px; width: 30px; height: 30px; border-radius: 999px;
   z-index: 3; background: linear-gradient(145deg, #3a3a3a, #0a0a0a); color: #fdfbf7; display: flex;
   align-items: center; justify-content: center; will-change: transform; cursor: grab; touch-action: none;
-  box-shadow: 0 3px 7px -3px rgba(10, 10, 10, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.16); }
-.nn-slide__knob svg { width: 13px; height: 13px; }
+  box-shadow: 0 3px 8px -3px rgba(10, 10, 10, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.16); }
+.nn-slide__knob svg { width: 17px; height: 17px; }
 .nn-slide__knob:active { cursor: grabbing; }
 .nn-slide.done .nn-slide__knob { opacity: 0; transition: opacity 0.2s; }
 /* "+1" bay lên trên miệng pill khi thêm thành công (gắn body, position:fixed → không bị pill cắt) */
@@ -671,4 +672,49 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .nn-hint-reveal, .nn-hint-reveal svg { animation: none; }
+}
+
+/* ── Mobile: floating hamburger (dưới nút giỏ) — bấm nảy 1 cái rồi nhả 3 mục float lên ── */
+.nn-fab-item {
+  position: absolute; bottom: 2px; right: 2px; height: 44px; width: 44px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center; color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(10, 10, 10, 0.5);
+  opacity: 0; transform: translateY(0) scale(0.3); pointer-events: none; z-index: 1;
+  transition: transform 0.36s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.22s;
+}
+#fab-menu.open .nn-fab-item { opacity: 1; pointer-events: auto; }
+#fab-menu.open .nn-fab-item[data-fab-item="1"] { transform: translateY(-56px) scale(1); transition-delay: 0.06s; }
+#fab-menu.open .nn-fab-item[data-fab-item="2"] { transform: translateY(-112px) scale(1); transition-delay: 0.11s; }
+#fab-menu.open .nn-fab-item[data-fab-item="3"] { transform: translateY(-168px) scale(1); transition-delay: 0.16s; }
+/* nút hamburger (toggle) */
+.nn-fab-toggle {
+  position: absolute; bottom: 0; right: 0; height: 48px; width: 48px; border-radius: 999px;
+  background: #0a0a0a; color: #fff; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 20px -6px rgba(10, 10, 10, 0.55); z-index: 3; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; }
+.nn-fab-toggle:active { transform: scale(0.9); }
+/* cú nảy khi mở (bounce 1 cái trước, các mục float lên sau nhờ transition-delay) */
+#fab-menu.open .nn-fab-toggle { animation: nnFabBounce 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes nnFabBounce {
+  0% { transform: scale(1); } 30% { transform: scale(0.8); }
+  60% { transform: scale(1.12); } 100% { transform: scale(1); }
+}
+/* 3 vạch → dấu X */
+.nn-burger { position: relative; width: 20px; height: 14px; }
+.nn-burger i { position: absolute; left: 0; right: 0; height: 2px; border-radius: 2px; background: currentColor;
+  transition: transform 0.3s, opacity 0.2s, top 0.3s; }
+.nn-burger i:nth-child(1) { top: 0; }
+.nn-burger i:nth-child(2) { top: 6px; }
+.nn-burger i:nth-child(3) { top: 12px; }
+#fab-menu.open .nn-burger i:nth-child(1) { top: 6px; transform: rotate(45deg); }
+#fab-menu.open .nn-burger i:nth-child(2) { opacity: 0; }
+#fab-menu.open .nn-burger i:nth-child(3) { top: 6px; transform: rotate(-45deg); }
+/* badge chưa đọc trên hamburger */
+.nn-fab-badge { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 999px; background: #e74c3c; color: #fff; font-size: 10px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; z-index: 4; }
+/* nút giỏ bị đẩy lên khi hamburger mở */
+.nn-cart.nn-cart-push { transform: translateY(-10.5rem); }
+@media (prefers-reduced-motion: reduce) {
+  #fab-menu.open .nn-fab-toggle { animation: none; }
 }

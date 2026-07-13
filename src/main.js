@@ -938,7 +938,7 @@ function initSlideCarts(container) {
     if (!product) return;
 
     let dragging = false, startX = 0, x = 0, max = 0, lastPx = 0, vel = 0, locked = false, rafId = 0;
-    const maxTravel = () => slide.clientWidth - knob.offsetWidth - 4;
+    const maxTravel = () => slide.clientWidth - knob.offsetWidth - 6;
 
     // vẽ vị trí núm: co giãn theo vận tốc (cao su) + teo dần về giỏ (ease-in, chạm mép = 0); giỏ phình đón bánh
     function paint(px, v) {
@@ -1017,15 +1017,23 @@ function initSlideCarts(container) {
       });
     }
 
-    knob.addEventListener("pointerdown", (e) => {
+    // Bắt kéo trên CẢ thanh (không chỉ mỗi núm) → được trọn chiều cao pill + biên ngang
+    // rộng quanh núm, nên ngón tay to đè lệch icon một chút vẫn nhận thao tác kéo.
+    // Vùng icon giỏ ở cuối phải để dành cho thao tác BẤM (tự trượt), không bắt kéo ở đó.
+    slide.addEventListener("pointerdown", (e) => {
       if (locked) return;
+      max = maxTravel();
+      const localX = e.clientX - slide.getBoundingClientRect().left;
+      const knobEnd = 3 + x + knob.offsetWidth;        // mép phải hiện tại của núm
+      const tol = knob.offsetWidth * 0.6;              // dung sai ~60% bề ngang núm mỗi phía
+      if (localX > knobEnd + tol) return;              // chạm vào vùng icon giỏ → để click xử lý
       cancelAnimationFrame(rafId);
-      dragging = true; max = maxTravel();
-      startX = e.clientX - x; lastPx = x; vel = 0;
-      knob.setPointerCapture(e.pointerId);
+      dragging = true;
+      startX = e.clientX - x; lastPx = x; vel = 0;     // không "nhảy" núm — kéo tiếp từ vị trí hiện tại
+      slide.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
-    knob.addEventListener("pointermove", (e) => {
+    slide.addEventListener("pointermove", (e) => {
       if (!dragging) return;
       let px = e.clientX - startX;
       if (px < 0) px *= 0.32;                          // lực cản 2 đầu (rubber band)
@@ -1040,8 +1048,8 @@ function initSlideCarts(container) {
       if (max && x / max >= THRESH) succeed();
       else spring(0, BOUNCE_STIFF, BOUNCE_DAMP);       // chưa đủ ngưỡng → bật về đầu
     };
-    knob.addEventListener("pointerup", release);
-    knob.addEventListener("pointercancel", release);
+    slide.addEventListener("pointerup", release);
+    slide.addEventListener("pointercancel", release);
 
     // bấm thẳng icon giỏ → tự trượt vào (cùng timing như kéo)
     target.addEventListener("click", () => {
@@ -1549,6 +1557,12 @@ async function loadContactSettings() {
 
   zaloBtn.classList.toggle("hidden", !data.zalo_url);
   messengerBtn.classList.toggle("hidden", !data.messenger_url);
+
+  // Mobile: cùng link cho 2 mục trong floating hamburger (#fab-menu).
+  const fabZalo = document.getElementById("fab-zalo");
+  const fabMessenger = document.getElementById("fab-messenger");
+  if (fabZalo) { fabZalo.href = data.zalo_url || "#"; fabZalo.classList.toggle("hidden", !data.zalo_url); }
+  if (fabMessenger) { fabMessenger.href = data.messenger_url || "#"; fabMessenger.classList.toggle("hidden", !data.messenger_url); }
 
   const footerPhone = document.getElementById("footer-phone");
   const footerAddress = document.getElementById("footer-address");
@@ -2155,6 +2169,35 @@ function updateLoyaltyHint() {
 }
 
 document.getElementById("hero-loyalty-login")?.addEventListener("click", openCustomerModal);
+
+// ── Mobile: floating hamburger (dưới nút giỏ) gộp chat/zalo/messenger ──
+// Bấm hamburger → nảy 1 cái rồi 3 mục float lên (CSS lo animation); nút giỏ bị đẩy lên nhường chỗ.
+(function initFabMenu() {
+  const menu = document.getElementById("fab-menu");
+  if (!menu) return;
+  const toggle = document.getElementById("fab-toggle");
+  const cart = document.getElementById("floating-cart");
+  const setOpen = (on) => {
+    menu.classList.toggle("open", on);
+    toggle.setAttribute("aria-expanded", String(on));
+    cart?.classList.toggle("nn-cart-push", on);
+  };
+  toggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setOpen(!menu.classList.contains("open"));
+  });
+  // Chọn xong 1 mục thì đóng menu; riêng "tin nhắn" mở khung chat (dùng lại handler của #chat-fab).
+  document.getElementById("fab-chat")?.addEventListener("click", () => {
+    setOpen(false);
+    document.getElementById("chat-fab")?.click();
+  });
+  document.getElementById("fab-zalo")?.addEventListener("click", () => setOpen(false));
+  document.getElementById("fab-messenger")?.addEventListener("click", () => setOpen(false));
+  // Bấm ra ngoài → đóng.
+  document.addEventListener("click", (e) => {
+    if (menu.classList.contains("open") && !menu.contains(e.target)) setOpen(false);
+  });
+})();
 
 // Scroll-spy: tự sáng mục nav đúng phần đang xem, và con trượt nền trượt mượt tới mục đó.
 function initNavSpy() {
