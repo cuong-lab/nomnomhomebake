@@ -686,7 +686,30 @@ let activePriceSort = "default";
 const categoryTabs = document.getElementById("category-tabs");
 const priceFilter = document.getElementById("price-filter");
 
-function renderProductCard(p) {
+// Layout sản phẩm khác nhau theo thiết bị: desktop (≥640px) = grid 3 ô vuông cuộn ngang
+// như cũ; mobile = list card nằm ngang xếp dọc. Render lại khi vượt ngưỡng 640px.
+const mqProductDesktop = window.matchMedia("(min-width: 640px)");
+mqProductDesktop.addEventListener("change", () => renderProducts());
+
+// Icon túi mua hàng (dùng chung cho nút "Giỏ hàng" ở cả 2 layout).
+const cartIconSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-300 group-hover/add:scale-110"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`;
+
+// Icon (Lucide) cho nút TRƯỢT vào giỏ ở mobile: bánh (cookie) = núm kéo, túi = đích, chevrons = mũi hướng.
+const cookieIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/><path d="M16 15.5v.01"/><path d="M12 12v.01"/><path d="M11 17v.01"/><path d="M7 14v.01"/></svg>`;
+const bagIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`;
+const chevIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>`;
+
+// HTML nút trượt cho 1 sản phẩm (mobile).
+const slideCartHtml = (p) => `
+  <div class="nn-slide" data-slide-cart="${p.id}">
+    <div class="nn-slide__fill"></div>
+    <div class="nn-slide__hint">${chevIconSvg}</div>
+    <div class="nn-slide__target" role="button" aria-label="Thêm vào giỏ">${bagIconSvg}</div>
+    <div class="nn-slide__knob">${cookieIconSvg}</div>
+  </div>`;
+
+// DESKTOP (≥640px): card DỌC, ảnh vuông trên, nút "Giỏ hàng" là thanh full-width dính đáy.
+function renderProductCardGrid(p) {
   return `
     <article class="group relative flex w-full flex-col overflow-hidden rounded-2xl border border-earth/50 bg-cream/70 shadow-[0_3px_14px_-6px_rgba(10,10,10,0.18)] transition-all duration-300 hover:-translate-y-1 hover:border-earth hover:shadow-[0_16px_30px_-10px_rgba(10,10,10,0.28)]">
       <div data-detail="${p.id}" class="aspect-square overflow-hidden bg-earth/30 cursor-pointer relative">
@@ -699,30 +722,71 @@ function renderProductCard(p) {
         ${p.badge === "new" ? `<span class="absolute top-2 left-2 sm:top-3 sm:left-3 bg-[#34C759] px-2 py-0.5 text-[10px] font-semibold text-white rounded-full sm:px-3 sm:text-[15px]">Mới</span>` : ""}
         ${p.badge === "soldout" ? `<span class="absolute top-2 left-2 sm:top-3 sm:left-3 bg-ink px-2 py-0.5 text-[10px] font-semibold text-white rounded-full sm:px-3 sm:text-[15px]">Hết hàng</span>` : ""}
       </div>
-      <div class="flex flex-col flex-1 p-3 sm:p-4">
+      <div class="flex flex-col flex-1 px-3 pt-2 pb-2.5 sm:px-4 sm:pt-3 sm:pb-3">
         <h3 data-detail="${p.id}" class="font-serif text-xs sm:text-lg text-ink cursor-pointer hover:text-ash transition-colors line-clamp-2">${p.name}</h3>
         ${p.description ? `<p class="mt-0.5 sm:mt-1 text-[10px] sm:text-sm text-ash line-clamp-2">${p.description}</p>` : ""}
-        <div class="mt-auto pt-1 sm:pt-2">
-          <p class="text-[11px] sm:text-sm font-medium text-ink">
-              ${p.sale_price
-                ? `<span class="text-ash line-through">${formatPrice(p.price)}</span> <span class="text-red-600">${formatPrice(p.sale_price)}</span>`
-                : formatPrice(p.price)
-              }
-          </p>
-          ${p.badge === "soldout"
-            ? `<span class="mt-1 sm:mt-2 block text-[10px] sm:text-xs text-ash">Hết hàng</span>`
-            : `<button data-add-cart="${p.id}" class="mt-1 sm:mt-2 w-full bg-ink py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium text-white hover:opacity-90 active:scale-95 transition-all">+ Giỏ hàng</button>`
-          }
-        </div>
+        <p class="mt-auto pt-1 sm:pt-2 text-[11px] sm:text-sm font-medium text-ink">
+            ${p.sale_price
+              ? `<span class="text-ash line-through">${formatPrice(p.price)}</span> <span class="text-red-600">${formatPrice(p.sale_price)}</span>`
+              : formatPrice(p.price)
+            }
+        </p>
       </div>
       ${
         state.isAdmin
-          ? `<div class="flex gap-2 px-3 pb-3 sm:px-4">
+          ? `<div class="flex gap-2 px-3 pb-2 sm:px-4">
               <button data-edit="${p.id}" class="text-xs text-ash hover:text-ink transition-colors">Sửa</button>
               <button data-delete="${p.id}" class="text-xs text-red-500 hover:text-red-700 transition-colors">Xóa</button>
             </div>`
           : ""
       }
+      ${p.badge === "soldout"
+        ? `<div class="w-full bg-ash/80 py-2 sm:py-2.5 text-center text-[10px] sm:text-xs font-medium text-white">Hết hàng</div>`
+        : `<button data-add-cart="${p.id}" aria-label="Thêm vào giỏ" class="group/add flex w-full items-center justify-center gap-1.5 bg-gradient-to-br from-[#232323] to-ink py-2.5 text-[11px] sm:text-sm font-semibold text-cream transition-all duration-200 hover:brightness-125 active:scale-[0.98]">
+            ${cartIconSvg}<span>Giỏ hàng</span>
+          </button>`
+      }
+    </article>`;
+}
+
+// MOBILE (<640px): card NẰM NGANG, ảnh vuông trái, thông tin phải, nút "Giỏ hàng" viên thuốc.
+function renderProductCardList(p) {
+  return `
+    <article class="group relative flex overflow-hidden rounded-2xl border border-earth/50 bg-cream/70 shadow-[0_3px_14px_-6px_rgba(10,10,10,0.18)] transition-all duration-300 hover:border-earth hover:shadow-[0_12px_26px_-12px_rgba(10,10,10,0.28)]">
+      <div data-detail="${p.id}" class="relative aspect-square w-[10.1rem] shrink-0 overflow-hidden bg-earth/30 cursor-pointer">
+        ${
+          p.image_url
+            ? `<img src="${p.image_url}" alt="${p.name}" loading="lazy" decoding="async" class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />`
+            : `<div class="flex h-full items-center justify-center"><span class="font-serif text-lg italic text-ash">nomnom</span></div>`
+        }
+        ${p.badge === "bestseller" ? `<span class="absolute top-2 left-2 bg-[#f39c12] px-2 py-0.5 text-[10px] font-semibold text-white rounded-full">Bán chạy</span>` : ""}
+        ${p.badge === "new" ? `<span class="absolute top-2 left-2 bg-[#34C759] px-2 py-0.5 text-[10px] font-semibold text-white rounded-full">Mới</span>` : ""}
+        ${p.badge === "soldout" ? `<span class="absolute top-2 left-2 bg-ink px-2 py-0.5 text-[10px] font-semibold text-white rounded-full">Hết hàng</span>` : ""}
+      </div>
+      <div class="flex min-w-0 flex-1 flex-col px-3 py-2.5">
+        <h3 data-detail="${p.id}" class="font-serif text-[18px] text-ink cursor-pointer hover:text-ash transition-colors line-clamp-1">${p.name}</h3>
+        ${p.description ? `<p class="mt-0.5 text-[11px] text-ash line-clamp-3">${p.description}</p>` : ""}
+        <div class="mt-auto flex items-end justify-between gap-2 pt-2">
+          <p class="flex flex-col leading-tight text-[12px] font-medium text-ink">
+            ${p.sale_price
+              ? `<span class="text-[10px] font-normal text-ash line-through">${formatPrice(p.price)}</span><span class="text-red-600">${formatPrice(p.sale_price)}</span>`
+              : `<span>${formatPrice(p.price)}</span>`
+            }
+          </p>
+          ${p.badge === "soldout"
+            ? `<span class="shrink-0 text-[10px] text-ash">Hết hàng</span>`
+            : slideCartHtml(p)
+          }
+        </div>
+        ${
+          state.isAdmin
+            ? `<div class="mt-1.5 flex gap-3">
+                <button data-edit="${p.id}" class="text-xs text-ash hover:text-ink transition-colors">Sửa</button>
+                <button data-delete="${p.id}" class="text-xs text-red-500 hover:text-red-700 transition-colors">Xóa</button>
+              </div>`
+            : ""
+        }
+      </div>
     </article>`;
 }
 
@@ -736,22 +800,24 @@ function renderProducts() {
     return;
   }
 
-  const addBtn = state.isAdmin
-    ? `<button class="add-product-btn flex aspect-square w-full items-center justify-center rounded-2xl border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink hover:bg-cream/50 transition-colors cursor-pointer">
-        <span class="text-center"><span class="block text-3xl leading-none">+</span><span class="mt-2 block text-sm">Thêm sản phẩm</span></span>
-      </button>`
-    : "";
+  const isDesktop = mqProductDesktop.matches;
+  const renderCard = isDesktop ? renderProductCardGrid : renderProductCardList;
 
-  // Mỗi ô (sản phẩm hoặc nút thêm) chiếm đúng 1/3 chiều ngang để luôn hiện 3 ô/hàng;
-  // nhiều hơn 3 thì cuộn ngang, có nút ‹ › ở 2 bên.
-  // Ô chứa là flex container để card con tự kéo giãn cao bằng nhau (align-items:stretch),
-  // không dựa vào height:100% (dễ bị bỏ qua khi track cao auto → card cao thấp lệch nhau).
-  const cell = (inner) =>
-    `<div class="pcar-cell snap-start shrink-0 flex">${inner}</div>`;
+  const addBtn = !state.isAdmin
+    ? ""
+    : isDesktop
+      ? `<button class="add-product-btn flex aspect-square w-full items-center justify-center rounded-2xl border-2 border-dashed border-earth text-ash hover:border-ink hover:text-ink hover:bg-cream/50 transition-colors cursor-pointer">
+          <span class="text-center"><span class="block text-3xl leading-none">+</span><span class="mt-2 block text-sm">Thêm sản phẩm</span></span>
+        </button>`
+      : `<button class="add-product-btn flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-earth py-6 text-ash hover:border-ink hover:text-ink hover:bg-cream/50 transition-colors cursor-pointer">
+          <span class="text-2xl leading-none">+</span><span class="text-sm">Thêm sản phẩm</span>
+        </button>`;
 
+  // DESKTOP: carousel 3 ô/hàng, cuộn ngang, có nút ‹ › khi >3.
+  const cell = (inner) => `<div class="pcar-cell snap-start shrink-0 flex">${inner}</div>`;
   const carousel = (cellsHtml, showArrows) => {
     const trackId = `pcar-${Math.random().toString(36).slice(2, 8)}`;
-    const arrowBtn = (dir, sym) =>
+    const arrowBtn = (dir) =>
       `<button data-car-${dir}="${trackId}" aria-label="${dir === "prev" ? "Xem trước" : "Xem tiếp"}"
         class="absolute ${dir === "prev" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"} top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-earth bg-white text-ink shadow-md hover:bg-earth/20 active:scale-95 transition sm:flex">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${dir === "prev" ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"}"/></svg>
@@ -767,13 +833,25 @@ function renderProducts() {
   };
 
   const section = (title, items) => {
-    const cells = items.map((p) => cell(renderProductCard(p))).join("") + (state.isAdmin ? cell(addBtn) : "");
-    const total = items.length + (state.isAdmin ? 1 : 0);
+    if (isDesktop) {
+      const cells = items.map((p) => cell(renderCard(p))).join("") + (state.isAdmin ? cell(addBtn) : "");
+      const total = items.length + (state.isAdmin ? 1 : 0);
+      return `
+        <div class="category-section">
+          <h3 class="font-serif text-2xl text-ink md:text-3xl">${title}</h3>
+          <hr class="mt-3 border-dashed border-earth" />
+          ${carousel(cells, total > 3)}
+        </div>`;
+    }
+    // MOBILE: list card ngang xếp dọc.
+    const cards = items.map(renderCard).join("") + (state.isAdmin ? addBtn : "");
     return `
       <div class="category-section">
         <h3 class="font-serif text-2xl text-ink md:text-3xl">${title}</h3>
         <hr class="mt-3 border-dashed border-earth" />
-        ${carousel(cells, total > 3)}
+        <div class="mx-auto mt-6 flex max-w-2xl flex-col gap-[0.525rem]">
+          ${cards}
+        </div>
       </div>`;
   };
 
@@ -785,12 +863,12 @@ function renderProducts() {
   if (uncategorized.length) {
     html += section("Khác", uncategorized);
   } else if (state.isAdmin && !categories.length) {
-    html += carousel(cell(addBtn), false);
+    html += isDesktop ? carousel(cell(addBtn), false) : `<div class="mx-auto mt-6 max-w-2xl">${addBtn}</div>`;
   }
 
   container.innerHTML = html;
 
-  // Nút ‹ › cuộn ngang track 1 "trang" (đúng bằng bề rộng đang thấy = 3 ô)
+  // Nút ‹ › cuộn ngang track 1 "trang" (desktop). Trên mobile không có → querySelector rỗng.
   container.querySelectorAll("[data-car-prev]").forEach((btn) =>
     btn.addEventListener("click", () => {
       const track = document.getElementById(btn.dataset.carPrev);
@@ -824,8 +902,13 @@ function renderProducts() {
       const product = allProducts.find((p) => p.id === btn.dataset.addCart);
       if (product) {
         addToCart(product);
-        btn.textContent = "Đã thêm ✓";
-        setTimeout(() => { btn.textContent = "+ Giỏ hàng"; }, 1000);
+        // Nút có icon + <span> nhãn → chỉ đổi chữ trong span để không xoá icon.
+        const label = btn.querySelector("span");
+        if (label) {
+          const prev = label.textContent;
+          label.textContent = "Đã thêm ✓";
+          setTimeout(() => { label.textContent = prev; }, 1000);
+        }
       }
     })
   );
@@ -836,6 +919,137 @@ function renderProducts() {
       if (product) openDetailModal(product);
     })
   );
+
+  initSlideCarts(container);
+}
+
+// Gắn tương tác "trượt bánh vào giỏ" cho mọi nút .nn-slide trong container (chỉ có ở layout mobile).
+// Kéo núm bánh sang phải qua ngưỡng → thêm vào giỏ; hoặc bấm thẳng icon giỏ → tự trượt vào.
+// Dùng pointer-capture (không gắn listener toàn cục) nên render lại nhiều lần không rò rỉ.
+function initSlideCarts(container) {
+  const THRESH = 0.7, BOUNCE_STIFF = 0.12, BOUNCE_DAMP = 0.8, RETURN_DELAY = 260;
+
+  container.querySelectorAll("[data-slide-cart]").forEach((slide) => {
+    const knob = slide.querySelector(".nn-slide__knob");
+    const fill = slide.querySelector(".nn-slide__fill");
+    const hint = slide.querySelector(".nn-slide__hint");
+    const target = slide.querySelector(".nn-slide__target");
+    const product = allProducts.find((p) => p.id === slide.dataset.slideCart);
+    if (!product) return;
+
+    let dragging = false, startX = 0, x = 0, max = 0, lastPx = 0, vel = 0, locked = false, rafId = 0;
+    const maxTravel = () => slide.clientWidth - knob.offsetWidth - 4;
+
+    // vẽ vị trí núm: co giãn theo vận tốc (cao su) + teo dần về giỏ (ease-in, chạm mép = 0); giỏ phình đón bánh
+    function paint(px, v) {
+      x = px;
+      const ratio = max ? Math.max(0, Math.min(1, px / max)) : 0;
+      const ease = Math.pow(ratio, 3.5);
+      const scale = Math.max(0, 1 - ease);
+      const st = Math.min(0.42, Math.abs(v) * 0.045);
+      knob.style.transform = `translateX(${px}px) scaleX(${scale * (1 + st)}) scaleY(${scale * (1 - st * 0.55)})`;
+      target.style.transform = `scale(${1 + 0.2 * ease})`;
+      fill.style.clipPath = `inset(0 ${100 - ratio * 100}% 0 0)`;
+      hint.style.opacity = String(Math.max(0, 1 - ratio * 1.7));
+      slide.classList.toggle("reached", ratio >= THRESH);
+    }
+
+    // lò xo bật về có nảy (dùng cho cả thả giữa chừng lẫn hồi sau khi vào giỏ)
+    function spring(to, stiff, damp, onDone) {
+      cancelAnimationFrame(rafId);
+      let pos = x, v = 0;
+      (function tick() {
+        v = (v + (to - pos) * stiff) * damp;
+        pos += v;
+        paint(pos, v);
+        if (Math.abs(v) < 0.25 && Math.abs(to - pos) < 0.25) { paint(to, 0); onDone && onDone(); }
+        else rafId = requestAnimationFrame(tick);
+      })();
+    }
+
+    // "đạn" bánh bay từ giỏ (đích) lên icon giỏ trên cùng
+    function flyToCart() {
+      const cartEl = ["floating-cart", "cart-btn"]
+        .map((id) => document.getElementById(id))
+        .find((el) => el && el.offsetParent !== null);
+      if (!cartEl) return;
+      const t = target.getBoundingClientRect();
+      const cr = cartEl.getBoundingClientRect();
+      const size = 20, cx = t.left + t.width / 2, cy = t.top + t.height / 2;
+      const fly = document.createElement("div");
+      fly.className = "nn-fly"; fly.innerHTML = cookieIconSvg;
+      fly.style.left = `${cx - size / 2}px`; fly.style.top = `${cy - size / 2}px`;
+      fly.style.width = `${size}px`; fly.style.height = `${size}px`;
+      document.body.appendChild(fly);
+      requestAnimationFrame(() => {
+        fly.style.transform = `translate(${cr.left + cr.width / 2 - cx}px, ${cr.top + cr.height / 2 - cy}px) scale(.4)`;
+        fly.style.opacity = "0";
+      });
+      setTimeout(() => fly.remove(), 600);
+    }
+
+    // "+1" bay lên phía trên miệng pill (gắn body → không bị overflow của pill cắt)
+    function spawnPlus() {
+      const t = target.getBoundingClientRect();
+      const el = document.createElement("div");
+      el.className = "nn-plus-fly"; el.textContent = "+1";
+      el.style.left = `${t.left + t.width / 2}px`;
+      el.style.top = `${t.top - 2}px`;
+      document.body.appendChild(el);
+      requestAnimationFrame(() => el.classList.add("go"));
+      setTimeout(() => el.remove(), 950);
+    }
+
+    function succeed(stiff, damp) {
+      locked = true;
+      spring(max, stiff || 0.4, damp || 0.5, () => {   // bắn nốt vào giỏ (đúng timing dù kéo hay bấm)
+        addToCart(product);
+        flyToCart();
+        spawnPlus();
+        slide.classList.add("done");                   // ẩn núm trong lúc đạn bay
+        setTimeout(() => {
+          slide.classList.remove("done");
+          spring(0, BOUNCE_STIFF, BOUNCE_DAMP, () => {  // nảy về đầu, sẵn sàng lần sau
+            slide.classList.remove("reached");
+            hint.style.opacity = "1"; locked = false;
+          });
+        }, RETURN_DELAY);
+      });
+    }
+
+    knob.addEventListener("pointerdown", (e) => {
+      if (locked) return;
+      cancelAnimationFrame(rafId);
+      dragging = true; max = maxTravel();
+      startX = e.clientX - x; lastPx = x; vel = 0;
+      knob.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    knob.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      let px = e.clientX - startX;
+      if (px < 0) px *= 0.32;                          // lực cản 2 đầu (rubber band)
+      else if (px > max) px = max + (px - max) * 0.32;
+      vel = px - lastPx; lastPx = px;
+      paint(px, vel);
+      e.preventDefault();
+    });
+    const release = () => {
+      if (!dragging) return;
+      dragging = false;
+      if (max && x / max >= THRESH) succeed();
+      else spring(0, BOUNCE_STIFF, BOUNCE_DAMP);       // chưa đủ ngưỡng → bật về đầu
+    };
+    knob.addEventListener("pointerup", release);
+    knob.addEventListener("pointercancel", release);
+
+    // bấm thẳng icon giỏ → tự trượt vào (cùng timing như kéo)
+    target.addEventListener("click", () => {
+      if (locked || dragging) return;
+      max = maxTravel();
+      succeed();
+    });
+  });
 }
 
 // ── Product Detail Modal (carousel tối đa 3 ảnh) ──
@@ -1929,6 +2143,14 @@ function updateLoyaltyHint() {
   if (show) {
     document.getElementById("hero-loyalty-cycle").textContent = state.rewardConfig.cycle;
     document.getElementById("hero-loyalty-percent").textContent = `${state.rewardConfig.percent}%`;
+  }
+
+  // Dải sinh nhật: hiện cho mọi khách khi admin có bật voucher sinh nhật (% > 0). % lấy theo cấu hình.
+  const bday = document.getElementById("hero-birthday-hint");
+  if (bday) {
+    const showBday = state.birthdayPercent > 0;
+    bday.classList.toggle("hidden", !showBday);
+    if (showBday) document.getElementById("hero-birthday-percent").textContent = `${state.birthdayPercent}%`;
   }
 }
 
