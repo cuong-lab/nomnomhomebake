@@ -2,6 +2,7 @@
   "framework": "vite",
   "crons": [
     { "path": "/api/cleanup-chat", "schedule": "0 3 * * *" },
-    { "path": "/api/issue-vouchers", "schedule": "0 1 * * *" }
+    { "path": "/api/issue-vouchers", "schedule": "0 1 * * *" },
+    { "path": "/api/cleanup-trash", "schedule": "0 2 * * *" }
   ]
 }
