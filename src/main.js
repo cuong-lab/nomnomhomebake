@@ -6,7 +6,7 @@ import { compressImage } from "./shared/imageUtils.js";
 import { state, DEFAULT_TIERS } from "./store.js";
 import { initReviews, loadReviews } from "./storefront/reviews.js";
 import { initHero, loadHeroSlides } from "./storefront/hero.js";
-import { initChat, restartChatWatcher, startPresence, setChatAdminMode, openCustomerChat } from "./storefront/chat.js";
+import { initChat, restartChatWatcher, startPresence, setChatAdminMode, openCustomerChat, nudgeCustomerChat } from "./storefront/chat.js";
 import { tierHeroHtml, activateLadders, voucherCardHtml, coVoucherHtml } from "./storefront/vouchers.js";
 import { initAnalytics } from "./storefront/analytics.js";
 
@@ -2370,7 +2370,10 @@ function startCustomerOrdersWatcher() {
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "orders", filter: `customer_phone=eq.${phone}` },
-      () => reloadActiveCustomerTab()
+      () => {
+        reloadActiveCustomerTab();
+        nudgeCustomerChat(); // đơn vừa đổi mốc → đồng bộ lại chat để chắc chắn thấy tin báo
+      }
     )
     .subscribe();
 }
