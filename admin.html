@@ -67,6 +67,10 @@
               Đơn hàng
               <span id="nav-orders-count" class="ml-auto hidden rounded-full bg-[#7a0c1f] px-2 py-0.5 text-[10px] text-white">0</span>
             </button>
+            <button class="admin-nav-item" data-route="tracking" type="button">
+              <span class="admin-nav-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+              Theo dõi đơn
+            </button>
 
             <button class="admin-nav-item" data-route="customers" type="button">
               <span class="admin-nav-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
@@ -262,6 +266,32 @@
                 </div>
               </div>
               <div id="orders-table" class="mt-4 overflow-x-auto"></div>
+            </section>
+          </section>
+
+          <section id="view-tracking" class="admin-view hidden">
+            <section class="admin-panel">
+              <div class="admin-panel-head">
+                <div>
+                  <h2 class="admin-panel-title">Mẫu tin nhắn báo khách</h2>
+                  <p class="admin-panel-subtitle">Mỗi lần bấm tiến 1 mốc, khách nhận đúng tin này trong khung chat. Dùng <b>{ma}</b> để chèn mã đơn. Để trống sẽ dùng câu mặc định.</p>
+                </div>
+              </div>
+              <div id="tracking-msg-editor" class="mt-4 grid gap-3"></div>
+              <div class="mt-4 flex items-center gap-3">
+                <button id="tracking-msg-save" type="button" class="admin-btn-primary">Lưu mẫu tin</button>
+                <span id="tracking-msg-status" class="text-xs text-ash"></span>
+              </div>
+            </section>
+
+            <section class="admin-panel mt-4">
+              <div class="admin-panel-head">
+                <div>
+                  <h2 class="admin-panel-title">Đơn đang theo dõi</h2>
+                  <p class="admin-panel-subtitle">Bấm từng mốc để cập nhật tiến trình giao. Khách xem timeline realtime và tự nhận tin báo.</p>
+                </div>
+              </div>
+              <div id="tracking-list" class="mt-4 grid gap-3"></div>
             </section>
           </section>
 
