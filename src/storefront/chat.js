@@ -138,6 +138,7 @@ export function restartChatWatcher() {
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "chat_messages", filter: `conversation_id=eq.${conversationId}` },
       (payload) => {
+        if (chatMessageCache.some((m) => m.id === payload.new.id)) return; // đã có (vd nudge lấy trước) → tránh trùng
         chatMessageCache.push(payload.new);
         if (!chatPanel.classList.contains("hidden")) {
           renderChatMessages(chatMessageCache);
@@ -155,6 +156,31 @@ export function restartChatWatcher() {
     .subscribe();
 
   if (!chatPanel.classList.contains("hidden")) loadChatHistory();
+}
+
+// Đồng bộ lại chat khách từ DB (fallback chắc chắn): gọi khi có realtime đơn thay đổi
+// (lúc admin tick mốc cũng là lúc gửi tin báo). Nếu kênh chat lỡ tin thì lần fetch này bắt lại:
+// panel mở → render luôn; panel đóng → cộng badge số tin 'shop' mới. Tự khớp với realtime (không đếm trùng).
+export async function nudgeCustomerChat() {
+  if (state.isAdmin) return;
+  const conversationId = getChatConversationId();
+  const { data } = await supabase
+    .from("chat_messages")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true })
+    .limit(200);
+  const prevLen = chatMessageCache.length;
+  chatMessageCache = data || [];
+  if (!chatPanel.classList.contains("hidden")) {
+    renderChatMessages(chatMessageCache);
+  } else {
+    const newShop = chatMessageCache.slice(prevLen).filter((m) => m.sender === "shop").length;
+    if (newShop > 0) {
+      chatUnreadCount += newShop;
+      updateChatBadge();
+    }
+  }
 }
 
 function openChat() {
