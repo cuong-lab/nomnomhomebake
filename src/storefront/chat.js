@@ -41,10 +41,13 @@ function getChatDisplayName() {
 }
 
 function updateChatBadge() {
-  const badge = document.getElementById("chat-fab-badge");
-  if (!badge) return;
-  badge.textContent = chatUnreadCount;
-  badge.classList.toggle("hidden", chatUnreadCount === 0);
+  // Cập nhật cả badge trên chat-fab (desktop) lẫn trên hamburger #fab-toggle (mobile).
+  ["chat-fab-badge", "fab-toggle-badge"].forEach((id) => {
+    const badge = document.getElementById(id);
+    if (!badge) return;
+    badge.textContent = chatUnreadCount;
+    badge.classList.toggle("hidden", chatUnreadCount === 0);
+  });
 }
 
 const CHAT_SHOP_AVATAR_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>`;
@@ -445,6 +448,13 @@ function handleAdminChatIncoming(message) {
 }
 
 function startAdminChatPanel() {
+  // Có thể bị gọi lại (onAuthStateChange fire nhiều lần) → dọn channel cũ trước.
+  // Nếu không, supabase.channel() trả lại channel cùng tên đã subscribe() và .on()
+  // sẽ ném "cannot add postgres_changes callbacks ... after subscribe()".
+  if (adminChatRealtimeChannel) { supabase.removeChannel(adminChatRealtimeChannel); adminChatRealtimeChannel = null; }
+  if (adminChatPresenceChannel) { supabase.removeChannel(adminChatPresenceChannel); adminChatPresenceChannel = null; }
+  if (adminChatPresenceHeartbeat) { clearInterval(adminChatPresenceHeartbeat); adminChatPresenceHeartbeat = null; }
+
   showAdminChatListPane();
   loadAdminChatConversations();
 
