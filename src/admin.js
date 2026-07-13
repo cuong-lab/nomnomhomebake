@@ -16,6 +16,7 @@ const pageTitle = document.getElementById("admin-page-title");
 const toast = document.getElementById("admin-toast");
 
 let orders = [];
+let trashedOrders = [];
 let customers = [];
 let siteSettings = null;
 let trafficEvents = [];
@@ -36,7 +37,11 @@ const ROUTES = {
   customers: "Khách hàng",
   traffic: "Traffic",
   messages: "Tin nhắn",
+  trash: "Thùng rác",
 };
+
+// Số ngày đơn nằm trong thùng rác trước khi bị xoá vĩnh viễn (cron dọn dẹp cũng dùng mốc này).
+const TRASH_RETENTION_DAYS = 30;
 
 const STATUS = ORDER_STATUS;
 
@@ -161,6 +166,7 @@ function hydrateFromCache() {
     const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
     if (cached && Array.isArray(cached.orders)) {
       orders = cached.orders;
+      trashedOrders = cached.trashedOrders || [];
       customers = cached.customers || [];
       chatConversations = cached.chatConversations || [];
       return true;
@@ -173,7 +179,7 @@ function hydrateFromCache() {
 
 function saveCache() {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ orders, customers, chatConversations }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ orders, trashedOrders, customers, chatConversations }));
   } catch (e) {
     // hết dung lượng localStorage thì bỏ qua, không ảnh hưởng chức năng
   }
@@ -265,7 +271,8 @@ async function loadBackoffice({ skipTraffic = false } = {}) {
     // skipTraffic=true (do realtime đơn/khách gọi): KHÔNG kéo lại 1000 dòng analytics_events
     // mỗi lần có đơn thay đổi. Traffic chỉ tải ở lần mount đầu + khi bấm Làm mới.
     const queries = [
-      supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(250).abortSignal(controller.signal),
+      // Đơn "sống" = chưa bị xoá mềm. Mọi thống kê/doanh thu/khách đều dùng mảng này nên tự loại đơn trong thùng rác.
+      supabase.from("orders").select("*").is("deleted_at", null).order("created_at", { ascending: false }).limit(250).abortSignal(controller.signal),
       supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(250).abortSignal(controller.signal),
     ];
     if (!skipTraffic) {
@@ -281,12 +288,19 @@ async function loadBackoffice({ skipTraffic = false } = {}) {
       );
     }
     queries.push(supabase.from("site_settings").select("*").single().abortSignal(controller.signal));
+    // Đơn trong thùng rác (đã xoá mềm) — chỉ hiển thị ở route "Thùng rác". Đặt cuối mảng, lấy index động
+    // để không lệ thuộc vị trí (skipTraffic làm mảng dài/ngắn khác nhau).
+    const trashIdx = queries.length;
+    queries.push(
+      supabase.from("orders").select("*").not("deleted_at", "is", null).order("deleted_at", { ascending: false }).limit(250).abortSignal(controller.signal)
+    );
 
     const results = await Promise.race([Promise.all(queries), timeoutAfter(30000)]);
     const { data: orderData, error: orderError } = results[0];
     const { data: customerData, error: customerError } = results[1];
     const { data: trafficData, error: trafficError } = skipTraffic ? {} : results[2];
     const { data: settingsData } = skipTraffic ? results[2] : results[3];
+    const { data: trashData } = results[trashIdx] || {};
 
     if (orderError) showToast(`Lỗi đơn hàng: ${orderError.message}`);
     if (customerError) showToast(`Lỗi khách hàng: ${customerError.message}`);
@@ -302,6 +316,7 @@ async function loadBackoffice({ skipTraffic = false } = {}) {
     }
 
     orders = orderData || [];
+    trashedOrders = trashData || [];
     customers = customerData || [];
     if (settingsData) siteSettings = settingsData;
     if (!skipTraffic) {
@@ -326,6 +341,7 @@ function renderAll() {
   renderMetrics();
   renderOverview();
   renderOrders();
+  renderTrash();
   renderCustomers();
   renderTierConfig();
   renderVoucherSender();
@@ -458,6 +474,7 @@ function renderActiveView() {
   if (activeRoute === "customers") renderCustomers();
   if (activeRoute === "traffic") renderTraffic();
   if (activeRoute === "messages") renderConversations();
+  if (activeRoute === "trash") renderTrash();
 }
 
 function paidLike(order) {
@@ -897,6 +914,7 @@ function renderOrderTable(list, options = {}) {
                           ${order.status === "pending" ? `<button class="admin-row-button is-danger" data-order-status="${order.id}:cancelled">Hủy</button>` : ""}
                           ${order.status === "paid" ? `<button class="admin-row-button" data-order-status="${order.id}:delivered">Đã giao</button>` : ""}
                           ${order.status === "paid" ? `<button class="admin-row-button is-danger" data-order-status="${order.id}:cancelled">Hủy</button>` : ""}
+                          <button class="admin-row-button" data-order-trash="${order.id}" title="Chuyển vào thùng rác">Xóa</button>
                         </div>
                       </td>`
                 }
@@ -910,6 +928,17 @@ function renderOrderTable(list, options = {}) {
 }
 
 document.getElementById("orders-table")?.addEventListener("click", async (event) => {
+  // Nút "Xóa" → chuyển đơn vào thùng rác (xoá mềm: đặt deleted_at = giờ hiện tại).
+  const trashBtn = event.target.closest("[data-order-trash]");
+  if (trashBtn) {
+    if (!window.confirm(`Chuyển đơn này vào thùng rác? Có thể khôi phục trong ${TRASH_RETENTION_DAYS} ngày.`)) return;
+    const { error } = await supabase.from("orders").update({ deleted_at: new Date().toISOString() }).eq("id", trashBtn.dataset.orderTrash);
+    if (error) return showToast(`Lỗi xóa đơn: ${error.message}`);
+    showToast("Đã chuyển đơn vào thùng rác");
+    await loadBackoffice();
+    return;
+  }
+
   const button = event.target.closest("[data-order-status]");
   if (!button) return;
   const [id, status] = button.dataset.orderStatus.split(":");
@@ -923,6 +952,109 @@ document.getElementById("orders-table")?.addEventListener("click", async (event)
 
   showToast("Đã cập nhật trạng thái đơn");
   await loadBackoffice();
+});
+
+// ── Thùng rác: đơn đã xoá mềm, giữ 30 ngày, xem/khôi phục/xoá vĩnh viễn ──
+let trashPage = 1;
+
+function renderTrash() {
+  const el = document.getElementById("trash-table");
+  if (!el) return;
+
+  const list = [...trashedOrders].sort((a, b) => new Date(b.deleted_at) - new Date(a.deleted_at));
+
+  // Cập nhật badge số lượng ở sidebar.
+  const badge = document.getElementById("nav-trash-count");
+  if (badge) {
+    badge.textContent = list.length;
+    badge.classList.toggle("hidden", list.length === 0);
+  }
+
+  if (!list.length) {
+    el.innerHTML = `<div class="admin-empty">Thùng rác trống. Đơn bị xóa sẽ ở đây ${TRASH_RETENTION_DAYS} ngày trước khi tự xoá vĩnh viễn.</div>`;
+    return;
+  }
+
+  const PAGE_SIZE = 8;
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (trashPage > totalPages) trashPage = totalPages;
+  if (trashPage < 1) trashPage = 1;
+  const pageList = list.slice((trashPage - 1) * PAGE_SIZE, (trashPage - 1) * PAGE_SIZE + PAGE_SIZE);
+
+  const rows = pageList
+    .map((order) => {
+      const status = STATUS[order.status] || { label: order.status || "--", tone: "ash" };
+      const items = Array.isArray(order.items) ? order.items : [];
+      const daysLeft = Math.max(0, TRASH_RETENTION_DAYS - Math.floor((Date.now() - new Date(order.deleted_at)) / 86400000));
+      return `
+        <tr>
+          <td>
+            <span class="font-semibold text-ink">${order.order_code || "--"}</span>
+            <span class="mt-1 block text-xs text-ash">Tạo: ${formatDateTime(order.created_at)}</span>
+          </td>
+          <td>
+            <span class="font-medium text-ink">${order.customer_name || "--"}</span>
+            <span class="mt-1 block text-xs text-ash">${order.customer_phone || ""}</span>
+          </td>
+          <td>
+            <span class="line-clamp-2 text-sm text-ink">${items.map((item) => `${item.name} x${item.qty}${item.note ? ` (${item.note})` : ""}`).join(", ") || "--"}</span>
+          </td>
+          <td class="font-semibold text-ink">${formatCurrency(order.total)}</td>
+          <td>
+            <span class="admin-status admin-status-${status.tone}">${status.label}</span>
+            <span class="mt-1 block text-xs text-ash">Xóa: ${formatDateTime(order.deleted_at)}</span>
+            <span class="mt-0.5 block text-xs ${daysLeft <= 3 ? "text-[#b91c1c]" : "text-ash"}">Còn ${daysLeft} ngày</span>
+          </td>
+          <td>
+            <div class="flex justify-end gap-2">
+              <button class="admin-row-button" data-trash-restore="${order.id}">Khôi phục</button>
+              <button class="admin-row-button is-danger" data-trash-purge="${order.id}">Xóa vĩnh viễn</button>
+            </div>
+          </td>
+        </tr>`;
+    })
+    .join("");
+
+  el.innerHTML = `
+    <table class="admin-table admin-table--fixed">
+      <colgroup>
+        <col style="width:9rem" /><col style="width:11rem" /><col style="width:16rem" />
+        <col style="width:7rem" /><col style="width:11rem" /><col style="width:13rem" />
+      </colgroup>
+      <thead>
+        <tr><th>Đơn</th><th>Khách</th><th>Món bánh</th><th>Tổng</th><th>Trạng thái</th><th></th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${pagerHtml(trashPage, totalPages, "data-trash-page")}
+  `;
+
+  el.querySelectorAll("[data-trash-page]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      trashPage = Number(btn.dataset.trashPage);
+      renderTrash();
+    })
+  );
+}
+
+document.getElementById("trash-table")?.addEventListener("click", async (event) => {
+  const restoreBtn = event.target.closest("[data-trash-restore]");
+  if (restoreBtn) {
+    const { error } = await supabase.from("orders").update({ deleted_at: null }).eq("id", restoreBtn.dataset.trashRestore);
+    if (error) return showToast(`Lỗi khôi phục: ${error.message}`);
+    showToast("Đã khôi phục đơn");
+    await loadBackoffice();
+    return;
+  }
+
+  const purgeBtn = event.target.closest("[data-trash-purge]");
+  if (purgeBtn) {
+    if (!window.confirm("Xóa VĨNH VIỄN đơn này? Không thể khôi phục.")) return;
+    const { error } = await supabase.from("orders").delete().eq("id", purgeBtn.dataset.trashPurge);
+    if (error) return showToast(`Lỗi xóa vĩnh viễn: ${error.message}`);
+    showToast("Đã xóa vĩnh viễn đơn");
+    await loadBackoffice();
+  }
 });
 
 function customerStatsByPhone() {
