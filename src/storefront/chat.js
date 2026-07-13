@@ -171,6 +171,17 @@ function closeChat() {
   chatPanel.classList.remove("flex");
 }
 
+// Mở chat khách kèm nội dung soạn sẵn (dùng cho nút "Nhắn tin" ở thẻ theo dõi đơn:
+// điền sẵn mã đơn để khách khỏi phải nói đó là đơn nào).
+export function openCustomerChat(prefill = "") {
+  if (state.isAdmin) return;
+  openChat();
+  if (prefill && chatInput) {
+    chatInput.value = prefill;
+    chatInput.focus();
+  }
+}
+
 // ── Trạng thái online/offline của shop (Supabase Realtime Presence — không tốn DB
 // cho phần "đang online", chỉ ghi nhẹ heartbeat để biết "lần cuối hoạt động" khi
 // shop đã offline) ──

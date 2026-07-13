@@ -342,6 +342,7 @@ function renderAll() {
   renderMetrics();
   renderOverview();
   renderOrders();
+  autoDeliverCompleted(); // hoàn thành > 10 phút → tự chuyển 'đã giao'
   renderTrackingEditor(false); // không đè khi cô chủ đang gõ mẫu tin
   renderTrackingList();
   renderTrash();
@@ -937,7 +938,6 @@ function renderOrderTable(list, options = {}) {
                       </td>`
                 }
               </tr>
-              ${options.compact || order.status === "cancelled" ? "" : `<tr class="admin-fstep-row"><td colspan="7">${fulfillmentStepperHtml(order)}</td></tr>`}
             `;
           })
           .join("")}
@@ -1009,17 +1009,38 @@ function renderTrackingEditor(force) {
     </label>`).join("");
 }
 
-// Danh sách đơn đang theo dõi: đã thanh toán / đã giao (chưa huỷ, đã lọc deleted ở query).
+// Sau khi bấm "Hoàn thành", đơn còn 10 phút để sửa; quá 10 phút thì KHÓA tiến trình và
+// tự chuyển trạng thái sang "đã giao" (hoàn thành rồi thì không cần chọn lại các bước).
+const COMPLETE_LOCK_MS = 10 * 60 * 1000;
+function stageLockedAt(order) {
+  const stage = Number(order?.fulfillment_stage) || 0;
+  const t = order?.fulfillment_log?.[4];
+  return stage >= 4 && t && Date.now() - new Date(t).getTime() >= COMPLETE_LOCK_MS;
+}
+// Quét đơn "hoàn thành > 10 phút" mà còn 'paid' → tự chuyển 'delivered' (best-effort phía admin online).
+const autoDelivering = new Set();
+function autoDeliverCompleted() {
+  orders.forEach((o) => {
+    if (o.status === "paid" && stageLockedAt(o) && !autoDelivering.has(o.id)) {
+      autoDelivering.add(o.id);
+      updateOrderStatus(o.id, "delivered").then(({ error }) => {
+        if (error) autoDelivering.delete(o.id); // lỗi thì cho thử lại lần tải sau
+      });
+    }
+  });
+}
+
+// Danh sách đơn ĐANG theo dõi: chỉ 'paid' (đang xử lý). Đã giao/huỷ coi như xong → không hiện ở đây.
 function renderTrackingList() {
   const list = document.getElementById("tracking-list");
   if (!list) return;
-  const active = orders.filter((o) => o.status === "paid" || o.status === "delivered");
+  const active = orders.filter((o) => o.status === "paid");
   if (!active.length) {
     list.innerHTML = `<div class="admin-empty">Chưa có đơn nào đang theo dõi.</div>`;
     return;
   }
   list.innerHTML = active.map((o) => {
-    const st = STATUS[o.status] || { label: o.status, tone: "ash" };
+    const locked = stageLockedAt(o);
     return `
       <div class="admin-track-card">
         <div class="admin-track-top">
@@ -1027,9 +1048,11 @@ function renderTrackingList() {
             <span class="font-semibold text-ink">${o.order_code || "--"}</span>
             <span class="ml-2 text-xs text-ash">${escapeHtml(o.customer_name || "")}${o.customer_phone ? " · " + escapeHtml(o.customer_phone) : ""}</span>
           </div>
-          <span class="admin-status admin-status-${st.tone}">${st.label}</span>
+          <span class="admin-status admin-status-green">Đã thanh toán</span>
         </div>
-        ${fulfillmentStepperHtml(o)}
+        ${locked
+          ? `<div class="admin-track-locked">✓ Đã hoàn tất — đang chuyển sang <b>Đã giao</b>, không cần cập nhật nữa.</div>`
+          : fulfillmentStepperHtml(o)}
       </div>`;
   }).join("");
 }
@@ -1065,6 +1088,12 @@ document.getElementById("tracking-msg-save")?.addEventListener("click", async ()
   if (statusEl) { statusEl.textContent = "✓ Đã lưu"; setTimeout(() => (statusEl.textContent = ""), 2500); }
   showToast("Đã lưu mẫu tin báo khách");
 });
+
+// Trong lúc admin mở dashboard: mỗi phút quét đơn "hoàn thành > 10 phút" để tự chuyển 'đã giao'
+// đúng thời điểm (không cần chờ 1 sự kiện realtime khác), và làm mới danh sách theo dõi.
+setInterval(() => {
+  if (orders.length) { autoDeliverCompleted(); renderTrackingList(); }
+}, 60 * 1000);
 
 // ── Thùng rác: đơn đã xoá mềm, giữ 30 ngày, xem/khôi phục/xoá vĩnh viễn ──
 let trashPage = 1;

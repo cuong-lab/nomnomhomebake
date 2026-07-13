@@ -580,18 +580,63 @@ document.getElementById("success-close").addEventListener("click", () => {
 document.getElementById("success-track").addEventListener("click", () => {
   closeCart();
   openCustomerModal();
-  switchCustomerTab("orders");
+  switchCustomerTab("tracking");
 });
 
-// Nút "Nhắn tin" trên thẻ theo dõi đơn (my-orders / màn success): mở chat khách +
-// điền sẵn mã đơn để cô chủ biết ngay là đơn nào, khỏi phải hỏi lại.
-document.addEventListener("click", (e) => {
+// Nút "Nhắn tin" trên thẻ theo dõi đơn: tự GỬI luôn "bill" tóm tắt vào chat để cô chủ
+// đọc ngay đơn nào (khỏi phải vào trang quản lý tìm), rồi mở khung chat.
+document.addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-chat-order]");
   if (!btn) return;
   const code = btn.dataset.chatOrder;
+  const order = customerOrdersCache.find((o) => o.order_code === code);
   closeCart();
   closeCustomerModal();
-  openCustomerChat(code ? `Mình cần hỗ trợ về đơn ${code} ạ. ` : "");
+  if (order && state.currentCustomer) {
+    await supabase.from("chat_messages").insert({
+      conversation_id: state.currentCustomer.phone,
+      customer_name: state.currentCustomer.name || "Khách",
+      sender: "customer",
+      message: buildOrderBillText(order),
+    });
+  }
+  openCustomerChat();
+});
+
+// "Bill" dạng chữ để gửi vào chat (cô chủ thấy ngay đơn nào mà không cần mở quản lý).
+function buildOrderBillText(o) {
+  const items = Array.isArray(o.items) ? o.items : [];
+  const st = ORDER_STATUS[o.status];
+  const lines = items.map((i) => `• ${i.qty}× ${i.name}${i.note ? ` (${i.note})` : ""} — ${formatPrice((i.price || 0) * (i.qty || 0))}`);
+  return [
+    `🧾 Cần hỗ trợ đơn ${o.order_code}`,
+    ...lines,
+    `Tổng: ${formatPrice(o.total || 0)}`,
+    o.customer_address ? `📍 ${o.customer_address}` : "",
+    st ? `Trạng thái: ${st.label}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+// Lịch sử đơn: bấm 1 dòng để bung/thu bill đầy đủ (render 1 lần rồi giữ).
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-order-toggle]");
+  if (!btn) return;
+  const code = btn.dataset.orderToggle;
+  const detail = btn.parentElement.querySelector(`[data-order-detail="${code}"]`);
+  if (!detail) return;
+  const chevron = btn.querySelector(".chevron");
+  if (detail.classList.contains("hidden")) {
+    if (!detail.dataset.rendered) {
+      const order = customerOrdersCache.find((o) => o.order_code === code);
+      if (order) detail.innerHTML = orderCardHtml(order, { actions: "chat" });
+      detail.dataset.rendered = "1";
+    }
+    detail.classList.remove("hidden");
+    chevron?.classList.add("rotate-180");
+  } else {
+    detail.classList.add("hidden");
+    chevron?.classList.remove("rotate-180");
+  }
 });
 
 document.getElementById("qr-back").addEventListener("click", async () => {
@@ -1908,7 +1953,9 @@ function hhmm(iso) {
 }
 
 // Thẻ hoá đơn đầy đủ: trạng thái + tiến trình (giờ dưới mốc) + Từ→Đến + món + tổng + Gọi/Nhắn tin.
-function orderCardHtml(order) {
+// opts.actions: "full" (Gọi + Nhắn tin, mặc định) | "chat" (chỉ Nhắn tin) | "none".
+function orderCardHtml(order, opts = {}) {
+  const actionsMode = opts.actions || "full";
   const items = Array.isArray(order.items) ? order.items : [];
   const cancelled = order.status === "cancelled";
   const stage = Number(order.fulfillment_stage) || 0;
@@ -1967,13 +2014,18 @@ function orderCardHtml(order) {
   const payRow = `<div class="nnv-pay"><span>Thanh toán</span><b>Chuyển khoản ${paidLike ? `<span class="nnv-pill-paid">${NNV_IC.checkc}Đã thanh toán</span>` : ""}</b></div>`;
   const delivRow = order.delivery_time ? `<div class="nnv-pay"><span>Thời gian giao</span><b>${escapeHtml(order.delivery_time)}</b></div>` : "";
 
-  // Gọi / Nhắn tin (khi shop phản hồi chậm). Nhắn tin mở chat + đính sẵn mã đơn.
+  // Gọi / Nhắn tin. Chỉ tab "Theo dõi đơn bánh" cần đủ 2 nút; Lịch sử chỉ cần Nhắn tin.
   const phone = state.shopInfo.phone;
-  const callBtn = phone ? `<a class="nnv-act call" href="tel:${escapeHtml(phone)}">${NNV_IC.phone}Gọi điện</a>` : "";
   const chatBtn = `<button type="button" class="nnv-act chat" data-chat-order="${escapeHtml(order.order_code || "")}">${NNV_IC.chat}Nhắn tin</button>`;
-  const actions = `
-    <p class="nnv-help-note">Shop phản hồi hơi lâu? Gọi hoặc nhắn ngay nhé:</p>
-    <div class="nnv-actions" style="${callBtn ? "" : "grid-template-columns:1fr"}">${callBtn}${chatBtn}</div>`;
+  let actions = "";
+  if (actionsMode === "full") {
+    const callBtn = phone ? `<a class="nnv-act call" href="tel:${escapeHtml(phone)}">${NNV_IC.phone}Gọi điện</a>` : "";
+    actions = `
+      <p class="nnv-help-note">Shop phản hồi hơi lâu? Gọi hoặc nhắn ngay nhé:</p>
+      <div class="nnv-actions" style="${callBtn ? "" : "grid-template-columns:1fr"}">${callBtn}${chatBtn}</div>`;
+  } else if (actionsMode === "chat") {
+    actions = `<div class="nnv-actions" style="grid-template-columns:1fr">${chatBtn}</div>`;
+  }
 
   return `
     <div class="nnv" data-stage="${cancelled ? "x" : stage}">
@@ -2274,7 +2326,7 @@ document.querySelectorAll("[data-customer-tab]").forEach((btn) =>
   btn.addEventListener("click", () => switchCustomerTab(btn.dataset.customerTab))
 );
 
-const CUSTOMER_TAB_INDEX = { overview: 0, membership: 1, orders: 2 };
+const CUSTOMER_TAB_INDEX = { overview: 0, membership: 1, tracking: 2, orders: 3 };
 function switchCustomerTab(tab) {
   document.querySelectorAll("[data-customer-tab]").forEach((btn) => {
     const on = btn.dataset.customerTab === tab;
@@ -2286,9 +2338,13 @@ function switchCustomerTab(tab) {
   // Trượt cả khối tới slide tương ứng (không ẩn/hiện → cao cố định, không nhảy).
   const track = document.getElementById("customer-tab-track");
   if (track) track.dataset.index = CUSTOMER_TAB_INDEX[tab] ?? 0;
-  if (tab === "orders") {
-    loadCustomerOrders();
-    startCustomerOrdersWatcher(); // realtime: admin đổi mốc → timeline khách tự cập nhật
+  activeCustomerTab = tab;
+  if (tab === "tracking") {
+    loadCustomerTracking(); // Theo dõi đơn bánh: thẻ đầy đủ (tiến trình + bill + Gọi/Nhắn tin)
+    startCustomerOrdersWatcher(); // realtime: admin đổi mốc → tự cập nhật
+  } else if (tab === "orders") {
+    loadCustomerOrders(); // Lịch sử đơn hàng: tóm tắt, bấm mở ra bill đầy đủ
+    startCustomerOrdersWatcher();
   } else {
     stopCustomerOrdersWatcher();
   }
@@ -2296,8 +2352,15 @@ function switchCustomerTab(tab) {
   if (tab === "membership") activateLadders(document.getElementById("customer-tab-membership"));
 }
 
-// Realtime timeline cho khách: chỉ subscribe khi đang mở tab "Đơn của tôi", dọn khi rời.
+// Realtime cho khách: subscribe khi mở tab Theo dõi/Lịch sử, tải lại đúng tab đang xem.
 let customerOrdersChannel = null;
+let activeCustomerTab = null;
+let customerOrdersCache = []; // đơn của khách (để nút Nhắn tin dựng bill nhanh)
+
+function reloadActiveCustomerTab() {
+  if (activeCustomerTab === "tracking") loadCustomerTracking();
+  else if (activeCustomerTab === "orders") loadCustomerOrders();
+}
 function startCustomerOrdersWatcher() {
   stopCustomerOrdersWatcher();
   if (!state.currentCustomer) return;
@@ -2307,7 +2370,7 @@ function startCustomerOrdersWatcher() {
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "orders", filter: `customer_phone=eq.${phone}` },
-      () => loadCustomerOrders()
+      () => reloadActiveCustomerTab()
     )
     .subscribe();
 }
@@ -2318,34 +2381,66 @@ function stopCustomerOrdersWatcher() {
   }
 }
 
-async function loadCustomerOrders() {
-  const box = document.getElementById("customer-tab-orders");
-  if (!state.currentCustomer) return;
-  box.innerHTML = `
-    <div class="space-y-3">
-      <div class="skeleton h-24 w-full rounded-lg"></div>
-      <div class="skeleton h-24 w-full rounded-lg"></div>
-      <div class="skeleton h-24 w-full rounded-lg"></div>
-    </div>`;
-
+// Tải đơn của khách 1 lần, cập nhật cache dùng chung cho cả 2 tab + nút Nhắn tin.
+async function fetchCustomerOrders() {
   const { data, error } = await supabase
     .from("orders")
     .select("*")
     .eq("customer_phone", state.currentCustomer.phone)
     .order("created_at", { ascending: false })
     .limit(100);
+  if (error) return { error };
+  customerOrdersCache = data || [];
+  return { data: customerOrdersCache };
+}
 
-  if (error) {
-    box.innerHTML = `<p class="py-8 text-center text-sm text-red-600">Lỗi tải đơn hàng: ${error.message}</p>`;
+const skeletonHtml = `<div class="space-y-3"><div class="skeleton h-24 w-full rounded-lg"></div><div class="skeleton h-24 w-full rounded-lg"></div></div>`;
+
+// ── Tab "Theo dõi đơn bánh": đơn ĐANG xử lý (chờ TT / đã TT, chưa giao/huỷ) — thẻ đầy đủ ──
+async function loadCustomerTracking() {
+  const box = document.getElementById("customer-tab-tracking");
+  if (!state.currentCustomer || !box) return;
+  box.innerHTML = skeletonHtml;
+  const { data, error } = await fetchCustomerOrders();
+  if (error) { box.innerHTML = `<p class="py-8 text-center text-sm text-red-600">Lỗi tải đơn: ${error.message}</p>`; return; }
+  const ongoing = data.filter((o) => o.status === "pending" || o.status === "paid");
+  if (!ongoing.length) {
+    box.innerHTML = `<p class="py-8 text-center text-sm text-ash">Không có đơn nào đang giao. Xem các đơn cũ ở tab “Lịch sử đơn hàng” nhé!</p>`;
     return;
   }
+  box.innerHTML = `<div class="space-y-4">${ongoing.map((o) => orderCardHtml(o, { actions: "full" })).join("")}</div>`;
+}
 
-  if (!data || !data.length) {
-    box.innerHTML = `<p class="py-8 text-center text-sm text-ash">Bạn chưa có đơn hàng nào.</p>`;
-    return;
-  }
+// ── Tab "Lịch sử đơn hàng": tóm tắt gọn, bấm 1 đơn để mở ra bill đầy đủ ──
+async function loadCustomerOrders() {
+  const box = document.getElementById("customer-tab-orders");
+  if (!state.currentCustomer || !box) return;
+  box.innerHTML = skeletonHtml;
+  const { data, error } = await fetchCustomerOrders();
+  if (error) { box.innerHTML = `<p class="py-8 text-center text-sm text-red-600">Lỗi tải đơn hàng: ${error.message}</p>`; return; }
+  if (!data.length) { box.innerHTML = `<p class="py-8 text-center text-sm text-ash">Bạn chưa có đơn hàng nào.</p>`; return; }
+  box.innerHTML = `<div class="space-y-2">${data.map(orderSummaryHtml).join("")}</div>`;
+}
 
-  box.innerHTML = `<div class="space-y-4">${data.map(orderCardHtml).join("")}</div>`;
+// Dòng tóm tắt 1 đơn trong Lịch sử (bấm để bung/thu bill đầy đủ).
+function orderSummaryHtml(o) {
+  const items = Array.isArray(o.items) ? o.items : [];
+  const st = orderStatusBadge(o.status);
+  const count = items.reduce((s, i) => s + (i.qty || 0), 0);
+  return `
+    <div class="rounded-xl border border-earth/40 overflow-hidden">
+      <button type="button" class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-earth/10" data-order-toggle="${escapeHtml(o.order_code || "")}">
+        <span class="min-w-0">
+          <span class="block font-medium text-ink">${escapeHtml(o.order_code || "--")}</span>
+          <span class="block text-xs text-ash">${formatDateTimeLong(o.created_at)} · ${count} món · ${formatPrice(o.total || 0)}</span>
+        </span>
+        <span class="flex shrink-0 items-center gap-2">
+          <span class="${st.cls} px-2 py-0.5 text-[10px] font-medium text-white rounded-full">${st.text}</span>
+          <svg class="chevron h-4 w-4 text-ash transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </button>
+      <div class="order-detail hidden px-2 pb-2" data-order-detail="${escapeHtml(o.order_code || "")}"></div>
+    </div>`;
 }
 
 function updateAccountLabel() {

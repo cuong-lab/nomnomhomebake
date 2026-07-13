@@ -428,14 +428,16 @@
       <!-- Chế độ khách hàng -->
       <div id="chat-customer-view" class="flex flex-1 flex-col overflow-hidden">
         <div id="chat-messages" class="flex-1 space-y-2 overflow-y-auto px-4 py-3 text-sm"></div>
+        <!-- Chat 2 chiều khách ↔ shop. (Nút "Nhắn tin" ở thẻ đơn tự gửi kèm bill để shop biết ngay đơn nào.) -->
         <form id="chat-form" class="flex items-center gap-2 border-t border-dashed border-earth p-3">
           <input id="chat-input" type="text" placeholder="Nhập tin nhắn..." autocomplete="off" class="flex-1 border border-earth/60 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-ink" />
           <button type="submit" class="bg-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90">Gửi</button>
         </form>
       </div>
 
-      <!-- Chế độ admin: danh sách hội thoại + nội dung — mobile chỉ hiện 1 cột tại 1 thời điểm -->
-      <div id="chat-admin-view" class="hidden flex-1 overflow-hidden md:flex">
+      <!-- Chế độ admin: danh sách hội thoại + nội dung — mobile chỉ hiện 1 cột tại 1 thời điểm.
+           Base KHÔNG để md:flex (sẽ đè lên hidden trên desktop → lọt sang khách); JS bật 'flex' khi admin. -->
+      <div id="chat-admin-view" class="hidden flex-1 overflow-hidden">
         <div id="chat-admin-list-pane" class="flex w-full flex-col overflow-hidden border-r border-earth/20 md:flex md:w-[42%]">
           <div id="chat-admin-conversations" class="flex-1 overflow-y-auto"></div>
         </div>
@@ -660,7 +662,8 @@
           <div class="mt-4 flex gap-5 border-b border-earth/40 text-sm font-medium">
             <button type="button" data-customer-tab="overview" class="customer-tab-btn border-b-2 border-ink pb-2 text-ink">Tổng quan</button>
             <button type="button" data-customer-tab="membership" class="customer-tab-btn border-b-2 border-transparent pb-2 text-ash">Hạng thành viên</button>
-            <button type="button" data-customer-tab="orders" class="customer-tab-btn border-b-2 border-transparent pb-2 text-ash">Đơn đã mua</button>
+            <button type="button" data-customer-tab="tracking" class="customer-tab-btn border-b-2 border-transparent pb-2 text-ash">Theo dõi đơn bánh</button>
+            <button type="button" data-customer-tab="orders" class="customer-tab-btn border-b-2 border-transparent pb-2 text-ash">Lịch sử đơn hàng</button>
           </div>
 
           <div class="customer-tab-viewport">
@@ -717,6 +720,10 @@
               <div id="customer-birthday-area" class="mt-2 flex flex-wrap items-center gap-2"></div>
               <p class="mt-2 text-xs text-ash">🔒 Sau khi lưu, ngày sinh sẽ bị <b>khoá</b> Khách Nomnom muốn sửa sinh nhật thì liên hệ với shop nhé ạ.</p>
             </div>
+          </div>
+
+          <div id="customer-tab-tracking" class="customer-tab-slide space-y-4">
+            <p class="py-8 text-center text-sm text-ash">Đang tải…</p>
           </div>
 
           <div id="customer-tab-orders" class="customer-tab-slide space-y-3">

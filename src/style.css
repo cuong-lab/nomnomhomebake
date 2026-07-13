@@ -494,6 +494,7 @@ body {
 .no-scrollbar::-webkit-scrollbar { width: 0; height: 0; }
 .customer-tab-track[data-index="1"] { transform: translateX(-100%); }
 .customer-tab-track[data-index="2"] { transform: translateX(-200%); }
+.customer-tab-track[data-index="3"] { transform: translateX(-300%); }
 
 /* ── Khung hạng sang trọng (card bo góc) ── */
 /* Nền = 1 vầng sáng ấm góc trên-phải tan đều vào đen (không tạo vệt/đường chia đôi). */

@@ -988,6 +988,13 @@ input[type="number"] {
   gap: 0.75rem;
   margin-bottom: 0.7rem;
 }
+.admin-track-locked {
+  font-size: 0.8rem;
+  color: #16783a;
+  background: rgba(52, 199, 89, 0.12);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+}
 
 .admin-empty {
   border: 1px dashed rgba(255, 255, 255, 0.4);

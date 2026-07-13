@@ -134,7 +134,9 @@ export function initHero() {
   slideUpload.addEventListener("change", async () => {
     let file = slideUpload.files[0];
     if (!file) return;
-    file = await compressImage(file);
+    // Hero phủ kín màn hình (~1920px+) nên để ảnh lớn & nét hơn ảnh thường.
+    // Chỉ có 1-2 ảnh hero, cache 1 năm ở máy khách → tăng chất lượng thoải mái.
+    file = await compressImage(file, { maxDim: 2560, quality: 0.9 });
 
     const ext = file.name.split(".").pop();
     const fileName = `hero-${Date.now()}.${ext}`;
