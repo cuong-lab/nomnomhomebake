@@ -15,6 +15,8 @@ export const state = {
   isAdmin: false,
   currentCustomer: JSON.parse(localStorage.getItem("nomnom_customer") || "null"),
   bankSettings: {},
+  shopInfo: { phone: "", address: "", zalo: "" }, // SĐT/địa chỉ tiệm (nạp từ site_settings) — dùng cho thẻ theo dõi đơn
+  trackingMessages: null, // 4 mẫu tin báo mốc do cô chủ sửa (site_settings.tracking_messages); null = dùng mặc định
   rewardConfig: { cycle: 10, percent: 20 },
   freeShipThreshold: 0,
   chatAutoReply: "",

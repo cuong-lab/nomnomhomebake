@@ -718,3 +718,105 @@ body {
 @media (prefers-reduced-motion: reduce) {
   #fab-menu.open .nn-fab-toggle { animation: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   THEO DÕI ĐƠN HÀNG — thẻ "hoá đơn" mận đô (khách xem ở tab Đơn của tôi + màn success)
+   markup do orderCardHtml() trong main.js sinh ra. Màu thương hiệu #7a0c1f.
+   ══════════════════════════════════════════════════════════════════ */
+.nnv {
+  --plum: #7a0c1f; --plum-lite: #a5142e; --plum-deep: #5e0a18; --wine: rgba(122, 12, 31, 0.09);
+  --nnv-ink: #1a1613; --nnv-ash: #8a7d70; --nnv-earth: #d4c5b9; --nnv-track: #ece4e0; --nnv-line: rgba(122, 12, 31, 0.12);
+  background: #fff; border: 1px solid var(--nnv-line); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 18px 44px -30px rgba(122, 12, 31, 0.45); color: var(--nnv-ink);
+}
+.nnv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  padding: 1.05rem 1.15rem; background: linear-gradient(180deg, #fff, #fdf6f1); border-bottom: 1px dashed var(--nnv-earth); }
+.nnv-brand { font-family: "Playfair Display", Georgia, serif; font-size: 1.3rem; font-weight: 700; color: var(--plum); line-height: 1; }
+.nnv-brand span { display: block; font-family: "Inter", sans-serif; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--nnv-ash); margin-top: 0.3rem; }
+.nnv-meta { text-align: right; }
+.nnv-code { font-size: 0.8rem; font-weight: 700; color: var(--nnv-ink); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+.nnv-date { font-size: 0.7rem; color: var(--nnv-ash); margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
+.nnv-body { padding: 1.15rem; }
+.nnv-div { border: 0; border-top: 1px dashed var(--nnv-earth); margin: 1.1rem 0; }
+
+/* Trạng thái lớn */
+.nnv-st { display: flex; align-items: flex-start; gap: 0.8rem; }
+.nnv-st-ic { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.nnv-st-ic svg { width: 22px; height: 22px; }
+.nnv-st-ic.run { background: var(--wine); color: var(--plum); }
+.nnv-st-ic.done { background: var(--plum); color: #fff; }
+.nnv-st-ic.idle { background: #f1ece4; color: var(--nnv-ash); }
+.nnv-st-ic.cancel { background: rgba(192, 57, 43, 0.12); color: #c0392b; }
+.nnv-st h3 { margin: 0.05rem 0 0.15rem; font-size: 1.1rem; font-weight: 800; letter-spacing: -0.01em; }
+.nnv-st h3.run, .nnv-st h3.done { color: var(--plum); }
+.nnv-st h3.idle { color: var(--nnv-ash); } .nnv-st h3.cancel { color: #c0392b; }
+.nnv-st p { margin: 0; font-size: 0.82rem; line-height: 1.5; color: var(--nnv-ash); }
+
+/* Thanh tiến trình + giờ dưới mỗi mốc */
+.nnv-bar { position: relative; margin: 1.5rem 0.1rem 0.2rem; }
+.nnv-line { position: absolute; left: 12.5%; right: 12.5%; top: 12px; height: 6px; border-radius: 999px; background: var(--nnv-track); overflow: hidden; }
+.nnv-fill { height: 100%; width: var(--fill, 0%); border-radius: 999px; background: linear-gradient(90deg, var(--plum-lite), var(--plum)); transition: width 1s cubic-bezier(0.5, 0.05, 0.1, 1); }
+.nnv-nodes { position: relative; display: flex; }
+.nnv-node { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.45rem; }
+.nnv-dot { position: relative; z-index: 1; width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center; background: #fff; border: 2px solid var(--nnv-track); color: #c3aeb0; transition: all 0.4s; }
+.nnv-dot svg { width: 15px; height: 15px; }
+.nnv-node.done .nnv-dot { background: linear-gradient(150deg, var(--plum-lite), var(--plum)); border-color: var(--plum); color: #fff; box-shadow: 0 5px 12px -5px rgba(122, 12, 31, 0.6); }
+.nnv-node.cur .nnv-dot { background: #fff; border-color: var(--plum); color: var(--plum); box-shadow: 0 0 0 4px rgba(122, 12, 31, 0.13); }
+.nnv-lbl { font-size: 0.68rem; font-weight: 500; color: #b3a695; text-align: center; line-height: 1.15; transition: color 0.4s; }
+.nnv-node.done .nnv-lbl { color: #5a4f44; font-weight: 600; }
+.nnv-node.cur .nnv-lbl { color: var(--plum); font-weight: 700; }
+.nnv-time { font-size: 0.63rem; font-weight: 600; color: var(--plum); font-variant-numeric: tabular-nums; min-height: 0.8rem; }
+.nnv-time.na { color: #cdbfae; font-weight: 500; }
+.nnv-rider { position: absolute; left: calc(12.5% + var(--fill, 0%) * 0.75); top: -13px; transform: translateX(-50%); z-index: 2; color: var(--plum); transition: left 1s cubic-bezier(0.5, 0.05, 0.1, 1); filter: drop-shadow(0 3px 2px rgba(122, 12, 31, 0.3)); pointer-events: none; }
+.nnv-rider svg { display: block; width: 32px; height: auto; }
+.nnv[data-stage="3"] .nnv-rider { animation: nnvBob 0.55s ease-in-out infinite; }
+@keyframes nnvBob { 0%, 100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-3px); } }
+.nnv:not([data-stage="3"]):not([data-stage="4"]) .nnv-rider { display: none; }
+
+/* Từ → Đến */
+.nnv-route { display: grid; gap: 0.85rem; }
+.nnv-rt { display: grid; grid-template-columns: 14px 1fr; gap: 0.6rem; }
+.nnv-rt-dot { width: 9px; height: 9px; border-radius: 999px; margin-top: 5px; }
+.nnv-rt-dot.from { background: var(--plum); } .nnv-rt-dot.to { background: #2e9e6b; }
+.nnv-rt-k { font-size: 0.68rem; font-weight: 700; color: var(--nnv-ash); text-transform: uppercase; letter-spacing: 0.06em; }
+.nnv-rt-name { font-size: 0.9rem; font-weight: 600; margin-top: 0.12rem; line-height: 1.35; }
+.nnv-rt-sub { font-size: 0.8rem; color: var(--nnv-ash); line-height: 1.4; margin-top: 0.1rem; }
+
+/* Bảng món + tổng */
+.nnv-sec-h { font-size: 0.68rem; font-weight: 700; color: var(--nnv-ash); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.75rem; }
+.nnv-li { display: grid; grid-template-columns: 1.6rem 1fr auto; gap: 0.5rem; align-items: baseline; font-size: 0.9rem; margin-bottom: 0.55rem; }
+.nnv-li .q { color: var(--plum); font-weight: 700; font-variant-numeric: tabular-nums; }
+.nnv-li .nm { line-height: 1.3; }
+.nnv-li .nm small { display: block; color: var(--nnv-ash); font-size: 0.76rem; }
+.nnv-li .amt { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nnv-tot { margin-top: 0.9rem; padding-top: 0.85rem; border-top: 1px dashed var(--nnv-earth); display: grid; gap: 0.4rem; }
+.nnv-tr { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--nnv-ash); }
+.nnv-tr span:last-child { font-variant-numeric: tabular-nums; color: var(--nnv-ink); }
+.nnv-tr.disc span:last-child { color: #2e9e6b; }
+.nnv-tr.grand { margin-top: 0.35rem; padding-top: 0.6rem; border-top: 1px solid var(--nnv-line); font-size: 1.05rem; font-weight: 800; color: var(--nnv-ink); }
+.nnv-tr.grand span:last-child { color: var(--plum); }
+
+.nnv-pay { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; font-size: 0.85rem; margin-top: 0.5rem; }
+.nnv-pay > span:first-child { color: var(--nnv-ash); }
+.nnv-pay b { font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem; }
+.nnv-pill-paid { display: inline-flex; align-items: center; gap: 0.28rem; background: rgba(46, 158, 107, 0.14); color: #1f7a50; font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px; }
+.nnv-pill-paid svg { width: 12px; height: 12px; }
+.nnv-thanks { text-align: center; font-size: 0.82rem; color: var(--plum); margin: 1.1rem 0 0; font-weight: 600; }
+
+.nnv-cancel-box { display: flex; align-items: center; gap: 0.55rem; padding: 0.75rem 0.9rem; border-radius: 11px; background: rgba(192, 57, 43, 0.07); color: #c0392b; font-size: 0.85rem; font-weight: 600; margin-top: 1rem; }
+.nnv-cancel-box svg { width: 17px; height: 17px; flex-shrink: 0; }
+
+/* Gọi / Nhắn tin */
+.nnv-help-note { margin: 1.15rem 0 0.6rem; font-size: 0.75rem; color: var(--nnv-ash); text-align: center; }
+.nnv-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.nnv-act { display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; font: inherit; font-size: 0.86rem; font-weight: 700; padding: 0.7rem; border-radius: 12px; cursor: pointer; border: 1.5px solid var(--plum); transition: background 0.18s ease, color 0.18s ease; text-decoration: none; }
+.nnv-act svg { width: 17px; height: 17px; }
+.nnv-act.call { background: #fff; color: var(--plum); }
+.nnv-act.call:hover { background: var(--wine); }
+.nnv-act.chat { background: var(--plum); color: #fff; }
+.nnv-act.chat:hover { background: var(--plum-deep); }
+
+@media (prefers-reduced-motion: reduce) {
+  .nnv-fill, .nnv-rider { transition: none; }
+  .nnv[data-stage="3"] .nnv-rider { animation: none; }
+}

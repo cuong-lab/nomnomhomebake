@@ -927,6 +927,68 @@ input[type="number"] {
   color: rgb(185, 28, 28);
 }
 
+/* ── Cụm 4 mốc giao vận (admin tick tiến trình đơn) — hàng phụ dưới mỗi đơn ── */
+.admin-fstep-row td {
+  padding-top: 0.15rem;
+  padding-bottom: 0.7rem;
+  border-top: none;
+}
+.admin-fsteps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.admin-fsteps-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--color-ash);
+  margin-right: 0.15rem;
+}
+.admin-fstep {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.4);
+  color: var(--color-ash);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.32rem 0.55rem;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease-soft), background 0.18s var(--ease-soft), color 0.18s var(--ease-soft);
+}
+.admin-fstep:hover {
+  border-color: var(--color-ink);
+  background: rgba(255, 255, 255, 0.7);
+}
+.admin-fstep.is-done {
+  background: rgba(52, 199, 89, 0.16);
+  border-color: rgba(52, 199, 89, 0.4);
+  color: #16783a;
+}
+.admin-fstep.is-current {
+  background: #16783a;
+  border-color: #16783a;
+  color: #fff;
+}
+
+/* ── Route "Theo dõi đơn": card mỗi đơn (đầu đơn + cụm 4 mốc) ── */
+.admin-track-card {
+  border: 1px solid rgba(122, 12, 31, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.45);
+  padding: 0.9rem 1rem;
+}
+.admin-track-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+
 .admin-empty {
   border: 1px dashed rgba(255, 255, 255, 0.4);
   border-radius: 14px;

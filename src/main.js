@@ -1,12 +1,12 @@
 import "./style.css";
 import { supabase } from "./supabase.js";
 import { formatCurrency, formatPrice, formatDateTimeLong, formatDateTime, escapeHtml } from "./shared/format.js";
-import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
+import { ORDER_STATUS, updateOrderStatus, FULFILLMENT_STAGES, updateFulfillmentStage, computeFulfillmentLog, notifyCustomerStage } from "./shared/orderStatus.js";
 import { compressImage } from "./shared/imageUtils.js";
 import { state, DEFAULT_TIERS } from "./store.js";
 import { initReviews, loadReviews } from "./storefront/reviews.js";
 import { initHero, loadHeroSlides } from "./storefront/hero.js";
-import { initChat, restartChatWatcher, startPresence, setChatAdminMode } from "./storefront/chat.js";
+import { initChat, restartChatWatcher, startPresence, setChatAdminMode, openCustomerChat } from "./storefront/chat.js";
 import { tierHeroHtml, activateLadders, voucherCardHtml, coVoucherHtml } from "./storefront/vouchers.js";
 import { initAnalytics } from "./storefront/analytics.js";
 
@@ -448,6 +448,16 @@ cartCheckout.addEventListener("click", async () => {
     return;
   }
 
+  // Đặt hàng xong → tự đăng nhập theo SĐT vừa nhập (không còn "khách vãng lai"): nhờ đó
+  // nút "Theo dõi đơn hàng" ở màn thành công + tab "Đơn của tôi" hiển thị đúng đơn này.
+  if (!state.currentCustomer) {
+    const { customer } = await signInCustomer(custPhone, custName, custAddress);
+    if (customer) {
+      restartChatWatcher();
+      startPresence();
+    }
+  }
+
   // Đánh dấu voucher đã dùng (RPC nguyên tử, chống double-spend). Voucher rời kho khách.
   if (selectedVoucherCodes.length) {
     await supabase.rpc("redeem_vouchers", { p_codes: selectedVoucherCodes, p_order_code: orderCode });
@@ -535,15 +545,20 @@ function showPaymentSuccess() {
   cart = [];
   saveCart();
   document.getElementById("cart-qr").classList.add("hidden");
-  document.getElementById("success-order-code").textContent = lastOrderCode;
+  const successCode = lastOrderCode;
 
-  const zaloUrl = state.bankSettings.zalo_url || "";
-  const successZalo = document.getElementById("success-zalo");
-  if (zaloUrl) {
-    successZalo.href = zaloUrl;
-    successZalo.classList.remove("hidden");
-  } else {
-    successZalo.classList.add("hidden");
+  // Thẻ theo dõi đơn (hoá đơn đầy đủ): tải đơn vừa đặt rồi render vào màn thành công.
+  const tlBox = document.getElementById("success-timeline");
+  if (tlBox) {
+    tlBox.innerHTML = "";
+    supabase
+      .from("orders")
+      .select("*")
+      .eq("order_code", successCode)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) tlBox.innerHTML = orderCardHtml(data);
+      });
   }
 
   document.getElementById("cart-success").classList.remove("hidden");
@@ -558,6 +573,25 @@ function showPaymentSuccess() {
 
 document.getElementById("success-close").addEventListener("click", () => {
   closeCart();
+});
+
+// "Theo dõi đơn hàng" ở màn thành công → đóng giỏ, mở tài khoản (đã tự đăng nhập sau
+// khi đặt) và nhảy thẳng tới tab "Đơn của tôi" để xem timeline tiến trình.
+document.getElementById("success-track").addEventListener("click", () => {
+  closeCart();
+  openCustomerModal();
+  switchCustomerTab("orders");
+});
+
+// Nút "Nhắn tin" trên thẻ theo dõi đơn (my-orders / màn success): mở chat khách +
+// điền sẵn mã đơn để cô chủ biết ngay là đơn nào, khỏi phải hỏi lại.
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-chat-order]");
+  if (!btn) return;
+  const code = btn.dataset.chatOrder;
+  closeCart();
+  closeCustomerModal();
+  openCustomerChat(code ? `Mình cần hỗ trợ về đơn ${code} ạ. ` : "");
 });
 
 document.getElementById("qr-back").addEventListener("click", async () => {
@@ -1619,7 +1653,14 @@ async function loadContactSettings() {
     bank_name: data.bank_name || "",
     zalo_url: data.zalo_url || "",
   };
+  // Thông tin tiệm cho thẻ theo dõi đơn (địa chỉ "Từ" + nút Gọi điện) — tự lấy từ cài đặt.
+  state.shopInfo = {
+    phone: data.phone || "",
+    address: data.address_text || "",
+    zalo: data.zalo_url || "",
+  };
   state.chatAutoReply = data.chat_auto_reply || "";
+  state.trackingMessages = data.tracking_messages || null; // 4 mẫu tin báo mốc (cô chủ sửa ở admin)
 
   state.rewardConfig = {
     cycle: parseInt(data.reward_cycle_orders) || 10,
@@ -1828,6 +1869,135 @@ function orderStatusBadge(status) {
   };
 }
 
+// ── Thẻ "hoá đơn" theo dõi đơn (khách xem ở tab Đơn của tôi + màn success) ──
+// Icon SVG line hiện đại (không emoji). Xe máy shipper là SVG phẳng tô màu mận đô.
+// CSS ở src/style.css (.nnv-*). Giờ xác nhận từng mốc lấy từ order.fulfillment_log.
+const NNV_IC = {
+  receipt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v18l2-1.2L10 21l2-1.2L14 21l2-1.2L18 21V3l-2 1.2L14 3l-2 1.2L10 3 8 4.2 6 3Z"/><path d="M9 8.5h6M9 12h6"/></svg>',
+  chef: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M8.5 20v-4M15.5 20v-4"/><path d="M7 16a3.4 3.4 0 0 1-1-6.7A4 4 0 0 1 13.9 7 3.4 3.4 0 0 1 17 16H7Z"/></svg>',
+  scooter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="17" r="2.5"/><circle cx="17.5" cy="17" r="2.5"/><path d="M4 17h-.5A1.5 1.5 0 0 1 2 15.5V14a3 3 0 0 1 3-3h6l2.5-4H16"/><path d="M15 17H9"/><path d="M17.2 14.5 15.5 7H13"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  checkc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  xc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
+  phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.4a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7A2 2 0 0 1 22 16.9Z"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+};
+const NNV_RIDER =
+  '<svg viewBox="0 0 44 30" xmlns="http://www.w3.org/2000/svg">' +
+  '<circle cx="10" cy="23" r="5" fill="#3a1219"/><circle cx="10" cy="23" r="1.8" fill="#fff"/>' +
+  '<circle cx="34" cy="23" r="5" fill="#3a1219"/><circle cx="34" cy="23" r="1.8" fill="#fff"/>' +
+  '<path d="M10 23h13l4-8h4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<rect x="3.5" y="7.5" width="9" height="9" rx="2" fill="currentColor"/>' +
+  '<path d="M9 10.5c1-1.1 2.4-.2 0 1.3-2.4-1.5-1-2.4 0-1.3z" fill="#fff"/>' +
+  '<circle cx="23" cy="7" r="3.4" fill="currentColor"/>' +
+  '<path d="M20 12c3 .3 6 .3 8.5-1.6L26.5 16 19 16.6z" fill="currentColor"/></svg>';
+
+const NNV_STEPS = [
+  { short: "Đã nhận", icon: "receipt", sub: "nomnom đã nhận đơn của bạn, đang chuẩn bị nhé!" },
+  { short: "Đang làm", icon: "chef", sub: "Bánh đang được làm — sắp ra lò rồi!" },
+  { short: "Đang giao", icon: "scooter", sub: "Bánh đang trên đường giao tới bạn, chờ chút nhé!" },
+  { short: "Hoàn thành", icon: "check", sub: "Đơn đã giao xong. Cảm ơn bạn, chúc ngon miệng!" },
+];
+
+// giờ HH:MM từ ISO (mốc cô chủ xác nhận)
+function hhmm(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(d) ? "" : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+// Thẻ hoá đơn đầy đủ: trạng thái + tiến trình (giờ dưới mốc) + Từ→Đến + món + tổng + Gọi/Nhắn tin.
+function orderCardHtml(order) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  const cancelled = order.status === "cancelled";
+  const stage = Number(order.fulfillment_stage) || 0;
+  const log = order.fulfillment_log || {};
+  const paidLike = order.status === "paid" || order.status === "delivered";
+
+  // Trạng thái lớn
+  let stc, stIcon, stTitle, stSub;
+  if (cancelled) { stc = "cancel"; stIcon = NNV_IC.xc; stTitle = "Đã hủy"; stSub = "Nếu cần hỗ trợ thêm, bạn nhắn shop giúp mình nhé."; }
+  else if (stage >= 4) { stc = "done"; stIcon = NNV_IC.checkc; stTitle = "Hoàn thành"; stSub = NNV_STEPS[3].sub; }
+  else if (stage <= 0) { stc = "idle"; stIcon = NNV_IC.clock; stTitle = "Chờ xử lý"; stSub = "nomnom đã nhận đơn, sẽ bắt đầu chuẩn bị sớm nhất nhé."; }
+  else { stc = "run"; stIcon = NNV_IC[NNV_STEPS[stage - 1].icon]; stTitle = NNV_STEPS[stage - 1].short; stSub = NNV_STEPS[stage - 1].sub; }
+
+  // Thanh tiến trình + giờ dưới mốc
+  const fill = cancelled ? 0 : stage >= 4 ? 100 : stage <= 0 ? 0 : ((stage - 1) / 3) * 100;
+  const nodes = NNV_STEPS.map((s, i) => {
+    const n = i + 1;
+    const reached = !cancelled && (stage >= 4 || n <= stage);
+    const cls = cancelled ? "" : stage >= 4 ? "done" : n < stage ? "done" : n === stage ? "cur" : "";
+    const t = hhmm(log[n]);
+    const timeHtml = reached && t ? `<span class="nnv-time">${t}</span>` : `<span class="nnv-time na">– –</span>`;
+    return `<div class="nnv-node ${cls}"><span class="nnv-dot">${NNV_IC[s.icon]}</span><span class="nnv-lbl">${s.short}</span>${timeHtml}</div>`;
+  }).join("");
+  const bar = cancelled
+    ? `<div class="nnv-cancel-box">${NNV_IC.xc}Đơn đã huỷ, hẹn bạn lần sau nhé!</div>`
+    : `<div class="nnv-bar" data-stage="${stage}" style="--fill:${fill}%">
+        <div class="nnv-line"><div class="nnv-fill"></div></div>
+        ${stage >= 3 ? `<div class="nnv-rider">${NNV_RIDER}</div>` : ""}
+        <div class="nnv-nodes">${nodes}</div>
+      </div>`;
+
+  // Từ → Đến (tự lấy địa chỉ tiệm ở cài đặt)
+  const shopAddr = state.shopInfo.address || "Đang cập nhật";
+  const toName = order.customer_name ? escapeHtml(order.customer_name) : "";
+  const toPhone = order.customer_phone ? escapeHtml(order.customer_phone) : "";
+  const toSub = [toName, toPhone].filter(Boolean).join(" · ");
+  const route = `
+    <div class="nnv-route">
+      <div class="nnv-rt"><span class="nnv-rt-dot from"></span><div><div class="nnv-rt-k">Từ</div><div class="nnv-rt-name">nomnom — tiệm bánh</div><div class="nnv-rt-sub">${escapeHtml(shopAddr)}</div></div></div>
+      <div class="nnv-rt"><span class="nnv-rt-dot to"></span><div><div class="nnv-rt-k">Giao đến</div><div class="nnv-rt-name">${escapeHtml(order.customer_address || "—")}</div>${toSub ? `<div class="nnv-rt-sub">${toSub}</div>` : ""}</div></div>
+    </div>`;
+
+  // Món + tổng (Tạm tính → Giảm giá → Tổng; KHÔNG có phí ship)
+  const subtotal = items.reduce((s, i) => s + (i.price || 0) * (i.qty || 0), 0);
+  const discount = Math.max(0, subtotal - (order.total || 0));
+  const lis = items.map((i) =>
+    `<div class="nnv-li"><span class="q">${i.qty}×</span><span class="nm">${escapeHtml(i.name || "")}${i.note ? `<small>${escapeHtml(i.note)}</small>` : ""}</span><span class="amt">${formatPrice((i.price || 0) * (i.qty || 0))}</span></div>`
+  ).join("");
+  const totals = `
+    <div class="nnv-tot">
+      <div class="nnv-tr"><span>Tạm tính</span><span>${formatPrice(subtotal)}</span></div>
+      ${discount > 0 ? `<div class="nnv-tr disc"><span>Giảm giá${order.voucher_percent ? ` (voucher ${order.voucher_percent}%)` : ""}</span><span>−${formatPrice(discount)}</span></div>` : ""}
+      <div class="nnv-tr grand"><span>Tổng cộng</span><span>${formatPrice(order.total || 0)}</span></div>
+    </div>`;
+
+  const payRow = `<div class="nnv-pay"><span>Thanh toán</span><b>Chuyển khoản ${paidLike ? `<span class="nnv-pill-paid">${NNV_IC.checkc}Đã thanh toán</span>` : ""}</b></div>`;
+  const delivRow = order.delivery_time ? `<div class="nnv-pay"><span>Thời gian giao</span><b>${escapeHtml(order.delivery_time)}</b></div>` : "";
+
+  // Gọi / Nhắn tin (khi shop phản hồi chậm). Nhắn tin mở chat + đính sẵn mã đơn.
+  const phone = state.shopInfo.phone;
+  const callBtn = phone ? `<a class="nnv-act call" href="tel:${escapeHtml(phone)}">${NNV_IC.phone}Gọi điện</a>` : "";
+  const chatBtn = `<button type="button" class="nnv-act chat" data-chat-order="${escapeHtml(order.order_code || "")}">${NNV_IC.chat}Nhắn tin</button>`;
+  const actions = `
+    <p class="nnv-help-note">Shop phản hồi hơi lâu? Gọi hoặc nhắn ngay nhé:</p>
+    <div class="nnv-actions" style="${callBtn ? "" : "grid-template-columns:1fr"}">${callBtn}${chatBtn}</div>`;
+
+  return `
+    <div class="nnv" data-stage="${cancelled ? "x" : stage}">
+      <div class="nnv-head">
+        <div class="nnv-brand">nomnom<span>Tiệm bánh</span></div>
+        <div class="nnv-meta"><div class="nnv-code">${escapeHtml(order.order_code || "—")}</div><div class="nnv-date">${formatDateTime(order.created_at)}</div></div>
+      </div>
+      <div class="nnv-body">
+        <div class="nnv-st"><div class="nnv-st-ic ${stc}">${stIcon}</div><div><h3 class="${stc}">${stTitle}</h3><p>${stSub}</p></div></div>
+        ${bar}
+        <hr class="nnv-div"/>
+        ${route}
+        <hr class="nnv-div"/>
+        <div class="nnv-sec-h">Chi tiết đơn hàng</div>
+        ${lis}
+        ${totals}
+        ${payRow}
+        ${delivRow}
+        ${actions}
+        ${cancelled ? "" : `<p class="nnv-thanks">Cảm ơn bạn đã đặt bánh tại nomnom ♥</p>`}
+      </div>
+    </div>`;
+}
+
 adminOrdersBtn.addEventListener("click", openOrdersDrawer);
 document.getElementById("orders-close").addEventListener("click", closeOrdersDrawer);
 ordersOverlay.addEventListener("click", closeOrdersDrawer);
@@ -1919,6 +2089,25 @@ function renderAdminOrders() {
         <p class="flex items-start gap-1.5"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="mt-0.5 shrink-0"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>${o.delivery_time || "Giao sớm nhất"}</span></p>
         ${o.note ? `<p class="flex items-start gap-1.5"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="mt-0.5 shrink-0"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span>${o.note}</span></p>` : ""}
       </div>
+      ${
+        o.status === "cancelled"
+          ? ""
+          : `<div class="mt-3 flex flex-wrap items-center gap-1.5">
+        <span class="text-[10px] font-semibold text-ash">Tiến trình giao</span>
+        ${FULFILLMENT_STAGES.map((s) => {
+          const cur = Number(o.fulfillment_stage) || 0;
+          const done = cur >= s.stage;
+          const isCur = cur === s.stage;
+          const target = isCur ? s.stage - 1 : s.stage;
+          const cls = isCur
+            ? "bg-[#16783a] text-white border-[#16783a]"
+            : done
+              ? "bg-[#34C759]/15 text-[#16783a] border-[#34C759]/50"
+              : "border-earth/60 text-ash hover:border-ink";
+          return `<button data-order-stage="${o.id}:${target}" class="rounded border px-2 py-1 text-[10px] font-medium ${cls}">${s.stage}. ${s.label}</button>`;
+        }).join("")}
+      </div>`
+      }
       <div class="mt-3 flex flex-wrap gap-2">
         <button data-order-print="${o.id}" class="border border-earth/60 px-3 py-2 text-xs font-medium text-ink hover:bg-earth/20">🖨 In đơn</button>
         ${o.status === "paid" ? `<button data-order-delivered="${o.id}" class="bg-ink px-3 py-2 text-xs font-medium text-white hover:opacity-90">Đã giao</button>` : ""}
@@ -1928,6 +2117,12 @@ function renderAdminOrders() {
     })
     .join("");
 
+  ordersList.querySelectorAll("[data-order-stage]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const [id, stageStr] = b.dataset.orderStage.split(":");
+      setOrderFulfillment(id, Number(stageStr));
+    })
+  );
   ordersList.querySelectorAll("[data-order-delivered]").forEach((b) =>
     b.addEventListener("click", () => setOrderStatus(b.dataset.orderDelivered, "delivered"))
   );
@@ -2011,6 +2206,21 @@ async function setOrderStatus(id, status) {
   fetchAdminOrders();
 }
 
+// Cập nhật mốc giao vận (fulfillment_stage) từ drawer đơn inline. Độc lập status thanh toán.
+async function setOrderFulfillment(id, stage) {
+  const order = adminOrdersCache.find((o) => o.id === id);
+  const oldStage = Number(order?.fulfillment_stage) || 0;
+  const log = computeFulfillmentLog(order, stage);
+  const { error } = await updateFulfillmentStage(id, stage, log);
+  if (error) {
+    alert("Lỗi cập nhật tiến trình: " + error.message);
+    return;
+  }
+  // Chỉ nhắn khách khi TIẾN tới mốc mới (không nhắn khi bấm lùi/sửa).
+  if (order && stage > oldStage) notifyCustomerStage(order, stage, state.trackingMessages);
+  fetchAdminOrders();
+}
+
 function startAdminOrdersRealtime() {
   stopAdminOrdersRealtime();
   fetchAdminOrders();
@@ -2055,6 +2265,7 @@ function closeCustomerModal() {
   customerModal.classList.add("hidden");
   customerModal.classList.remove("flex");
   document.body.classList.remove("overflow-hidden");
+  stopCustomerOrdersWatcher();
 }
 
 // ── Tab "Tổng quan" / "Đơn đã mua" trong tài khoản khách ──
@@ -2075,9 +2286,36 @@ function switchCustomerTab(tab) {
   // Trượt cả khối tới slide tương ứng (không ẩn/hiện → cao cố định, không nhảy).
   const track = document.getElementById("customer-tab-track");
   if (track) track.dataset.index = CUSTOMER_TAB_INDEX[tab] ?? 0;
-  if (tab === "orders") loadCustomerOrders();
+  if (tab === "orders") {
+    loadCustomerOrders();
+    startCustomerOrdersWatcher(); // realtime: admin đổi mốc → timeline khách tự cập nhật
+  } else {
+    stopCustomerOrdersWatcher();
+  }
   // Ladder animate khi tab hạng vừa hiện (lúc render nền track có thể chưa nhìn thấy)
   if (tab === "membership") activateLadders(document.getElementById("customer-tab-membership"));
+}
+
+// Realtime timeline cho khách: chỉ subscribe khi đang mở tab "Đơn của tôi", dọn khi rời.
+let customerOrdersChannel = null;
+function startCustomerOrdersWatcher() {
+  stopCustomerOrdersWatcher();
+  if (!state.currentCustomer) return;
+  const phone = state.currentCustomer.phone;
+  customerOrdersChannel = supabase
+    .channel(`cust-orders-${phone}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "orders", filter: `customer_phone=eq.${phone}` },
+      () => loadCustomerOrders()
+    )
+    .subscribe();
+}
+function stopCustomerOrdersWatcher() {
+  if (customerOrdersChannel) {
+    supabase.removeChannel(customerOrdersChannel);
+    customerOrdersChannel = null;
+  }
 }
 
 async function loadCustomerOrders() {
@@ -2107,33 +2345,7 @@ async function loadCustomerOrders() {
     return;
   }
 
-  box.innerHTML = data
-    .map((o) => {
-      const items = Array.isArray(o.items) ? o.items : [];
-      const st = orderStatusBadge(o.status);
-      const time = formatDateTimeLong(o.created_at);
-      return `
-        <div class="border border-earth/40 p-4">
-          <div class="flex items-center justify-between">
-            <span class="font-medium text-ink">${o.order_code}</span>
-            <span class="${st.cls} px-2 py-0.5 text-[10px] font-medium text-white">${st.text}</span>
-          </div>
-          <p class="mt-1 text-xs text-ash">${time}</p>
-          <div class="mt-3 space-y-0.5 text-sm text-ink">
-            ${items
-              .map(
-                (i) =>
-                  `<div class="flex justify-between"><span>${i.name} ×${i.qty}${i.note ? ` <span class="text-ash">(${i.note})</span>` : ""}</span><span class="text-ash">${formatPrice(i.price * i.qty)}</span></div>`
-              )
-              .join("")}
-          </div>
-          <div class="mt-2 flex justify-between border-t border-dashed border-earth pt-2 text-sm font-medium text-ink">
-            <span>Tổng</span><span>${formatPrice(o.total)}</span>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+  box.innerHTML = `<div class="space-y-4">${data.map(orderCardHtml).join("")}</div>`;
 }
 
 function updateAccountLabel() {
@@ -2146,18 +2358,17 @@ function updateAccountLabel() {
   updateLoyaltyHint();
 }
 
-// Ribbon ở hero mời khách chưa đăng nhập tham gia tích điểm. Ẩn khi đã đăng nhập
-// hoặc khi khách tự đóng (nhớ qua localStorage để không phiền lại).
+// Dải tích điểm ở hero: LUÔN hiện. Khách chưa đăng nhập → mời "Đăng nhập để tích điểm";
+// khách đã đăng nhập → đổi thành "Tích điểm đổi quà" (bỏ nút đăng nhập), vẫn giữ thông tin voucher.
 function updateLoyaltyHint() {
   const hint = document.getElementById("hero-loyalty-hint");
   if (!hint) return;
-  // Luôn hiện với khách chưa đăng nhập (không cho tắt) — ẩn khi đã đăng nhập.
-  const show = !state.currentCustomer;
-  hint.classList.toggle("hidden", !show);
-  if (show) {
-    document.getElementById("hero-loyalty-cycle").textContent = state.rewardConfig.cycle;
-    document.getElementById("hero-loyalty-percent").textContent = `${state.rewardConfig.percent}%`;
-  }
+  hint.classList.remove("hidden");
+  const loggedIn = !!state.currentCustomer;
+  document.getElementById("hero-loyalty-lead-guest").classList.toggle("hidden", loggedIn);
+  document.getElementById("hero-loyalty-lead-member").classList.toggle("hidden", !loggedIn);
+  document.getElementById("hero-loyalty-cycle").textContent = state.rewardConfig.cycle;
+  document.getElementById("hero-loyalty-percent").textContent = `${state.rewardConfig.percent}%`;
 
   // Dải sinh nhật: hiện cho mọi khách khi admin có bật voucher sinh nhật (% > 0). % lấy theo cấu hình.
   const bday = document.getElementById("hero-birthday-hint");
@@ -2511,17 +2722,11 @@ customerModal.addEventListener("click", (e) => {
   if (e.target === customerModal) closeCustomerModal();
 });
 
-customerLoginForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const phone = customerLoginForm.elements.phone.value.trim();
-  const name = customerLoginForm.elements.name.value.trim();
-  const address = customerLoginForm.elements.address.value.trim();
-
-  if (!/^[0-9]{8,12}$/.test(phone)) {
-    customerLoginError.textContent = "Số điện thoại không hợp lệ.";
-    customerLoginError.classList.remove("hidden");
-    return;
-  }
+// Đăng nhập/đăng ký khách theo SĐT (upsert bảng customers) + gán state.currentCustomer.
+// Dùng chung cho FORM đăng nhập và cho CHECKOUT (đặt hàng xong tự đăng nhập theo SĐT vừa nhập,
+// nên không còn khái niệm "khách vãng lai"). Trả { customer } khi thành công, { error } khi lỗi.
+async function signInCustomer(phone, name, address) {
+  if (!/^[0-9]{8,12}$/.test(phone)) return { error: "Số điện thoại không hợp lệ." };
 
   const { data: existing } = await supabase
     .from("customers")
@@ -2548,17 +2753,30 @@ customerLoginForm.addEventListener("submit", async (e) => {
       .insert({ phone, name: name || null, address: address || null, points: 0, vouchers_used: 0 })
       .select()
       .maybeSingle();
-    if (error) {
-      customerLoginError.textContent = "Lỗi: " + error.message;
-      customerLoginError.classList.remove("hidden");
-      return;
-    }
+    if (error) return { error: error.message };
     customer = created;
   }
 
   state.currentCustomer = customer;
   localStorage.setItem("nomnom_customer", JSON.stringify(customer));
   updateAccountLabel();
+  return { customer };
+}
+
+customerLoginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const phone = customerLoginForm.elements.phone.value.trim();
+  const name = customerLoginForm.elements.name.value.trim();
+  const address = customerLoginForm.elements.address.value.trim();
+
+  const { customer, error } = await signInCustomer(phone, name, address);
+  if (error) {
+    customerLoginError.textContent = error === "Số điện thoại không hợp lệ." ? error : "Lỗi: " + error;
+    customerLoginError.classList.remove("hidden");
+    return;
+  }
+
+  customerLoginError.classList.add("hidden");
   customerLoginForm.reset();
   openCustomerModal();
   await syncCartWithAccount(customer);

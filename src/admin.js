@@ -2,7 +2,7 @@ import "./style.css";
 import "./admin.css";
 import { supabase } from "./supabase.js";
 import { formatCurrency, formatDateTime, escapeHtml, timeAgo } from "./shared/format.js";
-import { ORDER_STATUS, updateOrderStatus } from "./shared/orderStatus.js";
+import { ORDER_STATUS, updateOrderStatus, FULFILLMENT_STAGES, updateFulfillmentStage, computeFulfillmentLog, notifyCustomerStage, DEFAULT_STAGE_MESSAGES } from "./shared/orderStatus.js";
 import { joinPresence, startHeartbeatLoop, fetchAllLastSeen } from "./shared/presence.js";
 import { avatarHtml, chatBubbleHtml, chatThreadSkeletonHtml } from "./shared/chatUi.js";
 
@@ -34,6 +34,7 @@ let lastSeenMap = new Map();
 const ROUTES = {
   overview: "Tổng quan bán hàng",
   orders: "Đơn Hàng",
+  tracking: "Theo dõi đơn",
   customers: "Khách hàng",
   traffic: "Traffic",
   messages: "Tin nhắn",
@@ -341,6 +342,8 @@ function renderAll() {
   renderMetrics();
   renderOverview();
   renderOrders();
+  renderTrackingEditor(false); // không đè khi cô chủ đang gõ mẫu tin
+  renderTrackingList();
   renderTrash();
   renderCustomers();
   renderTierConfig();
@@ -471,6 +474,7 @@ document.getElementById("tier-config-save")?.addEventListener("click", saveTierC
 function renderActiveView() {
   if (activeRoute === "overview") renderOverview();
   if (activeRoute === "orders") renderOrders();
+  if (activeRoute === "tracking") renderTracking();
   if (activeRoute === "customers") renderCustomers();
   if (activeRoute === "traffic") renderTraffic();
   if (activeRoute === "messages") renderConversations();
@@ -854,6 +858,20 @@ document.getElementById("orders-export")?.addEventListener("click", () => {
   document.body.removeChild(link);
 });
 
+// Cụm 4 mốc giao vận THỦ CÔNG (fulfillment_stage) — admin bấm để cập nhật tiến trình.
+// Độc lập với status thanh toán. Bấm mốc hiện tại để LÙI lại 1 bước (mã hoá sẵn target trong data).
+function fulfillmentStepperHtml(order) {
+  const cur = Number(order.fulfillment_stage) || 0;
+  const steps = FULFILLMENT_STAGES.map((s) => {
+    const done = cur >= s.stage;
+    const isCur = cur === s.stage;
+    const target = isCur ? s.stage - 1 : s.stage; // bấm lại mốc đang bật → lùi về mốc trước
+    const title = isCur ? "Bấm để lùi lại 1 bước" : `Đánh dấu: ${s.label}`;
+    return `<button class="admin-fstep${done ? " is-done" : ""}${isCur ? " is-current" : ""}" data-order-stage="${order.id}:${target}" title="${title}">${s.stage}. ${s.label}</button>`;
+  }).join("");
+  return `<div class="admin-fsteps"><span class="admin-fsteps-label">Tiến trình giao</span>${steps}</div>`;
+}
+
 function renderOrderTable(list, options = {}) {
   if (!list.length) {
     return `<div class="admin-empty">Chưa có đơn phù hợp.</div>`;
@@ -919,6 +937,7 @@ function renderOrderTable(list, options = {}) {
                       </td>`
                 }
               </tr>
+              ${options.compact || order.status === "cancelled" ? "" : `<tr class="admin-fstep-row"><td colspan="7">${fulfillmentStepperHtml(order)}</td></tr>`}
             `;
           })
           .join("")}
@@ -939,6 +958,14 @@ document.getElementById("orders-table")?.addEventListener("click", async (event)
     return;
   }
 
+  // Cụm 4 mốc giao vận (fulfillment_stage) — target đã mã hoá sẵn (bấm mốc đang bật = lùi).
+  const stageBtn = event.target.closest("[data-order-stage]");
+  if (stageBtn) {
+    const [id, stageStr] = stageBtn.dataset.orderStage.split(":");
+    await applyStageTick(id, Number(stageStr));
+    return;
+  }
+
   const button = event.target.closest("[data-order-status]");
   if (!button) return;
   const [id, status] = button.dataset.orderStatus.split(":");
@@ -952,6 +979,91 @@ document.getElementById("orders-table")?.addEventListener("click", async (event)
 
   showToast("Đã cập nhật trạng thái đơn");
   await loadBackoffice();
+});
+
+// Cập nhật 1 mốc giao vận (dùng chung cho bảng Đơn Hàng + route Theo dõi đơn):
+// ghi giờ vào fulfillment_log, và nếu TIẾN tới mốc mới thì tự nhắn khách (mẫu tin cô chủ sửa).
+async function applyStageTick(id, newStage) {
+  const order = orders.find((o) => o.id === id);
+  const oldStage = Number(order?.fulfillment_stage) || 0;
+  const log = computeFulfillmentLog(order, newStage);
+  const { error } = await updateFulfillmentStage(id, newStage, log);
+  if (error) return showToast(`Lỗi cập nhật tiến trình: ${error.message}`);
+  if (order && newStage > oldStage) notifyCustomerStage(order, newStage, siteSettings?.tracking_messages);
+  showToast("Đã cập nhật tiến trình giao");
+  await loadBackoffice();
+}
+
+// ── Route "Theo dõi đơn": sửa 4 mẫu tin báo khách + danh sách đơn đang giao ──
+// Editor 4 mẫu tin (site_settings.tracking_messages). Trống → placeholder = câu mặc định.
+// KHÔNG đè khi cô chủ đang gõ (force=false, gọi từ renderAll khi có đơn realtime).
+function renderTrackingEditor(force) {
+  const editor = document.getElementById("tracking-msg-editor");
+  if (!editor) return;
+  if (!force && editor.contains(document.activeElement)) return;
+  const tm = siteSettings?.tracking_messages || {};
+  editor.innerHTML = FULFILLMENT_STAGES.map((s) => `
+    <label class="grid gap-1.5">
+      <span class="text-xs font-semibold text-ink">${s.stage}. ${s.label}</span>
+      <textarea class="admin-input" rows="2" data-track-msg="${s.stage}" placeholder="${escapeHtml(DEFAULT_STAGE_MESSAGES[s.stage])}">${escapeHtml(tm[s.stage] || "")}</textarea>
+    </label>`).join("");
+}
+
+// Danh sách đơn đang theo dõi: đã thanh toán / đã giao (chưa huỷ, đã lọc deleted ở query).
+function renderTrackingList() {
+  const list = document.getElementById("tracking-list");
+  if (!list) return;
+  const active = orders.filter((o) => o.status === "paid" || o.status === "delivered");
+  if (!active.length) {
+    list.innerHTML = `<div class="admin-empty">Chưa có đơn nào đang theo dõi.</div>`;
+    return;
+  }
+  list.innerHTML = active.map((o) => {
+    const st = STATUS[o.status] || { label: o.status, tone: "ash" };
+    return `
+      <div class="admin-track-card">
+        <div class="admin-track-top">
+          <div>
+            <span class="font-semibold text-ink">${o.order_code || "--"}</span>
+            <span class="ml-2 text-xs text-ash">${escapeHtml(o.customer_name || "")}${o.customer_phone ? " · " + escapeHtml(o.customer_phone) : ""}</span>
+          </div>
+          <span class="admin-status admin-status-${st.tone}">${st.label}</span>
+        </div>
+        ${fulfillmentStepperHtml(o)}
+      </div>`;
+  }).join("");
+}
+
+function renderTracking() {
+  renderTrackingEditor(true); // vào route → nạp mẫu tin mới nhất
+  renderTrackingList();
+}
+
+// Bấm mốc trong danh sách "Theo dõi đơn" (dùng chung applyStageTick với bảng Đơn Hàng).
+document.getElementById("tracking-list")?.addEventListener("click", async (event) => {
+  const stageBtn = event.target.closest("[data-order-stage]");
+  if (!stageBtn) return;
+  const [id, stageStr] = stageBtn.dataset.orderStage.split(":");
+  await applyStageTick(id, Number(stageStr));
+});
+
+// Lưu 4 mẫu tin báo khách.
+document.getElementById("tracking-msg-save")?.addEventListener("click", async () => {
+  const editor = document.getElementById("tracking-msg-editor");
+  const statusEl = document.getElementById("tracking-msg-status");
+  const tm = {};
+  editor?.querySelectorAll("[data-track-msg]").forEach((ta) => {
+    const val = ta.value.trim();
+    if (val) tm[ta.dataset.trackMsg] = val; // trống → không lưu → dùng mặc định
+  });
+  const { error } = await supabase.from("site_settings").update({ tracking_messages: tm }).eq("id", 1);
+  if (error) {
+    if (statusEl) statusEl.textContent = "Lỗi: " + error.message;
+    return showToast("Lỗi lưu mẫu tin: " + error.message);
+  }
+  siteSettings = { ...(siteSettings || {}), tracking_messages: tm };
+  if (statusEl) { statusEl.textContent = "✓ Đã lưu"; setTimeout(() => (statusEl.textContent = ""), 2500); }
+  showToast("Đã lưu mẫu tin báo khách");
 });
 
 // ── Thùng rác: đơn đã xoá mềm, giữ 30 ngày, xem/khôi phục/xoá vĩnh viễn ──
