@@ -1025,7 +1025,7 @@ function initSlideCarts(container) {
       max = maxTravel();
       const localX = e.clientX - slide.getBoundingClientRect().left;
       const knobEnd = 3 + x + knob.offsetWidth;        // mép phải hiện tại của núm
-      const tol = knob.offsetWidth * 0.6;              // dung sai ~60% bề ngang núm mỗi phía
+      const tol = knob.offsetWidth * 0.78;             // dung sai ~78% bề ngang núm (nới cho ngón tay to)
       if (localX > knobEnd + tol) return;              // chạm vào vùng icon giỏ → để click xử lý
       cancelAnimationFrame(rafId);
       dragging = true;
