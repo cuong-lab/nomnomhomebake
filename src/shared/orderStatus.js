@@ -48,15 +48,19 @@ export const DEFAULT_STAGE_MESSAGES = {
   4: "✅ Đơn {ma} đã hoàn thành. Cảm ơn bạn nhiều, hẹn gặp lại! 🧁",
 };
 
-export function notifyCustomerStage(order, stage, templates) {
+// QUAN TRỌNG: phải là async + await insert bên trong. Query của supabase-js v2 là "lazy" —
+// chỉ thực sự gửi lên server khi được await/.then(). Trước đây gọi fire-and-forget (không await)
+// nên insert KHÔNG BAO GIỜ chạy → khách không nhận được tin báo mốc. Await nội bộ đảm bảo nó chạy.
+export async function notifyCustomerStage(order, stage, templates) {
   const phone = order?.customer_phone;
   const tpl = (templates && templates[stage]) || DEFAULT_STAGE_MESSAGES[stage];
-  if (!phone || !tpl) return Promise.resolve(); // mốc 0 / lùi về 0 → không nhắn
+  if (!phone || !tpl) return; // mốc 0 / lùi về 0 → không nhắn
   const message = tpl.replaceAll("{ma}", order.order_code || "của bạn");
-  return supabase.from("chat_messages").insert({
+  const { error } = await supabase.from("chat_messages").insert({
     conversation_id: phone,
     customer_name: "nomnom",
     sender: "shop",
     message,
   });
+  if (error) console.warn("notifyCustomerStage lỗi gửi tin:", error.message);
 }
